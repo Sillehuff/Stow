@@ -165,7 +165,7 @@ export function seedSpaceColor(index: number) {
 }
 
 export function toImageRef(url?: string) {
-  return url ? { downloadUrl: url } : undefined;
+  return url ? { downloadUrl: url } : null;
 }
 
 export function normalizeSeedForHousehold(householdId: string) {
@@ -199,10 +199,10 @@ export function normalizeSeedForHousehold(householdId: string) {
       name: item.name,
       kind: item.kind,
       image: toImageRef(item.image),
-      value: item.value,
-      isPriceless: item.isPriceless,
-      tags: item.tags,
-      notes: item.notes,
+      value: item.value ?? null,
+      isPriceless: item.isPriceless ?? false,
+      tags: item.tags ?? [],
+      notes: item.notes ?? "",
       isPacked: item.isPacked
     })
   );
