@@ -26,6 +26,7 @@ body,
 #root {
   width: 100%;
   min-height: 100%;
+  overscroll-behavior: none;
 }
 
 body {
@@ -316,7 +317,8 @@ select {
   gap: 10px;
   background: rgba(247, 247, 250, 0.92);
   backdrop-filter: blur(20px);
-  padding: 24px 16px 12px;
+  padding: 12px 16px 12px;
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
   border-bottom: 1px solid var(--border-l);
 }
 
@@ -339,9 +341,24 @@ select {
   justify-content: flex-end;
 }
 
+/* ── Tab Header (Search / Packing / Settings) ── */
+.tab-header {
+  padding: 16px 24px 16px;
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  background: var(--canvas);
+}
+
+.tab-header-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid var(--border-l);
+}
+
 /* ── Home Header (Stow. branding) ── */
 .home-header {
-  padding: 24px 24px 8px;
+  padding: 16px 24px 8px;
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
 }
 
 .home-header h1 {
@@ -611,14 +628,14 @@ select {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 88px;
   border-top: 1px solid var(--border-l);
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(24px);
   display: flex;
-  justify-content: space-between;
+  justify-content: space-around;
   align-items: center;
-  padding: 12px 24px 32px;
+  padding: 10px 16px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   z-index: 30;
 }
 
@@ -867,7 +884,8 @@ select {
   top: 0;
   left: 0;
   right: 0;
-  padding: 24px 16px 0;
+  padding: 16px 16px 0;
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
   display: flex;
   justify-content: space-between;
   z-index: 10;
@@ -1400,23 +1418,28 @@ select {
 
 /* ── Responsive ── */
 @media (max-width: 520px) {
+  body {
+    background: var(--canvas);
+  }
+
   .app-shell {
     padding: 0;
   }
 
   .phone-frame {
     width: 100%;
-    height: 100vh;
+    height: 100dvh;
     max-width: 100%;
     border-radius: 0;
     border: none;
   }
 
   .screen {
+    margin-top: 0;
     padding-bottom: calc(120px + env(safe-area-inset-bottom));
   }
 
   .bottom-nav {
-    padding-bottom: calc(22px + env(safe-area-inset-bottom));
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
   }
 }

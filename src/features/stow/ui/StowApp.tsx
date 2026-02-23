@@ -815,7 +815,7 @@ export function StowApp({
     if (tab === "search") {
       return (
         <div className="screen" style={{ padding: 0 }}>
-          <div style={{ padding: "24px 24px 16px", background: P.canvas, borderBottom: `1px solid ${P.borderL}`, position: "sticky", top: 0, zIndex: 20 }}>
+          <div className="tab-header tab-header-sticky">
             <h1 style={{ margin: "0 0 16px", fontSize: 28, fontWeight: 900, color: P.ink }}>Search</h1>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div className="search-input-wrap">
@@ -913,7 +913,7 @@ export function StowApp({
     if (tab === "packing") {
       return (
         <div className="screen" style={{ padding: 0 }}>
-          <div style={{ padding: "24px 24px 16px", background: P.canvas, borderBottom: `1px solid ${P.borderL}` }}>
+          <div className="tab-header" style={{ borderBottom: `1px solid ${P.borderL}` }}>
             <h1 style={{ margin: "0 0 16px", fontSize: 28, fontWeight: 900, color: P.ink }}>Packing</h1>
             <div className="packing-pills">
               <button className="packing-pill inactive">
@@ -971,7 +971,7 @@ export function StowApp({
       const isAdmin = members.some((m) => m.uid === user.uid && (m.role === "OWNER" || m.role === "ADMIN"));
       return (
         <div className="screen" style={{ padding: 0, overflowY: "auto", paddingBottom: 120 }}>
-          <div style={{ padding: "24px 24px 8px" }}>
+          <div className="tab-header">
             <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900, color: P.ink }}>Settings</h1>
           </div>
           <div style={{ padding: "20px 20px 0" }}>
