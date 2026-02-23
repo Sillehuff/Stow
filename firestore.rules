@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function membershipDoc(householdId) {
+      return /databases/$(database)/documents/households/$(householdId)/members/$(request.auth.uid);
+    }
+
+    function isHouseholdMember(householdId) {
+      return isSignedIn() && exists(membershipDoc(householdId));
+    }
+
+    function memberRole(householdId) {
+      return get(membershipDoc(householdId)).data.role;
+    }
+
+    function isHouseholdAdmin(householdId) {
+      return isHouseholdMember(householdId) && (memberRole(householdId) in ['OWNER', 'ADMIN']);
+    }
+
+    match /users/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /households/{householdId} {
+      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow read: if isHouseholdMember(householdId);
+      allow update: if isHouseholdAdmin(householdId);
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow read: if isHouseholdMember(householdId);
+        allow create, update, delete: if isHouseholdAdmin(householdId);
+      }
+
+      match /invites/{inviteId} {
+        allow read: if isHouseholdAdmin(householdId);
+        allow create, update, delete: if isHouseholdAdmin(householdId);
+      }
+
+      match /spaces/{spaceId} {
+        allow read: if isHouseholdMember(householdId);
+        allow create, update, delete: if isHouseholdMember(householdId);
+
+        match /areas/{areaId} {
+          allow read: if isHouseholdMember(householdId);
+          allow create, update, delete: if isHouseholdMember(householdId);
+        }
+      }
+
+      match /items/{itemId} {
+        allow read: if isHouseholdMember(householdId);
+        allow create, update, delete: if isHouseholdMember(householdId);
+      }
+
+      match /settings/{docId} {
+        allow read: if isHouseholdMember(householdId);
+        allow write: if isHouseholdAdmin(householdId);
+      }
+
+      match /visionJobs/{jobId} {
+        allow read: if isHouseholdMember(householdId);
+        allow write: if isHouseholdMember(householdId);
+      }
+    }
+  }
+}
