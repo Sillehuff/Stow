@@ -1,5 +1,4 @@
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { storage } from "@/lib/firebase/client";
+import { getStorageClient } from "@/lib/firebase/client";
 import type { ImageRef } from "@/types/domain";
 
 export async function uploadFileToStorage(
@@ -7,6 +6,10 @@ export async function uploadFileToStorage(
   file: File,
   metadata?: { contentType?: string }
 ): Promise<ImageRef> {
+  const [{ getDownloadURL, ref, uploadBytes }, storage] = await Promise.all([
+    import("firebase/storage"),
+    getStorageClient()
+  ]);
   if (!storage) throw new Error("Firebase Storage is not configured");
   const storageRef = ref(storage, path);
   const snapshot = await uploadBytes(storageRef, file, metadata);

@@ -11,6 +11,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
   writeBatch,
   type DocumentData,
   type QuerySnapshot
@@ -63,19 +64,10 @@ export const inventoryRepository = {
   subscribeAreas(householdId: string, onData: (state: SnapshotState<Area>) => void, onError: (e: Error) => void): Unsubscribe {
     const q = query(
       collectionGroup(requireDb(), "areas"),
+      where("householdId", "==", householdId),
       orderBy("name")
     );
-    return onSnapshot(
-      q,
-      (snap) => {
-        const all = mapSnapshot<Area>(snap);
-        onData({
-          ...all,
-          data: all.data.filter((area) => area.householdId === householdId)
-        });
-      },
-      onError
-    );
+    return onSnapshot(q, (snap) => onData(mapSnapshot<Area>(snap)), onError);
   },
 
   subscribeItems(householdId: string, onData: (state: SnapshotState<Item>) => void, onError: (e: Error) => void): Unsubscribe {

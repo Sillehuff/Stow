@@ -25,6 +25,20 @@ export type WorkspaceActions = {
   deleteItem: typeof inventoryRepository.deleteItem;
 };
 
+type WorkspaceErrorSource = "household" | "spaces" | "areas" | "items" | "members" | "llmConfig";
+type WorkspaceErrorsBySource = Record<WorkspaceErrorSource, string | null>;
+
+function emptyErrors(): WorkspaceErrorsBySource {
+  return {
+    household: null,
+    spaces: null,
+    areas: null,
+    items: null,
+    members: null,
+    llmConfig: null
+  };
+}
+
 export function useWorkspaceData(householdId: string | null, user: User | null) {
   const [household, setHousehold] = useState<Household | null>(null);
   const [spacesState, setSpacesState] = useState<CollectionState<Space>>(emptyState());
@@ -33,11 +47,33 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
   const [membersState, setMembersState] = useState<CollectionState<HouseholdMember>>(emptyState());
   const [llmConfig, setLlmConfig] = useState<HouseholdLlmConfig | null>(null);
   const [llmConfigMeta, setLlmConfigMeta] = useState({ fromCache: true, hasPendingWrites: false });
-  const [error, setError] = useState<string | null>(null);
+  const [errorsBySource, setErrorsBySource] = useState<WorkspaceErrorsBySource>(emptyErrors());
+
+  const setSourceError = (source: WorkspaceErrorSource, message: string | null) => {
+    setErrorsBySource((prev) => (prev[source] === message ? prev : { ...prev, [source]: message }));
+  };
+
+  useEffect(() => {
+    setHousehold(null);
+    setSpacesState(emptyState());
+    setAreasState(emptyState());
+    setItemsState(emptyState());
+    setMembersState(emptyState());
+    setLlmConfig(null);
+    setLlmConfigMeta({ fromCache: true, hasPendingWrites: false });
+    setErrorsBySource(emptyErrors());
+  }, [householdId]);
 
   useEffect(() => {
     if (!householdId) return;
-    const unsub = inventoryRepository.subscribeHousehold(householdId, setHousehold, (e) => setError(e.message));
+    const unsub = inventoryRepository.subscribeHousehold(
+      householdId,
+      (nextHousehold) => {
+        setHousehold(nextHousehold);
+        setSourceError("household", null);
+      },
+      (e) => setSourceError("household", e.message)
+    );
     return () => unsub();
   }, [householdId]);
 
@@ -45,8 +81,11 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     if (!householdId) return;
     const unsub = inventoryRepository.subscribeSpaces(
       householdId,
-      (state) => setSpacesState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites }),
-      (e) => setError(e.message)
+      (state) => {
+        setSpacesState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
+        setSourceError("spaces", null);
+      },
+      (e) => setSourceError("spaces", e.message)
     );
     return () => unsub();
   }, [householdId]);
@@ -55,8 +94,11 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     if (!householdId) return;
     const unsub = inventoryRepository.subscribeAreas(
       householdId,
-      (state) => setAreasState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites }),
-      (e) => setError(e.message)
+      (state) => {
+        setAreasState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
+        setSourceError("areas", null);
+      },
+      (e) => setSourceError("areas", e.message)
     );
     return () => unsub();
   }, [householdId]);
@@ -65,8 +107,11 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     if (!householdId) return;
     const unsub = inventoryRepository.subscribeItems(
       householdId,
-      (state) => setItemsState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites }),
-      (e) => setError(e.message)
+      (state) => {
+        setItemsState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
+        setSourceError("items", null);
+      },
+      (e) => setSourceError("items", e.message)
     );
     return () => unsub();
   }, [householdId]);
@@ -75,8 +120,11 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     if (!householdId) return;
     const unsub = inventoryRepository.subscribeMembers(
       householdId,
-      (state) => setMembersState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites }),
-      (e) => setError(e.message)
+      (state) => {
+        setMembersState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
+        setSourceError("members", null);
+      },
+      (e) => setSourceError("members", e.message)
     );
     return () => unsub();
   }, [householdId]);
@@ -88,11 +136,17 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
       (config, meta) => {
         setLlmConfig(config);
         setLlmConfigMeta(meta);
+        setSourceError("llmConfig", null);
       },
-      (e) => setError(e.message)
+      (e) => setSourceError("llmConfig", e.message)
     );
     return () => unsub();
   }, [householdId]);
+
+  const error = useMemo(() => {
+    const order: WorkspaceErrorSource[] = ["household", "spaces", "areas", "items", "members", "llmConfig"];
+    return order.map((source) => errorsBySource[source]).find(Boolean) ?? null;
+  }, [errorsBySource]);
 
   const spacesWithAreas: SpaceWithAreas[] = useMemo(() => {
     return spacesState.items.map((space) => ({
@@ -140,6 +194,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     llmConfig,
     sync,
     error,
+    errorsBySource,
     userId: user?.uid ?? null,
     actions
   };

@@ -9,6 +9,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/households/$(householdId)/members/$(request.auth.uid);
     }
 
+    function householdDoc(householdId) {
+      return /databases/$(database)/documents/households/$(householdId);
+    }
+
     function isHouseholdMember(householdId) {
       return isSignedIn() && exists(membershipDoc(householdId));
     }
@@ -19,6 +23,20 @@ service cloud.firestore {
 
     function isHouseholdAdmin(householdId) {
       return isHouseholdMember(householdId) && (memberRole(householdId) in ['OWNER', 'ADMIN']);
+    }
+
+    function isHouseholdBeingCreatedBySelf(householdId) {
+      return isSignedIn()
+        && !exists(householdDoc(householdId))
+        && existsAfter(householdDoc(householdId))
+        && getAfter(householdDoc(householdId)).data.createdBy == request.auth.uid;
+    }
+
+    function isBootstrapOwnerMemberCreate(householdId, uid) {
+      return isHouseholdBeingCreatedBySelf(householdId)
+        && uid == request.auth.uid
+        && request.resource.data.role == 'OWNER'
+        && request.resource.data.createdBy == request.auth.uid;
     }
 
     match /users/{uid} {
@@ -33,7 +51,8 @@ service cloud.firestore {
 
       match /members/{uid} {
         allow read: if isHouseholdMember(householdId);
-        allow create, update, delete: if isHouseholdAdmin(householdId);
+        allow create: if isHouseholdAdmin(householdId) || isBootstrapOwnerMemberCreate(householdId, uid);
+        allow update, delete: if isHouseholdAdmin(householdId);
       }
 
       match /invites/{inviteId} {
@@ -46,8 +65,10 @@ service cloud.firestore {
         allow create, update, delete: if isHouseholdMember(householdId);
 
         match /areas/{areaId} {
-          allow read: if isHouseholdMember(householdId);
-          allow create, update, delete: if isHouseholdMember(householdId);
+          allow read: if isHouseholdMember(resource.data.householdId);
+          allow create: if request.resource.data.householdId == householdId && isHouseholdMember(request.resource.data.householdId);
+          allow update: if request.resource.data.householdId == householdId && isHouseholdMember(request.resource.data.householdId);
+          allow delete: if resource.data.householdId == householdId && isHouseholdMember(resource.data.householdId);
         }
       }
 
@@ -58,13 +79,21 @@ service cloud.firestore {
 
       match /settings/{docId} {
         allow read: if isHouseholdMember(householdId);
-        allow write: if isHouseholdAdmin(householdId);
+        allow write: if isHouseholdAdmin(householdId) || (docId == 'llm' && isHouseholdBeingCreatedBySelf(householdId));
       }
 
       match /visionJobs/{jobId} {
         allow read: if isHouseholdMember(householdId);
         allow write: if isHouseholdMember(householdId);
       }
+    }
+
+    // Collection-group queries on `areas` require a recursive wildcard match.
+    match /{path=**}/areas/{areaId} {
+      allow read: if isHouseholdMember(resource.data.householdId);
+      allow create: if isHouseholdMember(request.resource.data.householdId);
+      allow update: if isHouseholdMember(request.resource.data.householdId);
+      allow delete: if isHouseholdMember(resource.data.householdId);
     }
   }
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { sendEmailLink, signInWithGoogle } from "@/lib/firebase/auth";
+import { toLoggedUserErrorMessage } from "@/lib/firebase/errors";
 import { useAuthContext } from "@/features/auth/AuthProvider";
 
 export function AuthGate({ children }: { children: ReactNode }) {
@@ -56,7 +57,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
             try {
               await signInWithGoogle();
             } catch (err) {
-              setError(err instanceof Error ? err.message : "Google sign-in failed");
+              setError(toLoggedUserErrorMessage(err, "Google sign-in failed"));
             } finally {
               setPending(null);
             }
@@ -75,7 +76,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
               await sendEmailLink(email.trim());
               setMessage(`Sign-in link sent to ${email.trim()}`);
             } catch (err) {
-              setError(err instanceof Error ? err.message : "Failed to send email link");
+              setError(toLoggedUserErrorMessage(err, "Failed to send email link"));
             } finally {
               setPending(null);
             }

@@ -1,5 +1,5 @@
 import admin from "firebase-admin";
-import { normalizeSeedForHousehold } from "../src/features/stow/seed.js";
+import { normalizeSeedForHousehold, stripUndefined } from "../src/features/stow/seed.js";
 
 function parseArg(name: string): string | undefined {
   const idx = process.argv.indexOf(`--${name}`);
@@ -56,27 +56,27 @@ async function main() {
   }, { merge: true });
 
   for (const space of seed.spaces) {
-    batch.set(db.doc(`households/${householdId}/spaces/${space.id}`), {
+    batch.set(db.doc(`households/${householdId}/spaces/${space.id}`), stripUndefined({
       ...space,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+    }));
   }
   for (const area of seed.areas) {
-    batch.set(db.doc(`households/${householdId}/spaces/${area.spaceId}/areas/${area.id}`), {
+    batch.set(db.doc(`households/${householdId}/spaces/${area.spaceId}/areas/${area.id}`), stripUndefined({
       ...area,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+    }));
   }
   for (const item of seed.items) {
-    batch.set(db.doc(`households/${householdId}/items/${item.id}`), {
+    batch.set(db.doc(`households/${householdId}/items/${item.id}`), stripUndefined({
       ...item,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       createdBy: uid,
       updatedBy: uid
-    });
+    }));
   }
 
   await batch.commit();

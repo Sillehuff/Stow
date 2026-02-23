@@ -33,7 +33,10 @@ body {
   margin: 0;
   font-family: -apple-system, ui-sans-serif, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   color: var(--ink);
-  background: #0a0a0f;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(232, 101, 43, 0.08), transparent 44%),
+    radial-gradient(circle at 82% 10%, rgba(67, 76, 160, 0.12), transparent 42%),
+    #0a0a0f;
 }
 
 button,
@@ -56,7 +59,7 @@ select {
 /* ── Global Banners ── */
 .global-banners {
   position: fixed;
-  top: 8px;
+  top: calc(8px + env(safe-area-inset-top, 0px));
   left: 0;
   right: 0;
   z-index: 1000;
@@ -64,6 +67,7 @@ select {
   flex-direction: column;
   gap: 8px;
   align-items: center;
+  padding-inline: 12px;
   pointer-events: none;
 }
 
@@ -77,6 +81,8 @@ select {
   font-weight: 700;
   box-shadow: var(--shadow);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  max-width: min(560px, calc(100vw - 24px));
+  overflow-wrap: anywhere;
 }
 
 .banner.warning {
@@ -99,12 +105,21 @@ select {
   cursor: pointer;
 }
 
+.banner.inline-error {
+  display: block;
+  margin-bottom: 12px;
+}
+
 /* ── Auth Shell ── */
 .center-shell {
   min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 24px;
+  background:
+    radial-gradient(circle at 14% 10%, rgba(232, 101, 43, 0.08), transparent 40%),
+    radial-gradient(circle at 90% 0%, rgba(26, 26, 46, 0.06), transparent 45%),
+    linear-gradient(180deg, #f4f4f8 0%, #f7f7fa 100%);
 }
 
 .panel {
@@ -119,6 +134,7 @@ select {
   padding: 24px;
   display: grid;
   gap: 14px;
+  box-shadow: 0 16px 46px rgba(16, 16, 28, 0.08);
 }
 
 .auth-panel h1 {
@@ -128,7 +144,7 @@ select {
 }
 
 .muted {
-  color: var(--warm);
+  color: #7c7c92;
   font-size: 13px;
   line-height: 1.45;
 }
@@ -220,7 +236,7 @@ select {
 }
 
 .btn:disabled {
-  opacity: 0.55;
+  opacity: 0.72;
   cursor: default;
 }
 
@@ -243,6 +259,41 @@ select {
 .textarea:focus,
 .select:focus {
   border-color: var(--accent);
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: #8a8aa0;
+  opacity: 1;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid rgba(232, 101, 43, 0.95);
+  outline-offset: 2px;
+}
+
+.btn:focus-visible,
+.icon-btn:focus-visible,
+.nav-btn:focus-visible,
+.fab:focus-visible,
+.fab-menu-item:focus-visible,
+.view-toggle:focus-visible,
+.search-clear:focus-visible,
+.pack-check:focus-visible,
+.pack-toggle:focus-visible,
+.back-btn:focus-visible,
+.space-list-row:focus-visible,
+.space-list-add:focus-visible,
+.list-row:focus-visible,
+.area-card:focus-visible,
+.search-tag-btn:focus-visible,
+.search-grid-item:focus-visible,
+.pack-item-open:focus-visible {
+  box-shadow: 0 0 0 4px rgba(232, 101, 43, 0.16);
 }
 
 .textarea {
@@ -1095,6 +1146,10 @@ select {
   white-space: nowrap;
 }
 
+.packing-pill:disabled {
+  cursor: default;
+}
+
 .packing-pill.active {
   background: var(--ink);
   color: #fff;
@@ -1123,6 +1178,17 @@ select {
   border-radius: 16px;
   padding: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+}
+
+.pack-item-open {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  color: inherit;
+  display: block;
+  cursor: pointer;
 }
 
 .pack-check {
@@ -1221,6 +1287,16 @@ select {
   gap: 8px;
   font-weight: 800;
   font-size: 14px;
+}
+
+.llm-actions {
+  align-items: stretch;
+}
+
+.llm-actions > .btn {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 /* ── Status Pill ── */
@@ -1380,12 +1456,16 @@ select {
 }
 
 .search-grid-item {
+  width: 100%;
   background: var(--surface);
   border: 1px solid var(--border-l);
   border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+  padding: 0;
+  text-align: left;
+  color: inherit;
 }
 
 .search-grid-item .grid-thumb {
@@ -1441,5 +1521,24 @@ select {
 
   .bottom-nav {
     padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .llm-actions {
+    flex-direction: column;
+  }
+
+  .llm-actions > .btn {
+    width: 100%;
+    white-space: normal;
+    line-height: 1.15;
+    min-height: 48px;
+  }
+}
+
+@media (min-width: 700px) {
+  .auth-panel {
+    width: min(460px, 100%);
+    padding: 28px;
+    gap: 16px;
   }
 }

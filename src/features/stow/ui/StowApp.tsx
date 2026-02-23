@@ -1,8 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import type {
+  FormEvent,
+  InputHTMLAttributes,
+  KeyboardEvent as ReactKeyboardEvent,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes
+} from "react";
 import type { User } from "firebase/auth";
 import { useNavigate, useParams } from "react-router-dom";
-import QRCode from "qrcode";
 import {
   Home,
   Search,
@@ -25,7 +31,6 @@ import {
   ArrowRight,
   Save,
   Inbox,
-  Upload,
   Users,
   KeyRound,
   LogOut,
@@ -34,14 +39,8 @@ import {
 import { useWorkspaceData } from "@/features/stow/hooks/useWorkspaceData";
 import type { ImageRef, Item, Role } from "@/types/domain";
 import type { HouseholdLlmConfig, VisionSuggestion } from "@/types/llm";
-import {
-  createHouseholdInvite,
-  saveHouseholdLlmConfig,
-  setHouseholdLlmSecret,
-  validateHouseholdLlmConfig,
-  visionCategorizeItemImage
-} from "@/lib/firebase/functions";
 import { storagePaths } from "@/lib/firebase/paths";
+import { toLoggedUserErrorMessage, toUserErrorMessage } from "@/lib/firebase/errors";
 import { imageRefFromUrl, uploadFileToStorage } from "@/lib/firebase/storage";
 
 const P = {
@@ -88,6 +87,26 @@ type VisionDraft = {
   name: string;
 };
 
+type FirebaseFunctionsModule = typeof import("@/lib/firebase/functions");
+type QrCodeModule = typeof import("qrcode");
+
+let firebaseFunctionsModulePromise: Promise<FirebaseFunctionsModule> | null = null;
+let qrCodeModulePromise: Promise<QrCodeModule> | null = null;
+
+function loadFirebaseFunctionsModule() {
+  if (!firebaseFunctionsModulePromise) {
+    firebaseFunctionsModulePromise = import("@/lib/firebase/functions");
+  }
+  return firebaseFunctionsModulePromise;
+}
+
+function loadQrCodeModule() {
+  if (!qrCodeModulePromise) {
+    qrCodeModulePromise = import("qrcode");
+  }
+  return qrCodeModulePromise;
+}
+
 function iconForSpace(icon: string) {
   switch (icon) {
     case "home":
@@ -95,6 +114,21 @@ function iconForSpace(icon: string) {
     default:
       return Box;
   }
+}
+
+const FOCUSABLE_SELECTOR = [
+  "button:not([disabled])",
+  "[href]",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])"
+].join(", ");
+
+function focusableElements(container: HTMLElement) {
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (el) => !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true"
+  );
 }
 
 function Modal({
@@ -108,15 +142,73 @@ function Modal({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const titleId = useId();
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    const frame = window.requestAnimationFrame(() => {
+      const sheet = sheetRef.current;
+      if (!sheet) return;
+      const firstFocusable = focusableElements(sheet)[0];
+      (firstFocusable ?? sheet).focus();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      previousFocusRef.current?.focus?.();
+    };
+  }, [open]);
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== "Tab") return;
+
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+    const items = focusableElements(sheet);
+    if (items.length === 0) {
+      event.preventDefault();
+      sheet.focus();
+      return;
+    }
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   if (!open) return null;
   return (
     <div className="overlay">
       <div className="overlay-backdrop" onClick={onClose} />
-      <div className="sheet">
+      <div
+        ref={sheetRef}
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+      >
         <div className="sheet-handle" />
         <div className="sheet-head">
-          <h3>{title}</h3>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">
+          <h3 id={titleId}>{title}</h3>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
             <X size={14} />
           </button>
         </div>
@@ -423,10 +515,21 @@ export function StowApp({
       setQrImageUrl(null);
       return;
     }
+    let cancelled = false;
     const url = `${window.location.origin}/spaces/${showQrForSpaceId}`;
-    QRCode.toDataURL(url, { margin: 1, width: 220, color: { dark: "#1A1A2E", light: "#FFFFFF" } })
-      .then(setQrImageUrl)
-      .catch(() => setQrImageUrl(null));
+    void loadQrCodeModule()
+      .then((module) =>
+        module.toDataURL(url, { margin: 1, width: 220, color: { dark: "#1A1A2E", light: "#FFFFFF" } })
+      )
+      .then((value) => {
+        if (!cancelled) setQrImageUrl(value);
+      })
+      .catch(() => {
+        if (!cancelled) setQrImageUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [showQrForSpaceId]);
 
   useEffect(() => {
@@ -472,6 +575,26 @@ export function StowApp({
       : online
         ? "Live"
         : "Offline";
+  const normalizedWorkspaceError = workspace.error
+    ? toUserErrorMessage(workspace.error, "We couldn’t load household data.")
+    : null;
+  const showCollectionLoadWarning = Boolean(normalizedWorkspaceError && items.length === 0);
+
+  async function copyInviteLinkToClipboard() {
+    if (!inviteLink) return;
+    try {
+      if (!window.isSecureContext || !navigator.clipboard?.writeText) {
+        throw new Error("Clipboard API unavailable");
+      }
+      await navigator.clipboard.writeText(inviteLink);
+      flash("Invite link copied");
+    } catch (error) {
+      flash("Couldn’t copy automatically. Copy the link from the field above.");
+      if (import.meta.env.DEV) {
+        console.error(error);
+      }
+    }
+  }
 
   async function submitAddSpace(event: FormEvent) {
     event.preventDefault();
@@ -505,7 +628,7 @@ export function StowApp({
       navigate(`/spaces/${newSpaceId}`);
       flash("Space created");
     } catch (error) {
-      flash(error instanceof Error ? error.message : "Failed to create space");
+      flash(toLoggedUserErrorMessage(error, "Failed to create space"));
     } finally {
       setSaving(false);
     }
@@ -534,7 +657,7 @@ export function StowApp({
       setAddAreaForm({ name: "", imageUrl: "", imageFile: null });
       flash("Area created");
     } catch (error) {
-      flash(error instanceof Error ? error.message : "Failed to create area");
+      flash(toLoggedUserErrorMessage(error, "Failed to create area"));
     } finally {
       setSaving(false);
     }
@@ -590,7 +713,7 @@ export function StowApp({
       });
       flash("Item added");
     } catch (error) {
-      flash(error instanceof Error ? error.message : "Failed to add item");
+      flash(toLoggedUserErrorMessage(error, "Failed to add item"));
     } finally {
       setSaving(false);
     }
@@ -640,7 +763,7 @@ export function StowApp({
       });
       flash("Item updated");
     } catch (error) {
-      flash(error instanceof Error ? error.message : "Failed to update item");
+      flash(toLoggedUserErrorMessage(error, "Failed to update item"));
     } finally {
       setSaving(false);
     }
@@ -673,6 +796,7 @@ export function StowApp({
       let response: { suggestion: VisionSuggestion } | null = null;
       try {
         if (uploadRef?.storagePath || uploadRef?.downloadUrl) {
+          const { visionCategorizeItemImage } = await loadFirebaseFunctionsModule();
           response = await visionCategorizeItemImage({
             householdId,
             imageRef: uploadRef.storagePath
@@ -716,7 +840,7 @@ export function StowApp({
       }));
       flash("Review the AI draft before saving");
     } catch (error) {
-      flash(error instanceof Error ? error.message : "Vision categorization failed");
+      flash(toLoggedUserErrorMessage(error, "Vision categorization failed"));
     } finally {
       setVisionWorking(false);
     }
@@ -762,7 +886,7 @@ export function StowApp({
       });
       flash("Vision draft saved as item");
     } catch (error) {
-      flash(error instanceof Error ? error.message : "Failed to save vision draft");
+      flash(toLoggedUserErrorMessage(error, "Failed to save vision draft"));
     } finally {
       setSaving(false);
     }
@@ -771,11 +895,12 @@ export function StowApp({
   async function createInvite() {
     setInviteWorking(true);
     try {
+      const { createHouseholdInvite } = await loadFirebaseFunctionsModule();
       const result = await createHouseholdInvite({ householdId, role: inviteRole, expiresInHours: 72 });
       setInviteLink(result.inviteUrl);
       flash("Invite link created");
     } catch (error) {
-      flash(error instanceof Error ? error.message : "Failed to create invite");
+      flash(toLoggedUserErrorMessage(error, "Failed to create invite"));
     } finally {
       setInviteWorking(false);
     }
@@ -784,6 +909,7 @@ export function StowApp({
   async function saveLlmSettings() {
     setLlmSaveWorking(true);
     try {
+      const { saveHouseholdLlmConfig, setHouseholdLlmSecret } = await loadFirebaseFunctionsModule();
       await saveHouseholdLlmConfig({ householdId, config: llmForm });
       if (llmSecretInput.trim()) {
         await setHouseholdLlmSecret({ householdId, apiKey: llmSecretInput.trim() });
@@ -791,7 +917,7 @@ export function StowApp({
       }
       flash("LLM settings saved");
     } catch (error) {
-      flash(error instanceof Error ? error.message : "Failed to save LLM settings");
+      flash(toLoggedUserErrorMessage(error, "Failed to save LLM settings"));
     } finally {
       setLlmSaveWorking(false);
     }
@@ -800,10 +926,11 @@ export function StowApp({
   async function validateLlmSettings() {
     setLlmValidateWorking(true);
     try {
+      const { validateHouseholdLlmConfig } = await loadFirebaseFunctionsModule();
       const result = await validateHouseholdLlmConfig({ householdId });
       flash(result.message || (result.ok ? "LLM config validated" : "LLM validation failed"));
     } catch (error) {
-      flash(error instanceof Error ? error.message : "Failed to validate LLM settings");
+      flash(toLoggedUserErrorMessage(error, "Failed to validate LLM settings"));
     } finally {
       setLlmValidateWorking(false);
     }
@@ -821,7 +948,6 @@ export function StowApp({
               <div className="search-input-wrap">
                 <Search size={16} />
                 <input
-                  autoFocus
                   className="input"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -829,17 +955,24 @@ export function StowApp({
                   style={{ borderColor: searchQuery ? P.accent : undefined }}
                 />
                 {searchQuery ? (
-                  <button className="search-clear" onClick={() => setSearchQuery("")}>
+                  <button type="button" className="search-clear" onClick={() => setSearchQuery("")} aria-label="Clear search">
                     <X size={14} />
                   </button>
                 ) : null}
               </div>
-              <button className="view-toggle" onClick={() => setGridView(!gridView)}>
+              <button
+                type="button"
+                className="view-toggle"
+                onClick={() => setGridView(!gridView)}
+                aria-label={gridView ? "Switch to list view" : "Switch to grid view"}
+                aria-pressed={gridView}
+              >
                 {gridView ? <List size={16} /> : <Grid size={16} />}
               </button>
             </div>
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 120px" }}>
+            {showCollectionLoadWarning ? <div className="banner error inline-error">{normalizedWorkspaceError}</div> : null}
             {!searchQuery ? (
               <div>
                 <div className="section-label">Popular Tags</div>
@@ -886,7 +1019,13 @@ export function StowApp({
             ) : (
               <div className="search-grid">
                 {searchedItems.map((item) => (
-                  <div key={item.id} className="search-grid-item" onClick={() => setSelectedItemId(item.id)}>
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="search-grid-item"
+                    onClick={() => setSelectedItemId(item.id)}
+                    aria-label={`Open item ${item.name}`}
+                  >
                     <div className="grid-thumb">
                       {item.image?.downloadUrl ? <img src={item.image.downloadUrl} alt="" /> : (
                         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><Inbox size={24} color={P.border} /></div>
@@ -901,7 +1040,7 @@ export function StowApp({
                       <div className="row-title">{item.name}</div>
                       <div className="row-sub">{spaceNameById[item.spaceId]}</div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -916,13 +1055,14 @@ export function StowApp({
           <div className="tab-header" style={{ borderBottom: `1px solid ${P.borderL}` }}>
             <h1 style={{ margin: "0 0 16px", fontSize: 28, fontWeight: 900, color: P.ink }}>Packing</h1>
             <div className="packing-pills">
-              <button className="packing-pill inactive">
+              <button type="button" className="packing-pill inactive" disabled title="Packing list presets coming soon">
                 All Packed <span className="count">{packedItems.length}</span>
               </button>
-              <button className="packing-pill active">Weekend Trip</button>
+              <button type="button" className="packing-pill active" disabled title="Packing list presets coming soon">Weekend Trip</button>
             </div>
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 120px" }}>
+            {showCollectionLoadWarning ? <div className="banner error inline-error">{normalizedWorkspaceError}</div> : null}
             <div className="progress-card">
               <div className="progress-label">
                 <span>Pack Progress</span>
@@ -936,7 +1076,10 @@ export function StowApp({
               {items.map((item) => (
                 <div key={item.id} className="packing-item">
                   <button
+                    type="button"
                     className={`pack-check ${item.isPacked ? "checked" : ""}`}
+                    aria-pressed={item.isPacked}
+                    aria-label={`${item.isPacked ? "Unpack" : "Pack"} ${item.name}`}
                     onClick={() => {
                       if (!workspace.userId) return;
                       void workspace.actions
@@ -947,15 +1090,21 @@ export function StowApp({
                           nextValue: !item.isPacked
                         })
                         .then(() => flash(item.isPacked ? "Unpacked" : "Packed!"))
-                        .catch((error) => flash(error instanceof Error ? error.message : "Failed"));
+                        .catch((error) => flash(toLoggedUserErrorMessage(error, "Failed to update packing status")));
                     }}
                   >
                     {item.isPacked ? <CheckCircle size={22} strokeWidth={2.5} /> : <div className="pack-check-circle" />}
                   </button>
-                  <div className="grow clickable" style={{ opacity: item.isPacked ? 0.35 : 1, transition: "opacity 0.3s" }} onClick={() => setSelectedItemId(item.id)}>
+                  <button
+                    type="button"
+                    className="pack-item-open grow"
+                    style={{ opacity: item.isPacked ? 0.35 : 1, transition: "opacity 0.3s" }}
+                    onClick={() => setSelectedItemId(item.id)}
+                    aria-label={`Open item details for ${item.name}`}
+                  >
                     <div className="row-title" style={{ textDecoration: item.isPacked ? "line-through" : "none" }}>{item.name}</div>
                     <div className="row-sub">{spaceNameById[item.spaceId]} · {item.areaNameSnapshot}</div>
-                  </div>
+                  </button>
                   {item.image?.downloadUrl ? (
                     <img src={item.image.downloadUrl} alt="" style={{ width: 38, height: 38, borderRadius: 10, objectFit: "cover", marginRight: 4, opacity: item.isPacked ? 0.25 : 1, filter: item.isPacked ? "grayscale(1)" : "none" }} />
                   ) : null}
@@ -1002,13 +1151,7 @@ export function StowApp({
                   {inviteLink ? (
                     <div className="stack-sm">
                       <TextInput readOnly value={inviteLink} />
-                      <button
-                        className="btn"
-                        onClick={async () => {
-                          await navigator.clipboard.writeText(inviteLink);
-                          flash("Invite link copied");
-                        }}
-                      >
+                      <button className="btn" onClick={() => void copyInviteLinkToClipboard()}>
                         Copy Invite Link
                       </button>
                     </div>
@@ -1083,7 +1226,7 @@ export function StowApp({
                   placeholder="Leave blank to keep current key"
                 />
               </Field>
-              <div className="row">
+              <div className="row llm-actions">
                 <button className="btn primary" disabled={llmSaveWorking} onClick={() => void saveLlmSettings()}>
                   {llmSaveWorking ? "Saving…" : "Save LLM Settings"}
                 </button>
@@ -1123,7 +1266,7 @@ export function StowApp({
             <h1>Stow<span className="dot">.</span></h1>
             <p className="subtitle">{items.length} items across {spaces.length} spaces</p>
           </div>
-          {workspace.error ? <div className="banner error" style={{ margin: "0 24px" }}>{workspace.error}</div> : null}
+          {normalizedWorkspaceError ? <div className="banner error" style={{ margin: "0 24px" }}>{normalizedWorkspaceError}</div> : null}
           <div style={{ flex: 1, overflowY: "auto", padding: "0 24px 120px" }}>
             <div style={{ height: 16 }} />
             <div className="section-label">Your Spaces</div>
@@ -1187,7 +1330,13 @@ export function StowApp({
           <div className="row gap-sm">
             {!selectedAreaId ? (
               <>
-                <button className="icon-btn" style={{ border: "none", background: "none" }} onClick={() => setShowQrForSpaceId(selectedSpaceId)}>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  style={{ border: "none", background: "none" }}
+                  onClick={() => setShowQrForSpaceId(selectedSpaceId)}
+                  aria-label="Show QR code for this space"
+                >
                   <Grid size={18} color={P.inkMuted} />
                 </button>
               </>
@@ -1280,7 +1429,13 @@ export function StowApp({
               </button>
             </div>
           ) : null}
-          <button className={`fab ${fabOpen ? "rotated" : ""}`} onClick={() => setFabOpen(!fabOpen)} aria-label="Add">
+          <button
+            type="button"
+            className={`fab ${fabOpen ? "rotated" : ""}`}
+            onClick={() => setFabOpen(!fabOpen)}
+            aria-label={fabOpen ? "Close add menu" : "Open add menu"}
+            aria-expanded={fabOpen}
+          >
             <Plus size={26} strokeWidth={2.5} />
           </button>
         </div>
@@ -1509,16 +1664,31 @@ export function StowApp({
                 </div>
               )}
               <div className="hero-controls">
-                <button className={`hero-btn ${selectedItem.image?.downloadUrl ? "on-image" : "on-plain"}`} onClick={() => { setSelectedItemId(null); setEditing(false); }}>
+                <button
+                  type="button"
+                  className={`hero-btn ${selectedItem.image?.downloadUrl ? "on-image" : "on-plain"}`}
+                  onClick={() => { setSelectedItemId(null); setEditing(false); }}
+                  aria-label="Back to list"
+                >
                   <ChevronLeft size={18} strokeWidth={2.5} />
                 </button>
                 <div style={{ display: "flex", gap: 8 }}>
                   {!editing ? (
-                    <button className={`hero-btn ${selectedItem.image?.downloadUrl ? "on-image" : "on-plain"}`} onClick={() => setEditing(true)}>
+                    <button
+                      type="button"
+                      className={`hero-btn ${selectedItem.image?.downloadUrl ? "on-image" : "on-plain"}`}
+                      onClick={() => setEditing(true)}
+                      aria-label="Edit item"
+                    >
                       <Edit size={16} />
                     </button>
                   ) : null}
-                  <button className={`hero-btn ${selectedItem.image?.downloadUrl ? "on-image" : "on-plain"}`} onClick={() => setDelConfirm(selectedItem.id)}>
+                  <button
+                    type="button"
+                    className={`hero-btn ${selectedItem.image?.downloadUrl ? "on-image" : "on-plain"}`}
+                    onClick={() => setDelConfirm(selectedItem.id)}
+                    aria-label="Delete item"
+                  >
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -1580,12 +1750,15 @@ export function StowApp({
                       ) : null}
                     </div>
                     <button
+                      type="button"
                       className={`pack-toggle ${selectedItem.isPacked ? "packed" : "unpacked"}`}
+                      aria-pressed={selectedItem.isPacked}
+                      aria-label={selectedItem.isPacked ? "Remove item from packing list" : "Add item to packing list"}
                       onClick={() => {
                         if (!workspace.userId) return;
                         void workspace.actions.togglePacked({ householdId, itemId: selectedItem.id, userId: workspace.userId, nextValue: !selectedItem.isPacked })
                           .then(() => flash(selectedItem.isPacked ? "Removed from bag" : "Added to bag!"))
-                          .catch((error) => flash(error instanceof Error ? error.message : "Failed to update"));
+                          .catch((error) => flash(toLoggedUserErrorMessage(error, "Failed to update item")));
                       }}
                     >
                       <Package size={20} strokeWidth={2} />
@@ -1649,7 +1822,7 @@ export function StowApp({
                   void workspace.actions
                     .deleteItem({ householdId, itemId: delConfirm })
                     .then(() => { setDelConfirm(null); setSelectedItemId(null); setEditing(false); flash("Item deleted"); })
-                    .catch((error) => flash(error instanceof Error ? error.message : "Failed to delete item"));
+                    .catch((error) => flash(toLoggedUserErrorMessage(error, "Failed to delete item")));
                 }}>Delete</button>
               </div>
             </div>
