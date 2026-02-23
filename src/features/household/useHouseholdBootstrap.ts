@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import { doc, getDoc, serverTimestamp, setDoc, writeBatch } from "firebase/firestore";
+import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { db } from "@/lib/firebase/client";
 import { householdPaths } from "@/lib/firebase/paths";
-import { normalizeSeedForHousehold, stripUndefined } from "@/features/stow/seed";
 
 type BootstrapState = {
   householdId: string | null;
@@ -55,33 +54,6 @@ async function ensureBootstrap(user: User): Promise<string> {
     maxTokens: 400
   });
   await batch.commit();
-
-  const seed = normalizeSeedForHousehold(householdId);
-  const seedBatch = writeBatch(db);
-  for (const space of seed.spaces) {
-    seedBatch.set(doc(db, householdPaths.space(householdId, space.id)), stripUndefined({
-      ...space,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    }));
-  }
-  for (const area of seed.areas) {
-    seedBatch.set(doc(db, householdPaths.area(householdId, area.spaceId, area.id)), stripUndefined({
-      ...area,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    }));
-  }
-  for (const item of seed.items) {
-    seedBatch.set(doc(db, householdPaths.item(householdId, item.id)), stripUndefined({
-      ...item,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      createdBy: user.uid,
-      updatedBy: user.uid
-    }));
-  }
-  await seedBatch.commit();
 
   return householdId;
 }
