@@ -165,7 +165,13 @@ export function seedSpaceColor(index: number) {
 }
 
 export function toImageRef(url?: string) {
-  return url ? { downloadUrl: url } : null;
+  return url ? { downloadUrl: url } : undefined;
+}
+
+/** Remove keys whose value is undefined — Firestore rejects undefined. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function stripUndefined<T extends Record<string, any>>(obj: T): T {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
 }
 
 export function normalizeSeedForHousehold(householdId: string) {
@@ -199,10 +205,10 @@ export function normalizeSeedForHousehold(householdId: string) {
       name: item.name,
       kind: item.kind,
       image: toImageRef(item.image),
-      value: item.value ?? null,
-      isPriceless: item.isPriceless ?? false,
-      tags: item.tags ?? [],
-      notes: item.notes ?? "",
+      value: item.value,
+      isPriceless: item.isPriceless,
+      tags: item.tags,
+      notes: item.notes,
       isPacked: item.isPacked
     })
   );

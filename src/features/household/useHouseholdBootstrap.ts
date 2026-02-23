@@ -3,7 +3,7 @@ import { doc, getDoc, serverTimestamp, setDoc, writeBatch } from "firebase/fires
 import type { User } from "firebase/auth";
 import { db } from "@/lib/firebase/client";
 import { householdPaths } from "@/lib/firebase/paths";
-import { normalizeSeedForHousehold } from "@/features/stow/seed";
+import { normalizeSeedForHousehold, stripUndefined } from "@/features/stow/seed";
 
 type BootstrapState = {
   householdId: string | null;
@@ -59,27 +59,27 @@ async function ensureBootstrap(user: User): Promise<string> {
   const seed = normalizeSeedForHousehold(householdId);
   const seedBatch = writeBatch(db);
   for (const space of seed.spaces) {
-    seedBatch.set(doc(db, householdPaths.space(householdId, space.id)), {
+    seedBatch.set(doc(db, householdPaths.space(householdId, space.id)), stripUndefined({
       ...space,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
-    });
+    }));
   }
   for (const area of seed.areas) {
-    seedBatch.set(doc(db, householdPaths.area(householdId, area.spaceId, area.id)), {
+    seedBatch.set(doc(db, householdPaths.area(householdId, area.spaceId, area.id)), stripUndefined({
       ...area,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
-    });
+    }));
   }
   for (const item of seed.items) {
-    seedBatch.set(doc(db, householdPaths.item(householdId, item.id)), {
+    seedBatch.set(doc(db, householdPaths.item(householdId, item.id)), stripUndefined({
       ...item,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       createdBy: user.uid,
       updatedBy: user.uid
-    });
+    }));
   }
   await seedBatch.commit();
 
