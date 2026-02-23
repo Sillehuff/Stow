@@ -36,7 +36,55 @@ export default function App() {
         }
       />
       <Route
-        path="/spaces/:spaceId?"
+        path="/spaces"
+        element={
+          <Suspense fallback={<RouteLoading message="Loading app…" />}>
+            <SpacesRoutePage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/spaces/:spaceId"
+        element={
+          <Suspense fallback={<RouteLoading message="Loading app…" />}>
+            <SpacesRoutePage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/spaces/:spaceId/areas/:areaId"
+        element={
+          <Suspense fallback={<RouteLoading message="Loading app…" />}>
+            <SpacesRoutePage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/items/:itemId"
+        element={
+          <Suspense fallback={<RouteLoading message="Loading app…" />}>
+            <SpacesRoutePage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/search"
+        element={
+          <Suspense fallback={<RouteLoading message="Loading app…" />}>
+            <SpacesRoutePage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/packing"
+        element={
+          <Suspense fallback={<RouteLoading message="Loading app…" />}>
+            <SpacesRoutePage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/settings"
         element={
           <Suspense fallback={<RouteLoading message="Loading app…" />}>
             <SpacesRoutePage />

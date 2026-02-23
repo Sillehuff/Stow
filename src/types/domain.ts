@@ -83,6 +83,7 @@ export interface HouseholdInvite {
   id: string;
   role: Role;
   tokenHash: string;
+  token?: string;
   createdAt: Timestamp;
   createdBy: string;
   expiresAt: Timestamp;

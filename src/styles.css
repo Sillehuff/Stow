@@ -214,6 +214,7 @@ select {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.05s ease;
 }
 
 .btn.primary {
@@ -238,6 +239,10 @@ select {
 .btn:disabled {
   opacity: 0.72;
   cursor: default;
+}
+
+.btn:not(:disabled):active {
+  transform: translateY(1px);
 }
 
 /* ── Inputs ── */
@@ -312,6 +317,12 @@ select:focus-visible,
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 1.2px;
+}
+
+.field-help {
+  font-size: 12px;
+  color: var(--warm);
+  line-height: 1.35;
 }
 
 .check-row {
@@ -694,14 +705,14 @@ select:focus-visible,
   border: none;
   background: transparent;
   color: var(--warm);
-  width: 72px;
+  width: 78px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.3px;
   position: relative;
@@ -710,6 +721,8 @@ select:focus-visible,
 .nav-btn.active {
   color: var(--accent);
   font-weight: 800;
+  background: rgba(232, 101, 43, 0.06);
+  border-radius: 14px;
 }
 
 .nav-icon-wrap {
@@ -738,13 +751,13 @@ select:focus-visible,
   position: absolute;
   top: -6px;
   right: -10px;
-  min-width: 17px;
-  height: 17px;
-  padding: 0 4px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
   border-radius: 999px;
   background: var(--accent);
   color: #fff;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 900;
   display: grid;
   place-items: center;
@@ -894,6 +907,13 @@ select:focus-visible,
   flex: 1;
 }
 
+.sticky-submit {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  box-shadow: 0 -8px 20px rgba(247, 247, 250, 0.92);
+}
+
 /* ── Item Detail (Full-Screen) ── */
 .item-detail {
   position: absolute;
@@ -1003,6 +1023,7 @@ select:focus-visible,
   margin-bottom: 14px;
   background: var(--canvas);
   border: 1px solid var(--border-l);
+  color: inherit;
 }
 
 .location-row {
@@ -1119,6 +1140,29 @@ select:focus-visible,
   margin-bottom: 24px;
 }
 
+.search-filter-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.search-filter-row.compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.search-filter-row.compact > * {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.search-filter-row.compact > .btn,
+.search-filter-row.compact > .packing-pill {
+  min-height: 44px;
+}
+
 .search-tag-btn {
   padding: 8px 16px;
   border-radius: 999px;
@@ -1128,6 +1172,55 @@ select:focus-visible,
   color: var(--ink-muted);
   border: 1px solid var(--border);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip-input {
+  width: 100%;
+  border: 1.5px solid var(--border);
+  background: var(--canvas);
+  border-radius: 14px;
+  padding: 8px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.chip-input:focus-within {
+  border-color: var(--accent);
+}
+
+.chip-input-pill {
+  border: 1px solid rgba(232, 101, 43, 0.2);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chip-input-field {
+  border: none;
+  background: transparent;
+  min-width: 120px;
+  flex: 1;
+  outline: none;
+  color: var(--ink);
+  font: inherit;
+}
+
+.chip-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* ── Packing Pills ── */
@@ -1258,8 +1351,8 @@ select:focus-visible,
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--ink);
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 12px;
   display: grid;
   place-items: center;
@@ -1270,6 +1363,23 @@ select:focus-visible,
 .icon-btn:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+@media (hover: hover) {
+  .btn:not(:disabled):hover {
+    border-color: #dcdce8;
+  }
+
+  .btn.primary:not(:disabled):hover {
+    filter: brightness(0.98);
+  }
+
+  .list-row:hover,
+  .space-list-row:hover,
+  .area-card:hover,
+  .search-grid-item:hover {
+    border-color: #e2e2ed;
+  }
 }
 
 /* ── Settings ── */
@@ -1364,6 +1474,14 @@ select:focus-visible,
   border: 1px solid var(--border-l);
   max-height: 220px;
   object-fit: cover;
+}
+
+.image-picker-preview {
+  padding: 10px;
+}
+
+.image-picker-preview .row {
+  flex-wrap: wrap;
 }
 
 /* ── Toast ── */
@@ -1540,5 +1658,96 @@ select:focus-visible,
     width: min(460px, 100%);
     padding: 28px;
     gap: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-shell {
+    place-items: stretch;
+    padding: 20px;
+  }
+
+  .phone-frame {
+    max-width: 1200px;
+    width: 100%;
+    height: calc(100vh - 40px);
+    border-radius: 24px;
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  }
+
+  .bottom-nav {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    width: 92px;
+    border-top: none;
+    border-right: 1px solid var(--border-l);
+    padding: 18px 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.85);
+  }
+
+  .nav-btn {
+    width: 100%;
+    min-height: 68px;
+    border-radius: 16px;
+    padding: 8px 4px;
+  }
+
+  .nav-btn.active {
+    background: var(--accent-soft);
+  }
+
+  .screen {
+    margin-top: 0;
+    margin-left: 92px;
+    padding-bottom: 32px;
+  }
+
+  .fab-wrap {
+    right: 24px;
+    bottom: 24px;
+  }
+
+  .phone-frame.item-detail-open .screen {
+    margin-right: min(420px, 40%);
+  }
+
+  .item-detail {
+    left: auto;
+    right: 0;
+    width: min(420px, 40%);
+    border-left: 1px solid var(--border-l);
+    box-shadow: none;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .item-detail-content {
+    border-radius: 0;
+    margin-top: 0;
+    box-shadow: none;
+  }
+
+  .item-detail-hero {
+    height: 32%;
+  }
+
+  .toast {
+    left: 92px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

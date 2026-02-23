@@ -22,6 +22,7 @@ export async function createHouseholdInviteHandler(raw: unknown, requestAuth: { 
 
   await inviteRef.set({
     role: input.role,
+    token,
     tokenHash,
     createdAt: FieldValue.serverTimestamp(),
     createdBy: uid,

@@ -5,7 +5,17 @@ import { sendEmailLink, signInWithGoogle } from "@/lib/firebase/auth";
 import { toLoggedUserErrorMessage } from "@/lib/firebase/errors";
 import { useAuthContext } from "@/features/auth/AuthProvider";
 
-export function AuthGate({ children }: { children: ReactNode }) {
+export function AuthGate({
+  children,
+  unauthTitle,
+  unauthSubtitle,
+  beforeAuthForm
+}: {
+  children: ReactNode;
+  unauthTitle?: string;
+  unauthSubtitle?: ReactNode;
+  beforeAuthForm?: ReactNode;
+}) {
   const { user, loading } = useAuthContext();
   const [email, setEmail] = useState("");
   const [pending, setPending] = useState<null | "google" | "email">(null);
@@ -43,8 +53,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
   return (
     <div className="center-shell">
       <div className="panel auth-panel">
-        <h1>Stow</h1>
-        <p className="muted">Sign in to access your shared household inventory.</p>
+        <h1>{unauthTitle || "Stow"}</h1>
+        <p className="muted">{unauthSubtitle || "Sign in to access your shared household inventory."}</p>
+        {beforeAuthForm}
         {error ? <div className="banner error">{error}</div> : null}
         {message ? <div className="banner ok">{message}</div> : null}
         <button
@@ -92,9 +103,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
             onChange={(event) => setEmail(event.target.value)}
           />
           <button className="btn" disabled={pending !== null || !email.trim()}>
-            {pending === "email" ? "Sending…" : "Send Email Sign-In Link"}
+            {pending === "email" ? "Sending…" : "Email Me a Sign-In Link"}
           </button>
         </form>
+        {message ? (
+          <div className="stack-sm">
+            <div className="muted">Next steps: check your inbox and spam folder, then open the link on this device.</div>
+            <button type="button" className="btn" onClick={() => setEmail("")}>
+              Use Another Email
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

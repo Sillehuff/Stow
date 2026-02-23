@@ -11,6 +11,15 @@ export default function AcceptInvitePage() {
   const navigate = useNavigate();
   const householdId = params.get("householdId") ?? "";
   const token = params.get("token") ?? "";
+  const householdName = params.get("householdName") ?? "";
+  const inviter = params.get("inviter") ?? "";
+  const inviteRole = params.get("role") ?? "";
+  const expiresAtRaw = params.get("expiresAt");
+  const expiresAtLabel = (() => {
+    if (!expiresAtRaw) return "";
+    const parsed = new Date(expiresAtRaw);
+    return Number.isNaN(parsed.getTime()) ? "" : parsed.toLocaleString();
+  })();
   const missingParams = !householdId || !token;
   const [state, setState] = useState<{
     status: "idle" | "working" | "success" | "error";
@@ -21,13 +30,31 @@ export default function AcceptInvitePage() {
   });
 
   return (
-    <AuthGate>
+    <AuthGate
+      unauthTitle="Accept Invite"
+      unauthSubtitle="Sign in first, then accept the household invite."
+      beforeAuthForm={
+        <div className="stack-sm">
+          {householdName ? <div className="banner">{householdName}</div> : null}
+          <div className="muted">
+            {inviteRole ? `Role: ${inviteRole}. ` : ""}
+            {inviter ? `Invited by ${inviter}. ` : ""}
+            {expiresAtLabel ? `Expires ${expiresAtLabel}.` : ""}
+          </div>
+        </div>
+      }
+    >
       <div className="center-shell">
         <div className="panel auth-panel">
           <h1>Accept Invite</h1>
           <p className="muted">
-            Join household <code>{householdId || "(missing)"}</code>
+            Join household {householdName ? <strong>{householdName}</strong> : <code>{householdId || "(missing)"}</code>}
           </p>
+          <div className="stack-sm">
+            {inviteRole ? <div className="muted">Role: {inviteRole}</div> : null}
+            {inviter ? <div className="muted">Invited by: {inviter}</div> : null}
+            {expiresAtLabel ? <div className="muted">Expires: {expiresAtLabel}</div> : null}
+          </div>
           {state.message ? <div className={`banner ${state.status === "error" ? "error" : "ok"}`}>{state.message}</div> : null}
           <div className="stack">
             <button
@@ -38,7 +65,7 @@ export default function AcceptInvitePage() {
                 try {
                   await acceptHouseholdInvite({ householdId, token });
                   setState({ status: "success", message: "Invite accepted. Redirecting…" });
-                  setTimeout(() => navigate("/", { replace: true }), 800);
+                  setTimeout(() => navigate("/", { replace: true }), 1200);
                 } catch (error) {
                   setState({
                     status: "error",
@@ -52,6 +79,11 @@ export default function AcceptInvitePage() {
             <button className="btn" onClick={() => navigate("/", { replace: true })}>
               Cancel
             </button>
+            {state.status === "success" ? (
+              <button className="btn primary" onClick={() => navigate("/", { replace: true })}>
+                Go to Household
+              </button>
+            ) : null}
           </div>
         </div>
       </div>

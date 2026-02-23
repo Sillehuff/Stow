@@ -5,6 +5,7 @@ import {
   collectionGroup,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -19,7 +20,7 @@ import {
 import type { Unsubscribe } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { householdPaths } from "@/lib/firebase/paths";
-import type { Area, Household, HouseholdMember, ImageRef, Item, Space } from "@/types/domain";
+import type { Area, Household, HouseholdInvite, HouseholdMember, ImageRef, Item, Space } from "@/types/domain";
 import type { HouseholdLlmConfig } from "@/types/llm";
 
 export type SnapshotState<T> = {
@@ -56,6 +57,13 @@ export const inventoryRepository = {
     );
   },
 
+  async updateHousehold(input: { householdId: string; patch: Partial<Pick<Household, "name">> }) {
+    await updateDoc(doc(requireDb(), householdPaths.root(input.householdId)), {
+      ...input.patch,
+      updatedAt: serverTimestamp()
+    });
+  },
+
   subscribeSpaces(householdId: string, onData: (state: SnapshotState<Space>) => void, onError: (e: Error) => void): Unsubscribe {
     const q = query(collection(requireDb(), householdPaths.spaces(householdId)), orderBy("name"));
     return onSnapshot(q, (snap) => onData(mapSnapshot<Space>(snap)), onError);
@@ -82,6 +90,15 @@ export const inventoryRepository = {
   ): Unsubscribe {
     const q = query(collection(requireDb(), householdPaths.members(householdId)), orderBy("createdAt", "asc"));
     return onSnapshot(q, (snap) => onData(mapSnapshot<HouseholdMember>(snap)), onError);
+  },
+
+  subscribeInvites(
+    householdId: string,
+    onData: (state: SnapshotState<HouseholdInvite>) => void,
+    onError: (e: Error) => void
+  ): Unsubscribe {
+    const q = query(collection(requireDb(), householdPaths.invites(householdId)), orderBy("createdAt", "desc"));
+    return onSnapshot(q, (snap) => onData(mapSnapshot<HouseholdInvite>(snap)), onError);
   },
 
   subscribeLlmConfig(
@@ -157,18 +174,100 @@ export const inventoryRepository = {
     return areaRef.id;
   },
 
-  async updateSpace(input: { householdId: string; spaceId: string; patch: Partial<Pick<Space, "name" | "icon" | "color" | "image">> }) {
+  async updateSpace(input: {
+    householdId: string;
+    spaceId: string;
+    patch: Partial<Pick<Space, "name" | "icon" | "color">> & { image?: ImageRef | null };
+  }) {
     await updateDoc(doc(requireDb(), householdPaths.space(input.householdId, input.spaceId)), {
       ...input.patch,
       updatedAt: serverTimestamp()
     });
   },
 
-  async updateArea(input: { householdId: string; spaceId: string; areaId: string; patch: Partial<Pick<Area, "name" | "image">> }) {
+  async updateArea(input: {
+    householdId: string;
+    spaceId: string;
+    areaId: string;
+    patch: Partial<Pick<Area, "name">> & { image?: ImageRef | null };
+  }) {
     await updateDoc(doc(requireDb(), householdPaths.area(input.householdId, input.spaceId, input.areaId)), {
       ...input.patch,
       updatedAt: serverTimestamp()
     });
+  },
+
+  async deleteArea(input: {
+    householdId: string;
+    spaceId: string;
+    areaId: string;
+    reassignTo?: { spaceId: string; areaId: string; areaNameSnapshot: string };
+    userId: string;
+  }) {
+    const database = requireDb();
+    const itemsSnap = await getDocs(
+      query(
+        collection(database, householdPaths.items(input.householdId)),
+        where("spaceId", "==", input.spaceId),
+        where("areaId", "==", input.areaId)
+      )
+    );
+
+    if (!itemsSnap.empty && !input.reassignTo) {
+      throw new Error("Area contains items. Choose a destination first.");
+    }
+
+    const batch = writeBatch(database);
+    if (input.reassignTo) {
+      for (const itemDoc of itemsSnap.docs) {
+        batch.update(itemDoc.ref, {
+          spaceId: input.reassignTo.spaceId,
+          areaId: input.reassignTo.areaId,
+          areaNameSnapshot: input.reassignTo.areaNameSnapshot,
+          updatedAt: serverTimestamp(),
+          updatedBy: input.userId
+        });
+      }
+    }
+
+    batch.delete(doc(database, householdPaths.area(input.householdId, input.spaceId, input.areaId)));
+    await batch.commit();
+  },
+
+  async deleteSpace(input: {
+    householdId: string;
+    spaceId: string;
+    userId: string;
+    reassignTo?: { spaceId: string; areaId: string; areaNameSnapshot: string };
+  }) {
+    const database = requireDb();
+    const [itemsSnap, areasSnap] = await Promise.all([
+      getDocs(query(collection(database, householdPaths.items(input.householdId)), where("spaceId", "==", input.spaceId))),
+      getDocs(collection(database, householdPaths.areas(input.householdId, input.spaceId)))
+    ]);
+
+    if (!itemsSnap.empty && !input.reassignTo) {
+      throw new Error("Space contains items. Choose a destination space/area first.");
+    }
+
+    const batch = writeBatch(database);
+    if (input.reassignTo) {
+      for (const itemDoc of itemsSnap.docs) {
+        batch.update(itemDoc.ref, {
+          spaceId: input.reassignTo.spaceId,
+          areaId: input.reassignTo.areaId,
+          areaNameSnapshot: input.reassignTo.areaNameSnapshot,
+          updatedAt: serverTimestamp(),
+          updatedBy: input.userId
+        });
+      }
+    }
+
+    for (const areaDoc of areasSnap.docs) {
+      batch.delete(areaDoc.ref);
+    }
+    batch.delete(doc(database, householdPaths.space(input.householdId, input.spaceId)));
+    await batch.commit();
   },
 
   async createItem(input: {
@@ -236,6 +335,20 @@ export const inventoryRepository = {
 
   async deleteItem(input: { householdId: string; itemId: string }) {
     await deleteDoc(doc(requireDb(), householdPaths.item(input.householdId, input.itemId)));
+  },
+
+  async updateMemberRole(input: { householdId: string; uid: string; role: HouseholdMember["role"] }) {
+    await updateDoc(doc(requireDb(), householdPaths.member(input.householdId, input.uid)), {
+      role: input.role
+    });
+  },
+
+  async removeMember(input: { householdId: string; uid: string }) {
+    await deleteDoc(doc(requireDb(), householdPaths.member(input.householdId, input.uid)));
+  },
+
+  async revokeInvite(input: { householdId: string; inviteId: string }) {
+    await deleteDoc(doc(requireDb(), `${householdPaths.invites(input.householdId)}/${input.inviteId}`));
   },
 
   async addTagToItem(input: { householdId: string; itemId: string; userId: string; tag: string }) {

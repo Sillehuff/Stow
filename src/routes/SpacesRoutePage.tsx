@@ -26,7 +26,7 @@ function ShellBanners({
   onRefresh: () => Promise<void>;
 }) {
   return (
-    <div className="global-banners">
+    <div className="global-banners" aria-live="polite">
       {!online ? <div className="banner warning">Offline mode: core inventory edits will sync when reconnected.</div> : null}
       {canInstall ? (
         <button className="banner action" onClick={() => void onInstall()}>
