@@ -77,6 +77,11 @@ service cloud.firestore {
         allow create, update, delete: if isHouseholdMember(householdId);
       }
 
+      match /packingLists/{listId} {
+        allow read: if isHouseholdMember(householdId);
+        allow create, update, delete: if isHouseholdMember(householdId);
+      }
+
       match /settings/{docId} {
         allow read: if isHouseholdMember(householdId);
         allow write: if isHouseholdAdmin(householdId) || (docId == 'llm' && isHouseholdBeingCreatedBySelf(householdId));

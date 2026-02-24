@@ -41,7 +41,7 @@ import {
   MoreHorizontal
 } from "lucide-react";
 import { useWorkspaceData } from "@/features/stow/hooks/useWorkspaceData";
-import type { ImageRef, Item, Role, SpaceIcon } from "@/types/domain";
+import type { ImageRef, Item, PackingList, Role, SpaceIcon } from "@/types/domain";
 import type { HouseholdLlmConfig, VisionSuggestion } from "@/types/llm";
 import { storagePaths } from "@/lib/firebase/paths";
 import { toLoggedUserErrorMessage, toUserErrorMessage } from "@/lib/firebase/errors";
@@ -65,8 +65,6 @@ const P = {
 } as const;
 
 type TabKey = "spaces" | "search" | "packing" | "settings";
-type PackingShow = "unpacked" | "packed" | "all";
-type PackingSort = "location" | "recent" | "value";
 type SearchPackedFilter = "all" | "yes" | "no";
 type SearchKindFilter = "all" | "item" | "folder";
 type SpaceContentView = "areas" | "items";
@@ -659,7 +657,14 @@ export function StowApp({
   const [showQrForSpaceId, setShowQrForSpaceId] = useState<string | null>(null);
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [bulkPackingWorking, setBulkPackingWorking] = useState(false);
+  const [packingListName, setPackingListName] = useState("");
+  const [showCreatePackingList, setShowCreatePackingList] = useState(false);
+  const [editingPackingList, setEditingPackingList] = useState<PackingList | null>(null);
+  const [showPackingItemPicker, setShowPackingItemPicker] = useState(false);
+  const [packingItemPickerSelected, setPackingItemPickerSelected] = useState<Set<string>>(new Set());
+  const [packingItemPickerSearch, setPackingItemPickerSearch] = useState("");
+  const [packingListMenuOpen, setPackingListMenuOpen] = useState<string | null>(null);
+  const [importFromListId, setImportFromListId] = useState<string | null>(null);
   const [visionWorking, setVisionWorking] = useState(false);
   const [inviteRole, setInviteRole] = useState<Role>("MEMBER");
   const [inviteLink, setInviteLink] = useState("");
@@ -768,12 +773,7 @@ export function StowApp({
   const searchAreaFilter = urlSearchParams.get("areaId") ?? "";
   const searchHasPhoto = urlSearchParams.get("hasPhoto") === "1";
   const searchTagFilters = urlSearchParams.getAll("tag");
-  const packingShow = (urlSearchParams.get("show") as PackingShow | null) ?? "unpacked";
-  const packingSpaceFilter = urlSearchParams.get("spaceId") ?? "";
-  const packingAreaFilter = urlSearchParams.get("areaId") ?? "";
-  const packingKindFilter = (urlSearchParams.get("kind") as SearchKindFilter | null) ?? "all";
-  const packingGroupBy = urlSearchParams.get("groupBy") === "none" ? "none" : "location";
-  const packingSort = (urlSearchParams.get("sort") as PackingSort | null) ?? "location";
+  const activePackingListId = urlSearchParams.get("listId") ?? null;
   const spacesContentView = (urlSearchParams.get("spaceView") as SpaceContentView | null) ?? "areas";
   const spaceItemsPackedFilter = (urlSearchParams.get("spacePacked") as SpaceItemsPackedFilter | null) ?? "all";
   const spaceItemsKindFilter = (urlSearchParams.get("spaceKind") as SearchKindFilter | null) ?? "all";
@@ -828,7 +828,8 @@ export function StowApp({
       const bDate = b.updatedAt?.toDate?.().getTime?.() ?? 0;
       return bDate - aDate;
     });
-  const packedItems = items.filter((item) => item.isPacked);
+  const packingLists = workspace.packingLists;
+  const activePackingList = activePackingListId ? packingLists.find((pl) => pl.id === activePackingListId) ?? null : null;
   const activeInvites = invites
     .filter((invite) => !invite.acceptedAt)
     .filter((invite) => {
@@ -899,53 +900,15 @@ export function StowApp({
     }
   }, [householdId, searchQuery]);
 
-  const packingItems = items.filter((item) => {
-    if (packingShow === "packed" && !item.isPacked) return false;
-    if (packingShow === "unpacked" && item.isPacked) return false;
-    if (packingSpaceFilter && item.spaceId !== packingSpaceFilter) return false;
-    if (packingAreaFilter && item.areaId !== packingAreaFilter) return false;
-    if (packingKindFilter !== "all" && item.kind !== packingKindFilter) return false;
-    return true;
-  });
-  const sortedPackingItems = useMemo(() => {
-    const next = [...packingItems];
-    next.sort((a, b) => {
-      if (packingSort === "recent") {
-        const aDate = a.updatedAt?.toDate?.().getTime?.() ?? 0;
-        const bDate = b.updatedAt?.toDate?.().getTime?.() ?? 0;
-        return bDate - aDate;
-      }
-      if (packingSort === "value") {
-        return (b.value ?? 0) - (a.value ?? 0);
-      }
-      const aSpaceName = spaces.find((space) => space.id === a.spaceId)?.name ?? "";
-      const bSpaceName = spaces.find((space) => space.id === b.spaceId)?.name ?? "";
-      const aLabel = `${aSpaceName} ${a.areaNameSnapshot} ${a.name}`;
-      const bLabel = `${bSpaceName} ${b.areaNameSnapshot} ${b.name}`;
-      return aLabel.localeCompare(bLabel);
-    });
-    return next;
-  }, [packingItems, packingSort, spaces]);
-  const packingGroups = useMemo(() => {
-    if (packingGroupBy === "none") return [{ key: "all", label: "All items", items: sortedPackingItems }] as const;
-    const map = new Map<string, Item[]>();
-    for (const item of sortedPackingItems) {
-      const key = `${item.spaceId}::${item.areaId}`;
-      const list = map.get(key);
-      if (list) list.push(item);
-      else map.set(key, [item]);
-    }
-    return [...map.entries()].map(([key, value]) => {
-      const [spaceId, areaId] = key.split("::");
-      const space = spaces.find((s) => s.id === spaceId);
-      const area = space?.areas.find((a) => a.id === areaId);
-      return {
-        key,
-        label: `${space?.name ?? "Unknown"} · ${area?.name ?? value[0]?.areaNameSnapshot ?? "Unknown"}`,
-        items: value
-      };
-    });
-  }, [packingGroupBy, sortedPackingItems, spaces]);
+  const activeListItems = useMemo(() => {
+    if (!activePackingList) return [];
+    const idSet = new Set(activePackingList.itemIds);
+    return items.filter((item) => idSet.has(item.id));
+  }, [activePackingList, items]);
+
+  const activeListPackedCount = activePackingList
+    ? activeListItems.filter((item) => activePackingList.packedItemIds.includes(item.id)).length
+    : 0;
 
   useEffect(() => {
     if (!showQrForSpaceId) {
@@ -1136,12 +1099,7 @@ export function StowApp({
       for (const tag of searchTagFilters) next.append("tag", tag);
     }
     if (nextTab === "packing") {
-      if (packingShow !== "unpacked") next.set("show", packingShow);
-      if (packingSpaceFilter) next.set("spaceId", packingSpaceFilter);
-      if (packingAreaFilter) next.set("areaId", packingAreaFilter);
-      if (packingKindFilter !== "all") next.set("kind", packingKindFilter);
-      if (packingGroupBy !== "location") next.set("groupBy", packingGroupBy);
-      if (packingSort !== "location") next.set("sort", packingSort);
+      if (activePackingListId) next.set("listId", activePackingListId);
     }
     const search = next.toString();
     navigate(`/${nextTab === "spaces" ? "spaces" : nextTab}${search ? `?${search}` : ""}`);
@@ -1167,12 +1125,7 @@ export function StowApp({
       if (searchHasPhoto) next.set("hasPhoto", "1");
       for (const tag of searchTagFilters) next.append("tag", tag);
     } else if (tab === "packing") {
-      if (packingShow !== "unpacked") next.set("show", packingShow);
-      if (packingSpaceFilter) next.set("spaceId", packingSpaceFilter);
-      if (packingAreaFilter) next.set("areaId", packingAreaFilter);
-      if (packingKindFilter !== "all") next.set("kind", packingKindFilter);
-      if (packingGroupBy !== "location") next.set("groupBy", packingGroupBy);
-      if (packingSort !== "location") next.set("sort", packingSort);
+      if (activePackingListId) next.set("listId", activePackingListId);
     }
     navigate(`/items/${itemId}?${next.toString()}`);
   }
@@ -1193,12 +1146,7 @@ export function StowApp({
     }
     if (tab === "packing") {
       const next = new URLSearchParams();
-      if (packingShow !== "unpacked") next.set("show", packingShow);
-      if (packingSpaceFilter) next.set("spaceId", packingSpaceFilter);
-      if (packingAreaFilter) next.set("areaId", packingAreaFilter);
-      if (packingKindFilter !== "all") next.set("kind", packingKindFilter);
-      if (packingGroupBy !== "location") next.set("groupBy", packingGroupBy);
-      if (packingSort !== "location") next.set("sort", packingSort);
+      if (activePackingListId) next.set("listId", activePackingListId);
       navigate(`/packing${next.toString() ? `?${next.toString()}` : ""}`);
       return;
     }
@@ -1880,29 +1828,116 @@ export function StowApp({
     popup.document.close();
   }
 
-  async function applyBulkPacking(nextValue: boolean, targetItems = packingItems) {
-    if (!workspace.userId) return;
-    if (!targetItems.length) {
-      flash("No visible items");
-      return;
-    }
-    setBulkPackingWorking(true);
+  async function handleCreatePackingList(e: FormEvent) {
+    e.preventDefault();
+    if (!workspace.userId || !packingListName.trim()) return;
+    setSaving(true);
     try {
-      await Promise.all(
-        targetItems.map((item) =>
-          workspace.actions.togglePacked({
-            householdId,
-            itemId: item.id,
-            userId: workspace.userId!,
-            nextValue
-          })
-        )
-      );
-      flash(nextValue ? "Marked visible items packed" : "Marked visible items unpacked");
+      const listId = await workspace.actions.createPackingList({
+        householdId,
+        userId: workspace.userId,
+        name: packingListName.trim(),
+        itemIds: []
+      });
+      setPackingListName("");
+      setShowCreatePackingList(false);
+      flash("List created");
+      navigate(`/packing?listId=${listId}`);
     } catch (error) {
-      flash(toLoggedUserErrorMessage(error, "Failed bulk update"));
+      flash(toLoggedUserErrorMessage(error, "Failed to create list"));
     } finally {
-      setBulkPackingWorking(false);
+      setSaving(false);
+    }
+  }
+
+  async function handleRenamePackingList(e: FormEvent) {
+    e.preventDefault();
+    if (!workspace.userId || !editingPackingList || !packingListName.trim()) return;
+    setSaving(true);
+    try {
+      await workspace.actions.updatePackingList({
+        householdId,
+        listId: editingPackingList.id,
+        userId: workspace.userId,
+        patch: { name: packingListName.trim() }
+      });
+      setEditingPackingList(null);
+      setPackingListName("");
+      flash("List renamed");
+    } catch (error) {
+      flash(toLoggedUserErrorMessage(error, "Failed to rename list"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeletePackingList(listId: string) {
+    try {
+      await workspace.actions.deletePackingList({ householdId, listId });
+      if (activePackingListId === listId) navigate("/packing");
+      flash("List deleted");
+    } catch (error) {
+      flash(toLoggedUserErrorMessage(error, "Failed to delete list"));
+    }
+  }
+
+  function openPackingItemPicker() {
+    if (!activePackingList) return;
+    setPackingItemPickerSelected(new Set(activePackingList.itemIds));
+    setPackingItemPickerSearch("");
+    setImportFromListId(null);
+    setShowPackingItemPicker(true);
+  }
+
+  async function savePackingItemSelection() {
+    if (!workspace.userId || !activePackingList) return;
+    setSaving(true);
+    try {
+      const newItemIds = [...packingItemPickerSelected];
+      const newPackedItemIds = activePackingList.packedItemIds.filter((id) => newItemIds.includes(id));
+      await workspace.actions.updatePackingList({
+        householdId,
+        listId: activePackingList.id,
+        userId: workspace.userId,
+        patch: { itemIds: newItemIds, packedItemIds: newPackedItemIds }
+      });
+      setShowPackingItemPicker(false);
+      flash("Items updated");
+    } catch (error) {
+      flash(toLoggedUserErrorMessage(error, "Failed to update items"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleClearPackingList() {
+    if (!workspace.userId || !activePackingList) return;
+    try {
+      await workspace.actions.clearPackingListPacked({
+        householdId,
+        listId: activePackingList.id,
+        userId: workspace.userId
+      });
+      flash("All items unchecked");
+    } catch (error) {
+      flash(toLoggedUserErrorMessage(error, "Failed to clear"));
+    }
+  }
+
+  async function handleRemoveFromPackingList(itemId: string) {
+    if (!workspace.userId || !activePackingList) return;
+    try {
+      const newItemIds = activePackingList.itemIds.filter((id) => id !== itemId);
+      const newPackedItemIds = activePackingList.packedItemIds.filter((id) => id !== itemId);
+      await workspace.actions.updatePackingList({
+        householdId,
+        listId: activePackingList.id,
+        userId: workspace.userId,
+        patch: { itemIds: newItemIds, packedItemIds: newPackedItemIds }
+      });
+      flash("Removed from list");
+    } catch (error) {
+      flash(toLoggedUserErrorMessage(error, "Failed to remove item"));
     }
   }
 
@@ -2197,194 +2232,197 @@ export function StowApp({
     }
 
     if (tab === "packing") {
-      const packingAreaOptions = packingSpaceFilter
-        ? spaces.find((space) => space.id === packingSpaceFilter)?.areas ?? []
-        : [];
+      // ── Packing list detail view ──
+      if (activePackingList) {
+        const packedSet = new Set(activePackingList.packedItemIds);
+        return (
+          <div className="screen" style={{ padding: 0 }}>
+            <div className="tab-header" style={{ borderBottom: `1px solid ${P.borderL}` }}>
+              <div className="row" style={{ justifyContent: "space-between", marginBottom: 12 }}>
+                <div className="row" style={{ gap: 8 }}>
+                  <button type="button" className="back-btn" onClick={() => navigate("/packing")} aria-label="Back to lists">
+                    <ChevronLeft size={22} />
+                  </button>
+                  <h1 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: P.ink }}>{activePackingList.name}</h1>
+                </div>
+                <StatusPill color={syncText === "Live" ? "success" : syncText === "Offline" ? "warn" : "default"}>
+                  {syncText}
+                </StatusPill>
+              </div>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 120px" }}>
+              {showCollectionLoadWarning ? <div className="banner error inline-error">{normalizedWorkspaceError}</div> : null}
+              <div className="progress-card">
+                <div className="progress-label">
+                  <span>Pack Progress</span>
+                  <span>{activeListPackedCount} of {activeListItems.length}</span>
+                </div>
+                <div className="progress-track">
+                  <div className="progress-bar" style={{ width: `${activeListItems.length ? Math.min((activeListPackedCount / activeListItems.length) * 100, 100) : 0}%` }} />
+                </div>
+              </div>
+              <div className="row" style={{ gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                <button className="btn" onClick={() => openPackingItemPicker()}>
+                  <Plus size={14} style={{ marginRight: 4 }} /> Add Items
+                </button>
+                <button className="btn" disabled={activeListPackedCount === 0} onClick={() => void handleClearPackingList()}>
+                  Clear All
+                </button>
+              </div>
+              {activeListItems.length > 0 && activeListPackedCount === activeListItems.length ? (
+                <div className="banner ok inline-error">All packed!</div>
+              ) : null}
+              {activeListItems.length === 0 ? (
+                <div className="empty-state">
+                  <Package size={32} color={P.border} className="empty-icon" />
+                  <div className="empty-title">No items in this list</div>
+                  <div className="empty-sub">Tap &ldquo;Add Items&rdquo; to pick items from your inventory.</div>
+                </div>
+              ) : (
+                <div className="list">
+                  {activeListItems.map((item) => {
+                    const isPacked = packedSet.has(item.id);
+                    return (
+                      <div key={item.id} className="packing-item">
+                        <button
+                          type="button"
+                          className={`pack-check ${isPacked ? "checked" : ""}`}
+                          aria-pressed={isPacked}
+                          aria-label={`${isPacked ? "Unpack" : "Pack"} ${item.name}`}
+                          onClick={() => {
+                            if (!workspace.userId) return;
+                            void workspace.actions
+                              .togglePackingListItem({
+                                householdId,
+                                listId: activePackingList.id,
+                                userId: workspace.userId,
+                                itemId: item.id,
+                                packed: !isPacked
+                              })
+                              .then(() => flash(isPacked ? "Unpacked" : "Packed!"))
+                              .catch((error) => flash(toLoggedUserErrorMessage(error, "Failed to update")));
+                          }}
+                        >
+                          {isPacked ? <CheckCircle size={22} strokeWidth={2.5} /> : <div className="pack-check-circle" />}
+                        </button>
+                        <button
+                          type="button"
+                          className="pack-item-open grow"
+                          style={{ opacity: isPacked ? 0.35 : 1, transition: "opacity 0.3s" }}
+                          onClick={() => navigateToItem(item.id)}
+                          aria-label={`Open item details for ${item.name}`}
+                        >
+                          <div className="row-title" style={{ textDecoration: isPacked ? "line-through" : "none" }}>{item.name}</div>
+                          <div className="row-sub">{spaceNameById[item.spaceId]} · {item.areaNameSnapshot}</div>
+                        </button>
+                        {item.image?.downloadUrl ? (
+                          <img src={item.image.downloadUrl} alt="" style={{ width: 38, height: 38, borderRadius: 10, objectFit: "cover", marginRight: 4, opacity: isPacked ? 0.25 : 1, filter: isPacked ? "grayscale(1)" : "none" }} />
+                        ) : null}
+                        <button
+                          type="button"
+                          className="btn-icon"
+                          aria-label={`Remove ${item.name} from list`}
+                          onClick={() => void handleRemoveFromPackingList(item.id)}
+                          style={{ marginLeft: 4, color: P.inkMuted }}
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      // ── Packing list selector view ──
       return (
         <div className="screen" style={{ padding: 0 }}>
           <div className="tab-header" style={{ borderBottom: `1px solid ${P.borderL}` }}>
-            <div className="row" style={{ justifyContent: "space-between", marginBottom: 12 }}>
+            <div className="row" style={{ justifyContent: "space-between", marginBottom: 0 }}>
               <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900, color: P.ink }}>Packing</h1>
-              <StatusPill color={syncText === "Live" ? "success" : syncText === "Offline" ? "warn" : "default"}>
-                {syncText}
-              </StatusPill>
-            </div>
-            <div className="packing-pills">
-              <button
-                type="button"
-                className={`packing-pill ${packingShow === "unpacked" ? "active" : "inactive"}`}
-                onClick={() => updateCurrentQuery({ show: null }, { replace: true })}
-              >
-                Unpacked
+              <button className="btn" onClick={() => { setPackingListName(""); setShowCreatePackingList(true); }}>
+                <Plus size={14} style={{ marginRight: 4 }} /> New List
               </button>
-              <button
-                type="button"
-                className={`packing-pill ${packingShow === "packed" ? "active" : "inactive"}`}
-                onClick={() => updateCurrentQuery({ show: "packed" }, { replace: true })}
-              >
-                Packed <span className="count">{packedItems.length}</span>
-              </button>
-              <button
-                type="button"
-                className={`packing-pill ${packingShow === "all" ? "active" : "inactive"}`}
-                onClick={() => updateCurrentQuery({ show: "all" }, { replace: true })}
-              >
-                All
-              </button>
-            </div>
-            <div className="search-filter-row">
-              <Select
-                value={packingSpaceFilter}
-                onChange={(e) => updateCurrentQuery({ spaceId: e.target.value || null, areaId: null }, { replace: true })}
-              >
-                <option value="">All spaces</option>
-                {spaces.map((space) => (
-                  <option key={space.id} value={space.id}>{space.name}</option>
-                ))}
-              </Select>
-              <Select
-                value={packingAreaFilter}
-                disabled={!packingSpaceFilter}
-                onChange={(e) => updateCurrentQuery({ areaId: e.target.value || null }, { replace: true })}
-              >
-                <option value="">All areas</option>
-                {packingAreaOptions.map((area) => (
-                  <option key={area.id} value={area.id}>{area.name}</option>
-                ))}
-              </Select>
-            </div>
-            <div className="search-filter-row compact">
-              <Select
-                value={packingKindFilter}
-                onChange={(e) => updateCurrentQuery({ kind: e.target.value === "all" ? null : e.target.value }, { replace: true })}
-              >
-                <option value="all">Type: All</option>
-                <option value="item">Items</option>
-                <option value="folder">Folders</option>
-              </Select>
-              <Select
-                value={packingGroupBy}
-                onChange={(e) => updateCurrentQuery({ groupBy: e.target.value === "location" ? null : e.target.value }, { replace: true })}
-              >
-                <option value="location">Group: Location</option>
-                <option value="none">Group: None</option>
-              </Select>
-              <Select
-                value={packingSort}
-                onChange={(e) => updateCurrentQuery({ sort: e.target.value === "location" ? null : e.target.value }, { replace: true })}
-              >
-                <option value="location">Sort: Location</option>
-                <option value="recent">Sort: Recent</option>
-                <option value="value">Sort: Value</option>
-              </Select>
             </div>
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 120px" }}>
             {showCollectionLoadWarning ? <div className="banner error inline-error">{normalizedWorkspaceError}</div> : null}
-            <div className="progress-card">
-              <div className="progress-label">
-                <span>Pack Progress</span>
-                <span>{packedItems.length} of {items.length} total</span>
-              </div>
-              <div className="progress-track">
-                <div className="progress-bar" style={{ width: `${items.length ? Math.min((packedItems.length / items.length) * 100, 100) : 0}%` }} />
-              </div>
-              <div className="row" style={{ justifyContent: "space-between", marginTop: 12, fontSize: 12 }}>
-                <span>{packingItems.length} visible item{packingItems.length !== 1 ? "s" : ""}</span>
-                <span>{packingItems.filter((item) => item.isPacked).length} packed in view</span>
-              </div>
-            </div>
-            <div className="row" style={{ gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-              <button className="btn" disabled={bulkPackingWorking || !packingItems.length} onClick={() => void applyBulkPacking(true)}>
-                Mark visible packed
-              </button>
-              <button className="btn" disabled={bulkPackingWorking || !packingItems.length} onClick={() => void applyBulkPacking(false)}>
-                Mark visible unpacked
-              </button>
-              <button
-                className="btn"
-                disabled={
-                  bulkPackingWorking ||
-                  !items.some(
-                    (item) =>
-                      item.isPacked &&
-                      (!packingSpaceFilter || item.spaceId === packingSpaceFilter) &&
-                      (!packingAreaFilter || item.areaId === packingAreaFilter) &&
-                      (packingKindFilter === "all" || item.kind === packingKindFilter)
-                  )
-                }
-                onClick={() => {
-                  updateCurrentQuery({ show: "packed" }, { replace: true });
-                  void applyBulkPacking(
-                    false,
-                    items.filter(
-                      (item) =>
-                        item.isPacked &&
-                        (!packingSpaceFilter || item.spaceId === packingSpaceFilter) &&
-                        (!packingAreaFilter || item.areaId === packingAreaFilter) &&
-                        (packingKindFilter === "all" || item.kind === packingKindFilter)
-                    )
-                  );
-                }}
-              >
-                Clear packed
-              </button>
-            </div>
-            {packingItems.length > 0 && packingItems.every((item) => item.isPacked) ? (
-              <div className="banner ok inline-error">Done packing this view.</div>
-            ) : null}
-            {packingItems.length === 0 ? (
+            {packingLists.length === 0 ? (
               <div className="empty-state">
                 <Package size={32} color={P.border} className="empty-icon" />
-                <div className="empty-title">No items in this view</div>
-                <div className="empty-sub">Adjust filters or packing status to see items.</div>
+                <div className="empty-title">No packing lists yet</div>
+                <div className="empty-sub">Create a list like &ldquo;Weekend Trip&rdquo; or &ldquo;Business Trip&rdquo; to get started.</div>
               </div>
             ) : (
               <div className="stack">
-                {packingGroups.map((group) => (
-                  <div key={group.key} className="stack-sm">
-                    {packingGroupBy === "location" ? <div className="section-label" style={{ marginBottom: 2 }}>{group.label}</div> : null}
-                    <div className="list">
-                      {group.items.map((item) => (
-                        <div key={item.id} className="packing-item">
+                {packingLists.map((pl) => {
+                  const totalCount = pl.itemIds.length;
+                  const packedCount = pl.packedItemIds.length;
+                  const pct = totalCount ? Math.min((packedCount / totalCount) * 100, 100) : 0;
+                  return (
+                    <button
+                      key={pl.id}
+                      type="button"
+                      className="packing-list-card"
+                      onClick={() => navigate(`/packing?listId=${pl.id}`)}
+                    >
+                      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div style={{ flex: 1 }}>
+                          <div className="row-title" style={{ fontSize: 16, marginBottom: 4 }}>{pl.name}</div>
+                          <div className="row-sub">{packedCount} of {totalCount} packed</div>
+                        </div>
+                        <div
+                          className="packing-list-menu-anchor"
+                          style={{ position: "relative" }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <button
                             type="button"
-                            className={`pack-check ${item.isPacked ? "checked" : ""}`}
-                            aria-pressed={item.isPacked}
-                            aria-label={`${item.isPacked ? "Unpack" : "Pack"} ${item.name}`}
-                            onClick={() => {
-                              if (!workspace.userId) return;
-                              void workspace.actions
-                                .togglePacked({
-                                  householdId,
-                                  itemId: item.id,
-                                  userId: workspace.userId,
-                                  nextValue: !item.isPacked
-                                })
-                                .then(() => flash(item.isPacked ? "Unpacked" : "Packed!"))
-                                .catch((error) => flash(toLoggedUserErrorMessage(error, "Failed to update packing status")));
+                            className="btn-icon"
+                            aria-label={`Options for ${pl.name}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPackingListMenuOpen(packingListMenuOpen === pl.id ? null : pl.id);
                             }}
                           >
-                            {item.isPacked ? <CheckCircle size={22} strokeWidth={2.5} /> : <div className="pack-check-circle" />}
+                            <MoreHorizontal size={18} />
                           </button>
-                          <button
-                            type="button"
-                            className="pack-item-open grow"
-                            style={{ opacity: item.isPacked ? 0.35 : 1, transition: "opacity 0.3s" }}
-                            onClick={() => navigateToItem(item.id)}
-                            aria-label={`Open item details for ${item.name}`}
-                          >
-                            <div className="row-title" style={{ textDecoration: item.isPacked ? "line-through" : "none" }}>{item.name}</div>
-                            <div className="row-sub">{spaceNameById[item.spaceId]} · {item.areaNameSnapshot}</div>
-                          </button>
-                          {item.image?.downloadUrl ? (
-                            <img src={item.image.downloadUrl} alt="" style={{ width: 38, height: 38, borderRadius: 10, objectFit: "cover", marginRight: 4, opacity: item.isPacked ? 0.25 : 1, filter: item.isPacked ? "grayscale(1)" : "none" }} />
+                          {packingListMenuOpen === pl.id ? (
+                            <div className="dropdown-menu" style={{ position: "absolute", right: 0, top: 28, zIndex: 10 }}>
+                              <button
+                                type="button"
+                                className="dropdown-item"
+                                onClick={() => {
+                                  setPackingListMenuOpen(null);
+                                  setEditingPackingList(pl);
+                                  setPackingListName(pl.name);
+                                }}
+                              >
+                                <Edit size={14} /> Rename
+                              </button>
+                              <button
+                                type="button"
+                                className="dropdown-item danger"
+                                onClick={() => {
+                                  setPackingListMenuOpen(null);
+                                  void handleDeletePackingList(pl.id);
+                                }}
+                              >
+                                <Trash2 size={14} /> Delete
+                              </button>
+                            </div>
                           ) : null}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                      </div>
+                      <div className="progress-track" style={{ marginTop: 8 }}>
+                        <div className="progress-bar" style={{ width: `${pct}%` }} />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -2913,7 +2951,7 @@ export function StowApp({
             onClick={() => navigateToTab("spaces")}
           />
           <NavButton active={tab === "search"} label="Search" icon={Search} onClick={() => navigateToTab("search")} />
-          <NavButton active={tab === "packing"} label="Packing" icon={Package} badge={packedItems.length || undefined} onClick={() => navigateToTab("packing")} />
+          <NavButton active={tab === "packing"} label="Packing" icon={Package} onClick={() => navigateToTab("packing")} />
           <NavButton active={tab === "settings"} label="Settings" icon={Settings} onClick={() => navigateToTab("settings")} />
         </nav>
 
@@ -3383,6 +3421,117 @@ export function StowApp({
               </button>
             </div>
           ) : null}
+        </Modal>
+
+        {/* ── Create Packing List Modal ── */}
+        <Modal open={showCreatePackingList} title="New Packing List" onClose={() => setShowCreatePackingList(false)}>
+          <form className="stack" onSubmit={(e) => void handleCreatePackingList(e)}>
+            <Field label="List name *">
+              <TextInput value={packingListName} onChange={(e) => setPackingListName(e.target.value)} required placeholder="e.g., Weekend Trip" autoFocus />
+            </Field>
+            <button className="btn primary sticky-submit" disabled={saving || !packingListName.trim()} type="submit">
+              {saving ? "Creating…" : "Create List"}
+            </button>
+          </form>
+        </Modal>
+
+        {/* ── Rename Packing List Modal ── */}
+        <Modal open={Boolean(editingPackingList)} title="Rename List" onClose={() => { setEditingPackingList(null); setPackingListName(""); }}>
+          <form className="stack" onSubmit={(e) => void handleRenamePackingList(e)}>
+            <Field label="List name *">
+              <TextInput value={packingListName} onChange={(e) => setPackingListName(e.target.value)} required autoFocus />
+            </Field>
+            <button className="btn primary sticky-submit" disabled={saving || !packingListName.trim()} type="submit">
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </form>
+        </Modal>
+
+        {/* ── Packing Item Picker Modal ── */}
+        <Modal open={showPackingItemPicker} title="Select Items" onClose={() => setShowPackingItemPicker(false)}>
+          <div className="stack">
+            <TextInput
+              value={packingItemPickerSearch}
+              onChange={(e) => setPackingItemPickerSearch(e.target.value)}
+              placeholder="Search items…"
+            />
+            {packingLists.length > 0 ? (
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <Select
+                  value={importFromListId ?? ""}
+                  onChange={(e) => {
+                    const listId = e.target.value;
+                    setImportFromListId(listId || null);
+                    if (listId) {
+                      const source = packingLists.find((pl) => pl.id === listId);
+                      if (source) {
+                        setPackingItemPickerSelected((prev) => {
+                          const next = new Set(prev);
+                          for (const id of source.itemIds) next.add(id);
+                          return next;
+                        });
+                        flash(`Imported ${source.itemIds.length} items from "${source.name}"`);
+                      }
+                    }
+                  }}
+                >
+                  <option value="">Import from list…</option>
+                  {packingLists
+                    .filter((pl) => pl.id !== activePackingListId)
+                    .map((pl) => (
+                      <option key={pl.id} value={pl.id}>{pl.name} ({pl.itemIds.length})</option>
+                    ))}
+                </Select>
+              </div>
+            ) : null}
+            <div style={{ maxHeight: 350, overflowY: "auto" }}>
+              {spaces.map((space) => {
+                const spaceItems = items.filter((item) => item.spaceId === space.id);
+                const search = packingItemPickerSearch.toLowerCase();
+                const filtered = search
+                  ? spaceItems.filter((item) => item.name.toLowerCase().includes(search) || item.areaNameSnapshot.toLowerCase().includes(search))
+                  : spaceItems;
+                if (filtered.length === 0) return null;
+                return (
+                  <div key={space.id} style={{ marginBottom: 12 }}>
+                    <div className="section-label" style={{ marginBottom: 4 }}>{space.name}</div>
+                    {filtered.map((item) => {
+                      const checked = packingItemPickerSelected.has(item.id);
+                      return (
+                        <label key={item.id} className="picker-item" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setPackingItemPickerSelected((prev) => {
+                                const next = new Set(prev);
+                                if (checked) next.delete(item.id);
+                                else next.add(item.id);
+                                return next;
+                              });
+                            }}
+                          />
+                          <span style={{ flex: 1 }}>
+                            <span className="row-title">{item.name}</span>
+                            <span className="row-sub" style={{ marginLeft: 6 }}>{item.areaNameSnapshot}</span>
+                          </span>
+                          {item.image?.downloadUrl ? (
+                            <img src={item.image.downloadUrl} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover" }} />
+                          ) : null}
+                        </label>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="row" style={{ justifyContent: "space-between", marginTop: 8 }}>
+              <span style={{ fontSize: 13, color: P.inkMuted }}>{packingItemPickerSelected.size} selected</span>
+              <button className="btn primary" disabled={saving} onClick={() => void savePackingItemSelection()}>
+                {saving ? "Saving…" : "Done"}
+              </button>
+            </div>
+          </div>
         </Modal>
 
         {/* ── Item Detail (Full-Screen Overlay) ── */}

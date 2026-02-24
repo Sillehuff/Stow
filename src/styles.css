@@ -1305,6 +1305,76 @@ select:focus-visible,
   border: 2px solid var(--border);
 }
 
+/* ── Packing List Cards ── */
+.packing-list-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border-l);
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+
+.packing-list-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-muted);
+}
+
+.btn-icon:hover {
+  background: var(--canvas);
+}
+
+.dropdown-menu {
+  background: var(--surface);
+  border: 1px solid var(--border-l);
+  border-radius: 12px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  min-width: 140px;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.dropdown-item:hover {
+  background: var(--canvas);
+}
+
+.dropdown-item.danger {
+  color: var(--danger);
+}
+
+.dropdown-item.danger:hover {
+  background: var(--danger-soft);
+}
+
 /* ── Delete Confirm ── */
 .delete-confirm {
   position: absolute;
