@@ -10,6 +10,8 @@ export const householdPaths = {
     `households/${householdId}/spaces/${spaceId}/areas/${areaId}`,
   items: (householdId: string) => `households/${householdId}/items`,
   item: (householdId: string, itemId: string) => `households/${householdId}/items/${itemId}`,
+  packingLists: (householdId: string) => `households/${householdId}/packingLists`,
+  packingList: (householdId: string, listId: string) => `households/${householdId}/packingLists/${listId}`,
   llmConfig: (householdId: string) => `households/${householdId}/settings/llm`
 };
 

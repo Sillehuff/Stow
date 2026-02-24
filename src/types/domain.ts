@@ -79,6 +79,18 @@ export interface Item {
   updatedBy: string;
 }
 
+export interface PackingList {
+  id: string;
+  householdId: string;
+  name: string;
+  itemIds: string[];
+  packedItemIds: string[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  createdBy: string;
+  updatedBy: string;
+}
+
 export interface HouseholdInvite {
   id: string;
   role: Role;

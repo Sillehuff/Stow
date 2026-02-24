@@ -1,5 +1,6 @@
 import {
   addDoc,
+  arrayRemove,
   arrayUnion,
   collection,
   collectionGroup,
@@ -20,7 +21,7 @@ import {
 import type { Unsubscribe } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { householdPaths } from "@/lib/firebase/paths";
-import type { Area, Household, HouseholdInvite, HouseholdMember, ImageRef, Item, Space } from "@/types/domain";
+import type { Area, Household, HouseholdInvite, HouseholdMember, ImageRef, Item, PackingList, Space } from "@/types/domain";
 import type { HouseholdLlmConfig } from "@/types/llm";
 
 export type SnapshotState<T> = {
@@ -361,5 +362,74 @@ export const inventoryRepository = {
 
   async saveLlmConfig(householdId: string, config: HouseholdLlmConfig) {
     await setDoc(doc(requireDb(), householdPaths.llmConfig(householdId)), config, { merge: true });
+  },
+
+  // ── Packing Lists ──────────────────────────────────────────────
+
+  subscribePackingLists(
+    householdId: string,
+    onData: (state: SnapshotState<PackingList>) => void,
+    onError: (e: Error) => void
+  ): Unsubscribe {
+    const q = query(collection(requireDb(), householdPaths.packingLists(householdId)), orderBy("updatedAt", "desc"));
+    return onSnapshot(q, (snap) => onData(mapSnapshot<PackingList>(snap)), onError);
+  },
+
+  async createPackingList(input: {
+    householdId: string;
+    userId: string;
+    name: string;
+    itemIds: string[];
+  }) {
+    const ref = await addDoc(collection(requireDb(), householdPaths.packingLists(input.householdId)), {
+      householdId: input.householdId,
+      name: input.name,
+      itemIds: input.itemIds,
+      packedItemIds: [],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      createdBy: input.userId,
+      updatedBy: input.userId
+    });
+    return ref.id;
+  },
+
+  async updatePackingList(input: {
+    householdId: string;
+    listId: string;
+    userId: string;
+    patch: Partial<Pick<PackingList, "name" | "itemIds" | "packedItemIds">>;
+  }) {
+    await updateDoc(doc(requireDb(), householdPaths.packingList(input.householdId, input.listId)), {
+      ...input.patch,
+      updatedAt: serverTimestamp(),
+      updatedBy: input.userId
+    });
+  },
+
+  async deletePackingList(input: { householdId: string; listId: string }) {
+    await deleteDoc(doc(requireDb(), householdPaths.packingList(input.householdId, input.listId)));
+  },
+
+  async togglePackingListItem(input: {
+    householdId: string;
+    listId: string;
+    userId: string;
+    itemId: string;
+    packed: boolean;
+  }) {
+    await updateDoc(doc(requireDb(), householdPaths.packingList(input.householdId, input.listId)), {
+      packedItemIds: input.packed ? arrayUnion(input.itemId) : arrayRemove(input.itemId),
+      updatedAt: serverTimestamp(),
+      updatedBy: input.userId
+    });
+  },
+
+  async clearPackingListPacked(input: { householdId: string; listId: string; userId: string }) {
+    await updateDoc(doc(requireDb(), householdPaths.packingList(input.householdId, input.listId)), {
+      packedItemIds: [],
+      updatedAt: serverTimestamp(),
+      updatedBy: input.userId
+    });
   }
 };
