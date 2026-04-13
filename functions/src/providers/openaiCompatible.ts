@@ -1,4 +1,4 @@
-import { extractJsonObject, normalizeSuggestion, requireOk } from "./common.js";
+import { extractJsonObject, normalizeSuggestion, readErrorBodyExcerpt, requireOk } from "./common.js";
 import type { ProviderContext, VisionProviderAdapter } from "./types.js";
 
 function toDataUrl(mimeType: string, bytes: Buffer) {
@@ -39,7 +39,7 @@ export const openaiCompatibleAdapter: VisionProviderAdapter = {
         ]
       })
     });
-    requireOk(response, "OpenAI-compatible");
+    await requireOk(response, "OpenAI-compatible");
     const body = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
@@ -53,7 +53,25 @@ export const openaiCompatibleAdapter: VisionProviderAdapter = {
       headers: { Authorization: `Bearer ${apiKey}` }
     });
     if (!response.ok) {
-      return { ok: false, message: `Model list failed (${response.status})` };
+      const excerpt = await readErrorBodyExcerpt(response);
+      return {
+        ok: false,
+        message: excerpt
+          ? `Model list failed (${response.status}): ${excerpt}`
+          : `Model list failed (${response.status})`
+      };
+    }
+    try {
+      const body = (await response.json()) as { data?: Array<{ id?: string }> };
+      const ids = body.data?.map((m) => m.id).filter((id): id is string => !!id) ?? [];
+      if (ids.length > 0 && !ids.includes(config.model)) {
+        return {
+          ok: false,
+          message: `Configured model "${config.model}" was not found in the provider's model list`
+        };
+      }
+    } catch {
+      // Non-OpenAI compatible servers may return a different shape; treat as successful reach.
     }
     return { ok: true, message: "Connection successful" };
   }

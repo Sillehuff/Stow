@@ -1,4 +1,4 @@
-import { extractJsonObject, normalizeSuggestion, requireOk } from "./common.js";
+import { extractJsonObject, normalizeSuggestion, readErrorBodyExcerpt, requireOk } from "./common.js";
 import type { ProviderContext, VisionProviderAdapter } from "./types.js";
 
 export const anthropicAdapter: VisionProviderAdapter = {
@@ -36,7 +36,7 @@ export const anthropicAdapter: VisionProviderAdapter = {
         ]
       })
     });
-    requireOk(response, "Anthropic");
+    await requireOk(response, "Anthropic");
     const body = (await response.json()) as {
       content?: Array<{ type: string; text?: string }>;
     };
@@ -58,7 +58,15 @@ export const anthropicAdapter: VisionProviderAdapter = {
         messages: [{ role: "user", content: "Reply with OK" }]
       })
     });
-    if (!response.ok) return { ok: false, message: `Validation request failed (${response.status})` };
+    if (!response.ok) {
+      const excerpt = await readErrorBodyExcerpt(response);
+      return {
+        ok: false,
+        message: excerpt
+          ? `Validation request failed (${response.status}): ${excerpt}`
+          : `Validation request failed (${response.status})`
+      };
+    }
     return { ok: true, message: "Connection successful" };
   }
 };

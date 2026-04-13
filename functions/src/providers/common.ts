@@ -38,11 +38,23 @@ export function normalizeSuggestion(candidate: unknown): VisionSuggestion {
   return parsed.data;
 }
 
-export function requireOk(response: Response, provider: string) {
-  if (!response.ok) {
-    throw new HttpsError(
-      "internal",
-      `${provider} API request failed (${response.status}): ${response.statusText}`
-    );
+export async function readErrorBodyExcerpt(response: Response, maxChars = 500): Promise<string> {
+  try {
+    const text = await response.text();
+    if (!text) return "";
+    const collapsed = text.replace(/\s+/g, " ").trim();
+    return collapsed.length > maxChars ? `${collapsed.slice(0, maxChars)}…` : collapsed;
+  } catch {
+    return "";
   }
+}
+
+export async function requireOk(response: Response, provider: string) {
+  if (response.ok) return;
+  const excerpt = await readErrorBodyExcerpt(response);
+  const detail = excerpt ? `: ${excerpt}` : response.statusText ? `: ${response.statusText}` : "";
+  throw new HttpsError(
+    "internal",
+    `${provider} API request failed (${response.status})${detail}`
+  );
 }

@@ -1,4 +1,4 @@
-import { extractJsonObject, normalizeSuggestion, requireOk } from "./common.js";
+import { extractJsonObject, normalizeSuggestion, readErrorBodyExcerpt, requireOk } from "./common.js";
 import type { ProviderContext, VisionProviderAdapter } from "./types.js";
 
 export const geminiAdapter: VisionProviderAdapter = {
@@ -28,7 +28,7 @@ export const geminiAdapter: VisionProviderAdapter = {
         ]
       })
     });
-    requireOk(response, "Gemini");
+    await requireOk(response, "Gemini");
     const body = (await response.json()) as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
     };
@@ -39,7 +39,15 @@ export const geminiAdapter: VisionProviderAdapter = {
   async validate({ apiKey, config }) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}?key=${encodeURIComponent(apiKey)}`;
     const response = await fetch(url);
-    if (!response.ok) return { ok: false, message: `Model lookup failed (${response.status})` };
+    if (!response.ok) {
+      const excerpt = await readErrorBodyExcerpt(response);
+      return {
+        ok: false,
+        message: excerpt
+          ? `Model lookup failed (${response.status}): ${excerpt}`
+          : `Model lookup failed (${response.status})`
+      };
+    }
     return { ok: true, message: "Connection successful" };
   }
 };

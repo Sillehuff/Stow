@@ -12,6 +12,24 @@ type ResolvedImage = {
   sourceUrl?: string;
 };
 
+export const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8 MB
+
+function assertImageBounds(bytes: Buffer, mimeType: string) {
+  if (bytes.length === 0) {
+    throw new HttpsError("invalid-argument", "Image is empty");
+  }
+  if (bytes.length > MAX_IMAGE_BYTES) {
+    throw new HttpsError(
+      "invalid-argument",
+      `Image exceeds maximum size of ${Math.floor(MAX_IMAGE_BYTES / 1024 / 1024)} MB`
+    );
+  }
+  const normalized = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
+  if (!normalized.startsWith("image/")) {
+    throw new HttpsError("invalid-argument", `Unsupported image MIME type: ${mimeType || "unknown"}`);
+  }
+}
+
 async function fetchFromUrl(url: string): Promise<ResolvedImage> {
   const response = await fetch(url);
   if (!response.ok) {
@@ -19,8 +37,10 @@ async function fetchFromUrl(url: string): Promise<ResolvedImage> {
   }
   const mimeType = response.headers.get("content-type") ?? "image/jpeg";
   const arrayBuffer = await response.arrayBuffer();
+  const bytes = Buffer.from(arrayBuffer);
+  assertImageBounds(bytes, mimeType);
   return {
-    bytes: Buffer.from(arrayBuffer),
+    bytes,
     mimeType,
     sourceUrl: url
   };

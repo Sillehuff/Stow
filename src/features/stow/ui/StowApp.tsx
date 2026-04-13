@@ -1364,40 +1364,24 @@ export function StowApp({
         file: visionDraft.imageFile,
         url: visionDraft.imageUrl ?? ""
       });
-      let response: { suggestion: VisionSuggestion } | null = null;
-      try {
-        if (uploadRef?.storagePath || uploadRef?.downloadUrl) {
-          const { visionCategorizeItemImage } = await loadFirebaseFunctionsModule();
-          response = await visionCategorizeItemImage({
-            householdId,
-            imageRef: uploadRef.storagePath
-              ? { storagePath: uploadRef.storagePath, downloadUrl: uploadRef.downloadUrl }
-              : { imageUrl: uploadRef.downloadUrl! },
-            context: {
-              spaceId: visionDraft.spaceId,
-              areaId: visionDraft.areaId,
-              areaName:
-                spaces
-                  .find((space) => space.id === visionDraft.spaceId)
-                  ?.areas.find((area) => area.id === visionDraft.areaId)?.name ?? undefined
-            }
-          });
-        }
-      } catch (error) {
-        // Fallback for early dev environments where functions/providers aren't configured.
-        response = {
-          suggestion: {
-            suggestedName: "Uncategorized Item",
-            tags: ["Review"],
-            notes:
-              error instanceof Error
-                ? `Function unavailable or provider not configured. ${error.message}`
-                : "Function unavailable or provider not configured.",
-            confidence: 0.25,
-            rationale: "Local fallback"
-          }
-        };
+      if (!uploadRef?.storagePath && !uploadRef?.downloadUrl) {
+        throw new Error("Image upload did not produce a usable reference");
       }
+      const { visionCategorizeItemImage } = await loadFirebaseFunctionsModule();
+      const response = await visionCategorizeItemImage({
+        householdId,
+        imageRef: uploadRef.storagePath
+          ? { storagePath: uploadRef.storagePath, downloadUrl: uploadRef.downloadUrl }
+          : { imageUrl: uploadRef.downloadUrl! },
+        context: {
+          spaceId: visionDraft.spaceId,
+          areaId: visionDraft.areaId,
+          areaName:
+            spaces
+              .find((space) => space.id === visionDraft.spaceId)
+              ?.areas.find((area) => area.id === visionDraft.areaId)?.name ?? undefined
+        }
+      });
 
       const suggestion = response?.suggestion;
       if (!suggestion) throw new Error("No suggestion returned");
@@ -1951,16 +1935,27 @@ export function StowApp({
 
   async function saveLlmSettings() {
     setLlmSaveWorking(true);
+    let configSaved = false;
     try {
       const { saveHouseholdLlmConfig, setHouseholdLlmSecret } = await loadFirebaseFunctionsModule();
       await saveHouseholdLlmConfig({ householdId, config: llmForm });
+      configSaved = true;
       if (llmSecretInput.trim()) {
         await setHouseholdLlmSecret({ householdId, apiKey: llmSecretInput.trim() });
         setLlmSecretInput("");
       }
       flash("LLM settings saved");
     } catch (error) {
-      flash(toLoggedUserErrorMessage(error, "Failed to save LLM settings"));
+      if (configSaved && llmSecretInput.trim()) {
+        flash(
+          toLoggedUserErrorMessage(
+            error,
+            "Settings were saved but the API key could not be stored. Please re-enter it and save again."
+          )
+        );
+      } else {
+        flash(toLoggedUserErrorMessage(error, "Failed to save LLM settings"));
+      }
     } finally {
       setLlmSaveWorking(false);
     }
@@ -3142,10 +3137,20 @@ export function StowApp({
               imageFile={visionDraft.imageFile}
               onImageUrlChange={(value) => setVisionDraft((prev) => ({ ...prev, imageUrl: value }))}
               onFileChange={(file) => setVisionDraft((prev) => ({ ...prev, imageFile: file }))}
-              disabled={!online}
-              helperText={!online ? "Vision scan requires an internet connection." : undefined}
+              disabled={!online || !workspace.llmConfig?.enabled}
+              helperText={
+                !online
+                  ? "Vision scan requires an internet connection."
+                  : !workspace.llmConfig?.enabled
+                    ? "Vision categorization is disabled. An admin can enable it in Settings."
+                    : undefined
+              }
             />
-            <button className="btn primary" disabled={visionWorking || !online} onClick={() => void runVisionCategorize()}>
+            <button
+              className="btn primary"
+              disabled={visionWorking || !online || !workspace.llmConfig?.enabled}
+              onClick={() => void runVisionCategorize()}
+            >
               <Sparkles size={16} />
               {visionWorking ? "Categorizing…" : "Categorize Image"}
             </button>
