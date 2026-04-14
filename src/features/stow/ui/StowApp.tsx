@@ -590,7 +590,13 @@ async function resolveImageRef({
           : target === "area"
             ? storagePaths.areaCover(householdId, targetId, safeName)
             : storagePaths.draftImage(householdId, targetId, safeName);
-    return uploadFileToStorage(path, file, { contentType: file.type || undefined });
+    return uploadFileToStorage(path, file, {
+      contentType: file.type || undefined,
+      // Vision scans only need the Storage path. Avoid forcing a read-backed
+      // download URL for draft uploads, which can fail even though the
+      // backend can safely read the object by path.
+      includeDownloadUrl: target !== "draft"
+    });
   }
 
   if (url.trim()) return imageRefFromUrl(url);
