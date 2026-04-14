@@ -92,7 +92,6 @@ type AddItemForm = {
 };
 
 type VisionDraft = {
-  imageUrl?: string;
   imageFile: File | null;
   uploadRef?: ImageRef;
   suggestion: VisionSuggestion | null;
@@ -335,6 +334,7 @@ function ImagePicker({
   imageFile,
   onImageUrlChange,
   onFileChange,
+  allowUrlInput = true,
   disabled,
   helperText
 }: {
@@ -343,6 +343,7 @@ function ImagePicker({
   imageFile: File | null;
   onImageUrlChange: (value: string) => void;
   onFileChange: (file: File | null) => void;
+  allowUrlInput?: boolean;
   disabled?: boolean;
   helperText?: string;
 }) {
@@ -379,13 +380,15 @@ function ImagePicker({
           <img src={previewUrl} alt={`${label} preview`} className="hero-image" />
           <div className="row gap-sm">
             {imageFile ? <StatusPill color="default">Uploaded file: {imageFile.name}</StatusPill> : null}
-            {imageUrl.trim() && !imageFile ? <StatusPill color="default">URL image</StatusPill> : null}
+            {allowUrlInput && imageUrl.trim() && !imageFile ? <StatusPill color="default">URL image</StatusPill> : null}
             <button
               type="button"
               className="btn"
               onClick={() => {
                 onFileChange(null);
-                onImageUrlChange("");
+                if (allowUrlInput) {
+                  onImageUrlChange("");
+                }
               }}
             >
               Remove image
@@ -393,14 +396,16 @@ function ImagePicker({
           </div>
         </div>
       ) : null}
-      <Field label={`${label} (URL fallback)`}>
-        <TextInput
-          value={imageUrl}
-          onChange={(e) => onImageUrlChange(e.target.value)}
-          placeholder="https://..."
-          disabled={disabled}
-        />
-      </Field>
+      {allowUrlInput ? (
+        <Field label={`${label} (URL fallback)`}>
+          <TextInput
+            value={imageUrl}
+            onChange={(e) => onImageUrlChange(e.target.value)}
+            placeholder="https://..."
+            disabled={disabled}
+          />
+        </Field>
+      ) : null}
       <Field label={`${label} (camera / gallery)`}>
         <input
           className="input file-input"
@@ -750,7 +755,6 @@ export function StowApp({
 
   const [visionDraft, setVisionDraft] = useState<VisionDraft>({
     imageFile: null,
-    imageUrl: "",
     suggestion: null,
     spaceId: "",
     areaId: "",
@@ -1351,7 +1355,7 @@ export function StowApp({
       flash("Select a space and area");
       return;
     }
-    if (!visionDraft.imageFile && !visionDraft.imageUrl?.trim()) {
+    if (!visionDraft.imageFile) {
       flash("Add an image first");
       return;
     }
@@ -1368,17 +1372,23 @@ export function StowApp({
         target: "draft",
         targetId: draftId,
         file: visionDraft.imageFile,
-        url: visionDraft.imageUrl ?? ""
+        url: ""
       });
       if (!uploadRef?.storagePath && !uploadRef?.downloadUrl) {
         throw new Error("Image upload did not produce a usable reference");
       }
+      const imageRef = uploadRef.storagePath
+        ? { storagePath: uploadRef.storagePath }
+        : uploadRef.downloadUrl
+          ? { imageUrl: uploadRef.downloadUrl }
+          : null;
+      if (!imageRef) {
+        throw new Error("Image upload did not produce a valid image reference");
+      }
       const { visionCategorizeItemImage } = await loadFirebaseFunctionsModule();
       const response = await visionCategorizeItemImage({
         householdId,
-        imageRef: uploadRef.storagePath
-          ? { storagePath: uploadRef.storagePath, downloadUrl: uploadRef.downloadUrl }
-          : { imageUrl: uploadRef.downloadUrl! },
+        imageRef,
         context: {
           spaceId: visionDraft.spaceId,
           areaId: visionDraft.areaId,
@@ -1437,7 +1447,6 @@ export function StowApp({
       setShowScanner(false);
       setVisionDraft({
         imageFile: null,
-        imageUrl: "",
         suggestion: null,
         spaceId: selectedSpaceId || spaces[0]?.id || "",
         areaId: selectedAreaId || spaces[0]?.areas[0]?.id || "",
@@ -3139,10 +3148,11 @@ export function StowApp({
             </div>
             <ImagePicker
               label="Scan image"
-              imageUrl={visionDraft.imageUrl || ""}
+              imageUrl=""
               imageFile={visionDraft.imageFile}
-              onImageUrlChange={(value) => setVisionDraft((prev) => ({ ...prev, imageUrl: value }))}
+              onImageUrlChange={() => {}}
               onFileChange={(file) => setVisionDraft((prev) => ({ ...prev, imageFile: file }))}
+              allowUrlInput={false}
               disabled={!online || !workspace.llmConfigLoaded || !workspace.llmConfig?.enabled}
               helperText={
                 !online
