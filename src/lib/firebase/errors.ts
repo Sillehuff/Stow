@@ -1,4 +1,8 @@
 export function toUserErrorMessage(error: unknown, fallback = "Something went wrong. Please try again."): string {
+  const rawCode =
+    error && typeof error === "object" && "code" in error && typeof error.code === "string"
+      ? error.code.toLowerCase()
+      : "";
   const raw =
     typeof error === "string"
       ? error
@@ -12,6 +16,7 @@ export function toUserErrorMessage(error: unknown, fallback = "Something went wr
   if (!message) return fallback;
 
   if (
+    rawCode.includes("permission-denied") ||
     message.includes("permission-denied") ||
     message.includes("permission denied") ||
     message.includes("no matching allow statements")
@@ -23,21 +28,29 @@ export function toUserErrorMessage(error: unknown, fallback = "Something went wr
     return "That sign-in method is not enabled for this project yet.";
   }
 
-  if (
-    message.includes("network-request-failed") ||
-    message.includes("offline") ||
-    message.includes("failed to fetch") ||
-    message.includes("unavailable")
-  ) {
+  if (rawCode.includes("network-request-failed") || rawCode === "functions/unavailable" || rawCode === "unavailable") {
+    return "Network issue. Check your connection and try again.";
+  }
+
+  if (message.includes("network-request-failed") || message.includes("offline") || message.includes("failed to fetch")) {
     return "Network issue. Check your connection and try again.";
   }
 
   if (
+    rawCode.includes("failed-precondition") ||
     message.includes("failed-precondition") ||
     message.includes("requires an index") ||
     message.includes("index") && message.includes("query")
   ) {
     return "This action needs a database config update. Please try again in a moment.";
+  }
+
+  if (message.includes("temporarily overloaded") || message.includes("high demand")) {
+    return "The selected AI model is temporarily overloaded. Try again in a minute or switch to a more stable model.";
+  }
+
+  if (message.includes("quota is exhausted") || message.includes("quota exceeded")) {
+    return "The configured AI provider is out of quota right now. Check the provider plan or try again later.";
   }
 
   return raw;

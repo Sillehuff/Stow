@@ -516,6 +516,6 @@ describe("visionCategorizeItemImageHandler", () => {
         { householdId: "h1", imageRef: { imageUrl: "https://example.test/item.jpg" } },
         "uid-1"
       )
-    ).rejects.toThrow(/OpenAI-compatible API request failed \(429\).*rate_limited/);
+    ).rejects.toThrow(/OpenAI-compatible quota is exhausted right now/);
   });
 });

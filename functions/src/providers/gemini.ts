@@ -1,10 +1,13 @@
-import { extractJsonObject, normalizeSuggestion, readErrorBodyExcerpt, requireOk } from "./common.js";
+import { extractJsonObject, normalizeSuggestion, providerFetch } from "./common.js";
 import type { ProviderContext, VisionProviderAdapter } from "./types.js";
 
 export const geminiAdapter: VisionProviderAdapter = {
   async classifyImage({ apiKey, config, prompt, image }: ProviderContext) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const response = await fetch(url, {
+    const response = await providerFetch(
+      "Gemini",
+      url,
+      {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -27,8 +30,9 @@ export const geminiAdapter: VisionProviderAdapter = {
           }
         ]
       })
-    });
-    await requireOk(response, "Gemini");
+      },
+      { retries: 2, retryDelayMs: 1000 }
+    );
     const body = (await response.json()) as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
     };
@@ -38,16 +42,15 @@ export const geminiAdapter: VisionProviderAdapter = {
 
   async validate({ apiKey, config }) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}?key=${encodeURIComponent(apiKey)}`;
-    const response = await fetch(url);
-    if (!response.ok) {
-      const excerpt = await readErrorBodyExcerpt(response);
+    try {
+      await providerFetch("Gemini", url);
+      return { ok: true, message: "Connection successful" };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       return {
         ok: false,
-        message: excerpt
-          ? `Model lookup failed (${response.status}): ${excerpt}`
-          : `Model lookup failed (${response.status})`
+        message
       };
     }
-    return { ok: true, message: "Connection successful" };
   }
 };

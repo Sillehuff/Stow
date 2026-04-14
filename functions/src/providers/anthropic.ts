@@ -1,9 +1,9 @@
-import { extractJsonObject, normalizeSuggestion, readErrorBodyExcerpt, requireOk } from "./common.js";
+import { extractJsonObject, normalizeSuggestion, providerFetch } from "./common.js";
 import type { ProviderContext, VisionProviderAdapter } from "./types.js";
 
 export const anthropicAdapter: VisionProviderAdapter = {
   async classifyImage({ apiKey, config, prompt, image }: ProviderContext) {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await providerFetch("Anthropic", "https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "x-api-key": apiKey,
@@ -36,7 +36,6 @@ export const anthropicAdapter: VisionProviderAdapter = {
         ]
       })
     });
-    await requireOk(response, "Anthropic");
     const body = (await response.json()) as {
       content?: Array<{ type: string; text?: string }>;
     };
@@ -45,26 +44,25 @@ export const anthropicAdapter: VisionProviderAdapter = {
   },
 
   async validate({ apiKey, config }) {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        model: config.model,
-        max_tokens: 8,
-        messages: [{ role: "user", content: "Reply with OK" }]
-      })
-    });
-    if (!response.ok) {
-      const excerpt = await readErrorBodyExcerpt(response);
+    try {
+      await providerFetch("Anthropic", "https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          model: config.model,
+          max_tokens: 8,
+          messages: [{ role: "user", content: "Reply with OK" }]
+        })
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       return {
         ok: false,
-        message: excerpt
-          ? `Validation request failed (${response.status}): ${excerpt}`
-          : `Validation request failed (${response.status})`
+        message
       };
     }
     return { ok: true, message: "Connection successful" };

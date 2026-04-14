@@ -1,4 +1,4 @@
-import { extractJsonObject, normalizeSuggestion, readErrorBodyExcerpt, requireOk } from "./common.js";
+import { extractJsonObject, normalizeSuggestion, providerFetch } from "./common.js";
 import type { ProviderContext, VisionProviderAdapter } from "./types.js";
 
 function toDataUrl(mimeType: string, bytes: Buffer) {
@@ -8,7 +8,7 @@ function toDataUrl(mimeType: string, bytes: Buffer) {
 export const openaiCompatibleAdapter: VisionProviderAdapter = {
   async classifyImage({ apiKey, config, prompt, image }: ProviderContext) {
     const baseUrl = (config.baseUrl ?? "https://api.openai.com/v1").replace(/\/+$/, "");
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const response = await providerFetch("OpenAI-compatible", `${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -39,7 +39,6 @@ export const openaiCompatibleAdapter: VisionProviderAdapter = {
         ]
       })
     });
-    await requireOk(response, "OpenAI-compatible");
     const body = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
@@ -49,16 +48,16 @@ export const openaiCompatibleAdapter: VisionProviderAdapter = {
 
   async validate({ apiKey, config }) {
     const baseUrl = (config.baseUrl ?? "https://api.openai.com/v1").replace(/\/+$/, "");
-    const response = await fetch(`${baseUrl}/models`, {
-      headers: { Authorization: `Bearer ${apiKey}` }
-    });
-    if (!response.ok) {
-      const excerpt = await readErrorBodyExcerpt(response);
+    let response: Response;
+    try {
+      response = await providerFetch("OpenAI-compatible", `${baseUrl}/models`, {
+        headers: { Authorization: `Bearer ${apiKey}` }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       return {
         ok: false,
-        message: excerpt
-          ? `Model list failed (${response.status}): ${excerpt}`
-          : `Model list failed (${response.status})`
+        message
       };
     }
     let ids: string[] = [];

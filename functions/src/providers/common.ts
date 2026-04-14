@@ -72,12 +72,78 @@ export async function readErrorBodyExcerpt(response: Response, maxChars = 500): 
   return `${collapsed.slice(0, maxChars)}…`;
 }
 
+function isRetryableProviderStatus(status: number) {
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function classifyProviderFailure(provider: string, status: number, excerpt: string) {
+  const normalized = excerpt.toLowerCase();
+  if (status === 429) {
+    return new HttpsError(
+      "resource-exhausted",
+      `${provider} quota is exhausted right now. Check the provider plan or try again later.`
+    );
+  }
+  if (status === 503 || normalized.includes("\"status\": \"unavailable\"") || normalized.includes("currently experiencing high demand")) {
+    return new HttpsError(
+      "resource-exhausted",
+      `${provider} is temporarily overloaded for this model. Try again in a minute or switch to a more stable model.`
+    );
+  }
+  return null;
+}
+
+export async function providerFetch(
+  provider: string,
+  url: string,
+  init?: RequestInit,
+  options?: { retries?: number; retryDelayMs?: number }
+) {
+  const retries = options?.retries ?? 0;
+  const retryDelayMs = options?.retryDelayMs ?? 750;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    let response: Response;
+    try {
+      response = await fetch(url, init);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new HttpsError(
+        "failed-precondition",
+        `${provider} API request could not be completed: ${redactSecrets(message)}`
+      );
+    }
+
+    if (response.ok) return response;
+
+    const excerpt = await readErrorBodyExcerpt(response);
+    const classified = classifyProviderFailure(provider, response.status, excerpt);
+    const canRetry = attempt < retries && isRetryableProviderStatus(response.status);
+    if (canRetry) {
+      await delay(retryDelayMs * (attempt + 1));
+      continue;
+    }
+    if (classified) throw classified;
+
+    const detail = excerpt ? `: ${excerpt}` : response.statusText ? `: ${response.statusText}` : "";
+    throw new HttpsError(
+      "internal",
+      `${provider} API request failed (${response.status})${detail}`
+    );
+  }
+
+  throw new HttpsError("internal", `${provider} API request failed after retries`);
+}
+
 export async function requireOk(response: Response, provider: string) {
   if (response.ok) return;
   const excerpt = await readErrorBodyExcerpt(response);
+  const classified = classifyProviderFailure(provider, response.status, excerpt);
+  if (classified) throw classified;
   const detail = excerpt ? `: ${excerpt}` : response.statusText ? `: ${response.statusText}` : "";
-  throw new HttpsError(
-    "internal",
-    `${provider} API request failed (${response.status})${detail}`
-  );
+  throw new HttpsError("internal", `${provider} API request failed (${response.status})${detail}`);
 }
