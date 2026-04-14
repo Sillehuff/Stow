@@ -61,17 +61,37 @@ export const openaiCompatibleAdapter: VisionProviderAdapter = {
           : `Model list failed (${response.status})`
       };
     }
+    let ids: string[] = [];
+    let parsedShape = false;
     try {
       const body = (await response.json()) as { data?: Array<{ id?: string }> };
-      const ids = body.data?.map((m) => m.id).filter((id): id is string => !!id) ?? [];
-      if (ids.length > 0 && !ids.includes(config.model)) {
-        return {
-          ok: false,
-          message: `Configured model "${config.model}" was not found in the provider's model list`
-        };
+      if (Array.isArray(body.data)) {
+        parsedShape = true;
+        ids = body.data.map((m) => m.id).filter((id): id is string => !!id);
       }
     } catch {
-      // Non-OpenAI compatible servers may return a different shape; treat as successful reach.
+      // fall through: unparseable body → treat as "reachable but shape unknown"
+    }
+    if (!parsedShape) {
+      // Non-OpenAI compatible server returned a non-standard shape. We cannot
+      // verify the model, but the endpoint responded 200, so surface that
+      // explicitly rather than claiming success.
+      return {
+        ok: true,
+        message: "Connection successful (model list not in OpenAI shape; model not verified)"
+      };
+    }
+    if (ids.length === 0) {
+      return {
+        ok: true,
+        message: "Connection successful (server returned empty model list; model not verified)"
+      };
+    }
+    if (!ids.includes(config.model)) {
+      return {
+        ok: false,
+        message: `Configured model "${config.model}" was not found in the provider's model list`
+      };
     }
     return { ok: true, message: "Connection successful" };
   }

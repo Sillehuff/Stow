@@ -19,5 +19,7 @@ export const paths = {
   llmConfig: (householdId: string) => `households/${householdId}/settings/llm`,
   llmSecret: (householdId: string) => `households/${householdId}/settings/llmSecret`,
   visionJobs: (householdId: string) => `households/${householdId}/visionJobs`,
+  visionQuota: (householdId: string, uid: string, isoDay: string) =>
+    `households/${householdId}/visionQuota/${uid}_${isoDay}`,
   user: (uid: string) => `users/${uid}`
 };

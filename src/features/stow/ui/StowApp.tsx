@@ -3137,18 +3137,22 @@ export function StowApp({
               imageFile={visionDraft.imageFile}
               onImageUrlChange={(value) => setVisionDraft((prev) => ({ ...prev, imageUrl: value }))}
               onFileChange={(file) => setVisionDraft((prev) => ({ ...prev, imageFile: file }))}
-              disabled={!online || !workspace.llmConfig?.enabled}
+              disabled={!online || !workspace.llmConfigLoaded || !workspace.llmConfig?.enabled}
               helperText={
                 !online
                   ? "Vision scan requires an internet connection."
-                  : !workspace.llmConfig?.enabled
-                    ? "Vision categorization is disabled. An admin can enable it in Settings."
-                    : undefined
+                  : !workspace.llmConfigLoaded
+                    ? "Checking vision settings…"
+                    : !workspace.llmConfig?.enabled
+                      ? "Vision categorization is disabled. An admin can enable it in Settings."
+                      : undefined
               }
             />
             <button
               className="btn primary"
-              disabled={visionWorking || !online || !workspace.llmConfig?.enabled}
+              disabled={
+                visionWorking || !online || !workspace.llmConfigLoaded || !workspace.llmConfig?.enabled
+              }
               onClick={() => void runVisionCategorize()}
             >
               <Sparkles size={16} />

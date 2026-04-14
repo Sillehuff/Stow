@@ -74,6 +74,13 @@ const providerPayloads = {
     providerJson({ content: [{ type: "text", text: JSON.stringify(fakeSuggestion) }] })
 };
 
+if (!emulatorReady) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[vision.emulator.test] Skipped: FIRESTORE_EMULATOR_HOST is not set. Run via `npm run test:emulator` behind `firebase emulators:exec`."
+  );
+}
+
 describe.runIf(emulatorReady)("vision emulator smoke test", () => {
   let visionHandler: (raw: unknown, uid: string) => Promise<{
     suggestion: VisionSuggestion;
@@ -110,20 +117,49 @@ describe.runIf(emulatorReady)("vision emulator smoke test", () => {
     await Promise.all(jobs.docs.map((d) => d.ref.delete()));
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
+    // Hermetic per-test cleanup so each assertion only sees its own writes.
+    const jobs = await db.collection(`households/${HOUSEHOLD_ID}/visionJobs`).get();
+    await Promise.all(jobs.docs.map((d) => d.ref.delete()));
+    const quotas = await db.collection(`households/${HOUSEHOLD_ID}/visionQuota`).get();
+    await Promise.all(quotas.docs.map((d) => d.ref.delete()));
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
+  async function expectSingleVisionJob(providerType: string) {
+    const jobs = await db.collection(`households/${HOUSEHOLD_ID}/visionJobs`).get();
+    expect(jobs.size).toBe(1);
+    const data = jobs.docs[0]!.data();
+    expect(data.providerType).toBe(providerType);
+    expect(data.createdBy).toBe(USER_ID);
+    expect(typeof data.latencyMs).toBe("number");
+    expect(data.latencyMs).toBeGreaterThanOrEqual(0);
+    expect(typeof data.confidence).toBe("number");
+    expect(data.quotaLimit).toBeGreaterThan(0);
+    expect(data.quotaUsed).toBeGreaterThanOrEqual(1);
+    return data;
+  }
+
   async function setProvider(providerType: HouseholdLlmConfig["providerType"], model: string) {
-    await db.doc(`households/${HOUSEHOLD_ID}/settings/llm`).set(
-      { ...baseConfig, providerType, model, baseUrl: providerType === "openai_compatible" ? baseConfig.baseUrl : null },
-      { merge: false }
-    );
+    const next: HouseholdLlmConfig = {
+      ...baseConfig,
+      providerType,
+      model
+    };
+    if (providerType !== "openai_compatible") {
+      // baseUrl is optional; omit it entirely for Gemini/Anthropic so the
+      // stored doc matches the Zod schema and won't blow up if the handler
+      // ever parses it.
+      delete (next as { baseUrl?: string | null }).baseUrl;
+    } else {
+      next.baseUrl = baseConfig.baseUrl;
+    }
+    await db.doc(`households/${HOUSEHOLD_ID}/settings/llm`).set(next, { merge: false });
   }
 
   it("runs end-to-end with the OpenAI-compatible provider", async () => {
@@ -139,13 +175,9 @@ describe.runIf(emulatorReady)("vision emulator smoke test", () => {
     expect(result.suggestion.suggestedName).toBe("Desk Lamp");
     expect(result.provider.providerType).toBe("openai_compatible");
 
-    const jobs = await db.collection(`households/${HOUSEHOLD_ID}/visionJobs`).get();
-    const mostRecent = jobs.docs
-      .map((d) => d.data())
-      .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))[0];
-    expect(mostRecent?.providerType).toBe("openai_compatible");
-    expect(mostRecent?.confidence).toBeCloseTo(0.92);
-    expect(mostRecent?.createdBy).toBe(USER_ID);
+    const data = await expectSingleVisionJob("openai_compatible");
+    expect(data.confidence).toBeCloseTo(0.92);
+    expect(data.model).toBe("gpt-4o-mini");
   });
 
   it("runs end-to-end with the Gemini provider", async () => {
@@ -161,6 +193,7 @@ describe.runIf(emulatorReady)("vision emulator smoke test", () => {
     expect(result.provider.providerType).toBe("gemini");
     expect(result.suggestion.suggestedName).toBe("Desk Lamp");
     expect(fetchMock.mock.calls[1]?.[0]).toContain("generateContent");
+    await expectSingleVisionJob("gemini");
   });
 
   it("runs end-to-end with the Anthropic provider", async () => {
@@ -175,6 +208,7 @@ describe.runIf(emulatorReady)("vision emulator smoke test", () => {
     );
     expect(result.provider.providerType).toBe("anthropic");
     expect(fetchMock.mock.calls[1]?.[0]).toBe("https://api.anthropic.com/v1/messages");
+    await expectSingleVisionJob("anthropic");
   });
 
   it("rejects a caller who is not a household member", async () => {

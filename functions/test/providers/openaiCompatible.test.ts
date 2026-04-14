@@ -130,4 +130,29 @@ describe("openaiCompatibleAdapter.validate", () => {
     expect(result.message).toMatch(/401/);
     expect(result.message).toContain("bad key");
   });
+
+  it("reports ok:true with a clear caveat when /models returns empty data", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: [] }));
+    const result = await openaiCompatibleAdapter.validate({ apiKey: "sk", config });
+    expect(result.ok).toBe(true);
+    expect(result.message).toMatch(/model not verified/);
+    // Must NOT falsely claim the configured model was confirmed.
+    expect(result.message).not.toMatch(/^Connection successful$/);
+  });
+
+  it("reports ok:true with a clear caveat when /models returns a non-OpenAI shape", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ models: ["gpt-4o-mini"] }));
+    const result = await openaiCompatibleAdapter.validate({ apiKey: "sk", config });
+    expect(result.ok).toBe(true);
+    expect(result.message).toMatch(/not in OpenAI shape/);
+  });
+
+  it("reports ok:true with a caveat when /models returns malformed JSON", async () => {
+    fetchMock.mockResolvedValue(
+      new Response("not-json-at-all", { status: 200, headers: { "content-type": "application/json" } })
+    );
+    const result = await openaiCompatibleAdapter.validate({ apiKey: "sk", config });
+    expect(result.ok).toBe(true);
+    expect(result.message).toMatch(/not in OpenAI shape/);
+  });
 });

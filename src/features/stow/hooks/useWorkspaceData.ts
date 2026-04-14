@@ -62,6 +62,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
   const [packingListsState, setPackingListsState] = useState<CollectionState<PackingList>>(emptyState());
   const [llmConfig, setLlmConfig] = useState<HouseholdLlmConfig | null>(null);
   const [llmConfigMeta, setLlmConfigMeta] = useState({ fromCache: true, hasPendingWrites: false });
+  const [llmConfigLoaded, setLlmConfigLoaded] = useState(false);
   const [errorsBySource, setErrorsBySource] = useState<WorkspaceErrorsBySource>(emptyErrors());
 
   const setSourceError = (source: WorkspaceErrorSource, message: string | null) => {
@@ -174,14 +175,19 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
 
   useEffect(() => {
     if (!householdId) return;
+    setLlmConfigLoaded(false);
     const unsub = inventoryRepository.subscribeLlmConfig(
       householdId,
       (config, meta) => {
         setLlmConfig(config);
         setLlmConfigMeta(meta);
+        setLlmConfigLoaded(true);
         setSourceError("llmConfig", null);
       },
-      (e) => setSourceError("llmConfig", e.message)
+      (e) => {
+        setLlmConfigLoaded(true);
+        setSourceError("llmConfig", e.message);
+      }
     );
     return () => unsub();
   }, [householdId]);
@@ -256,6 +262,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     invites: invitesState.items,
     packingLists: packingListsState.items,
     llmConfig,
+    llmConfigLoaded,
     sync,
     error,
     errorsBySource,

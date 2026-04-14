@@ -38,15 +38,38 @@ export function normalizeSuggestion(candidate: unknown): VisionSuggestion {
   return parsed.data;
 }
 
+/**
+ * Strip substrings that may contain a secret (API keys, bearer tokens, or
+ * URL query strings that embed an `apiKey`/`key=` parameter). Provider
+ * servers sometimes echo the incoming request URL or headers in their error
+ * payloads — without this step, those secrets would land in HttpsError
+ * messages that are forwarded to the client and logs.
+ */
+export function redactSecrets(text: string): string {
+  return text
+    // Bearer tokens
+    .replace(/Bearer\s+[A-Za-z0-9._~+/\-]+=*/gi, "Bearer [REDACTED]")
+    // Gemini/Google style ?key=..., &key=..., "key":"..."
+    .replace(/([?&](?:key|api_?key|access_token)=)[^&\s"']+/gi, "$1[REDACTED]")
+    .replace(/("(?:api_?key|key|access_token|authorization)"\s*:\s*")[^"]+(")/gi, "$1[REDACTED]$2")
+    // Known key prefixes (OpenAI sk-, Anthropic sk-ant-, Google AIza)
+    .replace(/sk-ant-[A-Za-z0-9_\-]{10,}/g, "[REDACTED]")
+    .replace(/sk-[A-Za-z0-9_\-]{20,}/g, "[REDACTED]")
+    .replace(/AIza[A-Za-z0-9_\-]{20,}/g, "[REDACTED]");
+}
+
 export async function readErrorBodyExcerpt(response: Response, maxChars = 500): Promise<string> {
+  let text: string;
   try {
-    const text = await response.text();
-    if (!text) return "";
-    const collapsed = text.replace(/\s+/g, " ").trim();
-    return collapsed.length > maxChars ? `${collapsed.slice(0, maxChars)}…` : collapsed;
+    text = await response.text();
   } catch {
     return "";
   }
+  if (!text) return "";
+  const redacted = redactSecrets(text);
+  const collapsed = redacted.replace(/\s+/g, " ").trim();
+  if (collapsed.length <= maxChars) return collapsed;
+  return `${collapsed.slice(0, maxChars)}…`;
 }
 
 export async function requireOk(response: Response, provider: string) {

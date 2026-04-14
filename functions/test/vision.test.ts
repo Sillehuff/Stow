@@ -3,6 +3,9 @@ import type { HouseholdLlmConfig, VisionSuggestion } from "../src/shared/schemas
 
 // In-memory Firestore stub used by the mocked shared/firestore.js module.
 const visionJobWrites: Array<{ path: string; data: Record<string, unknown> }> = [];
+const quotaStore = new Map<string, { count: number }>();
+const storageFileCalls: Array<{ path: string }> = [];
+let storageFileExists = true;
 
 const fakePaths = {
   household: (h: string) => `households/${h}`,
@@ -13,6 +16,7 @@ const fakePaths = {
   llmConfig: (h: string) => `households/${h}/settings/llm`,
   llmSecret: (h: string) => `households/${h}/settings/llmSecret`,
   visionJobs: (h: string) => `households/${h}/visionJobs`,
+  visionQuota: (h: string, u: string, day: string) => `households/${h}/visionQuota/${u}_${day}`,
   user: (u: string) => `users/${u}`
 };
 
@@ -23,27 +27,53 @@ const docFactory = (path: string) => ({
   }
 });
 
+type QuotaRef = { path: string };
+
+function quotaDocRef(path: string): QuotaRef {
+  return { path };
+}
+
 const fakeDb = {
   collection: (path: string) => ({
     doc: () => docFactory(`${path}/test-job-id`)
   }),
-  doc: (_path: string) => ({
-    async get() {
-      throw new Error("db.doc should not be called in these tests");
-    }
-  })
+  doc: (path: string) => quotaDocRef(path),
+  async runTransaction<T>(work: (tx: {
+    get: (ref: QuotaRef) => Promise<{
+      exists: boolean;
+      get: (field: string) => unknown;
+    }>;
+    set: (ref: QuotaRef, data: Record<string, unknown>) => void;
+  }) => Promise<T>): Promise<T> {
+    return work({
+      async get(ref: QuotaRef) {
+        const existing = quotaStore.get(ref.path);
+        return {
+          exists: !!existing,
+          get: (field: string) => (existing ? (existing as unknown as Record<string, unknown>)[field] : undefined)
+        };
+      },
+      set(ref: QuotaRef, data: Record<string, unknown>) {
+        const count = typeof data.count === "number" ? data.count : 0;
+        quotaStore.set(ref.path, { count });
+      }
+    });
+  }
 };
 
 const fakeStorage = {
   bucket: () => ({
-    file: () => ({
-      async exists() {
-        return [true];
-      },
-      async getSignedUrl() {
-        return ["https://signed.test/image.jpg"];
-      }
-    })
+    file: (p: string) => {
+      storageFileCalls.push({ path: p });
+      return {
+        async exists() {
+          return [storageFileExists];
+        },
+        async getSignedUrl() {
+          return [`https://signed.test/${encodeURIComponent(p)}`];
+        }
+      };
+    }
   })
 };
 
@@ -133,9 +163,13 @@ describe("visionCategorizeItemImageHandler", () => {
 
   beforeEach(() => {
     visionJobWrites.length = 0;
+    quotaStore.clear();
+    storageFileCalls.length = 0;
+    storageFileExists = true;
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     loadConfigMock.mockReset();
+    delete process.env.VISION_DAILY_PER_USER_LIMIT;
   });
 
   afterEach(() => {
@@ -255,6 +289,152 @@ describe("visionCategorizeItemImageHandler", () => {
         "uid-1"
       )
     ).rejects.toThrow(/Unsupported image MIME/);
+  });
+
+  it("resolves images via the storagePath branch (signed URL) and routes through the provider", async () => {
+    loadConfigMock.mockResolvedValue({ config: baseConfig, apiKey: "sk-test" });
+    fetchMock
+      .mockResolvedValueOnce(imageResponse(Buffer.from("signed-bytes"), "image/jpeg"))
+      .mockResolvedValueOnce(openaiResponse(fakeSuggestion));
+
+    const { visionCategorizeItemImageHandler } = await import("../src/vision.js");
+    const result = await visionCategorizeItemImageHandler(
+      {
+        householdId: "h1",
+        imageRef: { storagePath: "drafts/h1/uid-1/capture.jpg" }
+      },
+      "uid-1"
+    );
+
+    expect(result.suggestion.suggestedName).toBe("Desk Lamp");
+    expect(storageFileCalls).toEqual([{ path: "drafts/h1/uid-1/capture.jpg" }]);
+    // First fetch must target the signed URL returned by the mocked bucket.
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://signed.test/drafts%2Fh1%2Fuid-1%2Fcapture.jpg"
+    );
+    expect(visionJobWrites).toHaveLength(1);
+  });
+
+  it("rejects a storagePath that does not exist in storage", async () => {
+    loadConfigMock.mockResolvedValue({ config: baseConfig, apiKey: "sk-test" });
+    storageFileExists = false;
+
+    const { visionCategorizeItemImageHandler } = await import("../src/vision.js");
+    await expect(
+      visionCategorizeItemImageHandler(
+        { householdId: "h1", imageRef: { storagePath: "drafts/h1/uid-1/missing.jpg" } },
+        "uid-1"
+      )
+    ).rejects.toThrow(/not found in storage/);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(visionJobWrites).toHaveLength(0);
+  });
+
+  it("pre-rejects images when Content-Length exceeds the limit (without buffering)", async () => {
+    loadConfigMock.mockResolvedValue({ config: baseConfig, apiKey: "sk-test" });
+    const { MAX_IMAGE_BYTES } = await import("../src/vision.js");
+    // Hand back a tiny body but advertise a massive Content-Length. If the
+    // handler were to buffer first, this test would be slow; instead it
+    // should read the header and bail immediately.
+    const oversizedHeader = new Response("x", {
+      status: 200,
+      headers: {
+        "content-type": "image/jpeg",
+        "content-length": String(MAX_IMAGE_BYTES + 1)
+      }
+    });
+    fetchMock.mockResolvedValueOnce(oversizedHeader);
+
+    const { visionCategorizeItemImageHandler } = await import("../src/vision.js");
+    await expect(
+      visionCategorizeItemImageHandler(
+        { householdId: "h1", imageRef: { imageUrl: "https://example.test/huge.jpg" } },
+        "uid-1"
+      )
+    ).rejects.toThrow(/maximum size/);
+    expect(visionJobWrites).toHaveLength(0);
+  });
+
+  it("caps body size even when Content-Length is missing", async () => {
+    loadConfigMock.mockResolvedValue({ config: baseConfig, apiKey: "sk-test" });
+    const { MAX_IMAGE_BYTES } = await import("../src/vision.js");
+    // Stream a body larger than the limit with no Content-Length header. The
+    // streaming reader should cancel once the byte count crosses MAX_IMAGE_BYTES.
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const chunkSize = 1024 * 1024; // 1 MB chunks
+        const totalChunks = Math.ceil(MAX_IMAGE_BYTES / chunkSize) + 2;
+        const chunk = new Uint8Array(chunkSize).fill(0x41);
+        for (let i = 0; i < totalChunks; i++) controller.enqueue(chunk);
+        controller.close();
+      }
+    });
+    const streamResponse = new Response(stream, {
+      status: 200,
+      headers: { "content-type": "image/jpeg" }
+    });
+    fetchMock.mockResolvedValueOnce(streamResponse);
+
+    const { visionCategorizeItemImageHandler } = await import("../src/vision.js");
+    await expect(
+      visionCategorizeItemImageHandler(
+        { householdId: "h1", imageRef: { imageUrl: "https://example.test/stream.jpg" } },
+        "uid-1"
+      )
+    ).rejects.toThrow(/maximum size/);
+  });
+
+  it("enforces the per-user daily quota", async () => {
+    process.env.VISION_DAILY_PER_USER_LIMIT = "2";
+    loadConfigMock.mockResolvedValue({ config: baseConfig, apiKey: "sk-test" });
+    const { visionCategorizeItemImageHandler } = await import("../src/vision.js");
+
+    for (let i = 0; i < 2; i++) {
+      fetchMock
+        .mockResolvedValueOnce(imageResponse(Buffer.from(`img-${i}`), "image/jpeg"))
+        .mockResolvedValueOnce(openaiResponse(fakeSuggestion));
+      const result = await visionCategorizeItemImageHandler(
+        { householdId: "h1", imageRef: { imageUrl: `https://example.test/${i}.jpg` } },
+        "uid-1"
+      );
+      expect(result.quota).toEqual({ count: i + 1, limit: 2 });
+    }
+
+    // Third call should be rejected BEFORE the provider or image fetch runs.
+    fetchMock.mockClear();
+    await expect(
+      visionCategorizeItemImageHandler(
+        { householdId: "h1", imageRef: { imageUrl: "https://example.test/3.jpg" } },
+        "uid-1"
+      )
+    ).rejects.toThrow(/daily limit reached/);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(visionJobWrites).toHaveLength(2);
+  });
+
+  it("tracks quota independently per user", async () => {
+    process.env.VISION_DAILY_PER_USER_LIMIT = "1";
+    loadConfigMock.mockResolvedValue({ config: baseConfig, apiKey: "sk-test" });
+    const { visionCategorizeItemImageHandler } = await import("../src/vision.js");
+
+    fetchMock
+      .mockResolvedValueOnce(imageResponse(Buffer.from("a"), "image/jpeg"))
+      .mockResolvedValueOnce(openaiResponse(fakeSuggestion))
+      .mockResolvedValueOnce(imageResponse(Buffer.from("b"), "image/jpeg"))
+      .mockResolvedValueOnce(openaiResponse(fakeSuggestion));
+
+    await visionCategorizeItemImageHandler(
+      { householdId: "h1", imageRef: { imageUrl: "https://example.test/a.jpg" } },
+      "user-A"
+    );
+    // user-B should still have their quota intact.
+    await expect(
+      visionCategorizeItemImageHandler(
+        { householdId: "h1", imageRef: { imageUrl: "https://example.test/b.jpg" } },
+        "user-B"
+      )
+    ).resolves.toBeDefined();
+    expect(visionJobWrites).toHaveLength(2);
   });
 
   it("surfaces provider errors to the caller", async () => {
