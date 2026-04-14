@@ -40,4 +40,8 @@ export interface VisionCategorizeResponse {
     providerType: ProviderType;
     model: string;
   };
+  quota: {
+    count: number;
+    limit: number;
+  };
 }

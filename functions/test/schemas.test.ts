@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createInviteInputSchema,
   llmConfigSchema,
+  saveLlmConfigInputSchema,
   visionCategorizeInputSchema,
   visionSuggestionSchema
 } from "../src/shared/schemas.js";
@@ -26,6 +27,26 @@ describe("shared schemas", () => {
         maxTokens: 300
       })
     ).not.toThrow();
+  });
+
+  it("strips validation metadata from llm config save payloads", () => {
+    const parsed = saveLlmConfigInputSchema.parse({
+      householdId: "h1",
+      config: {
+        enabled: true,
+        providerType: "openai_compatible",
+        model: "gpt-4.1-mini",
+        baseUrl: "https://api.openai.com/v1",
+        promptProfile: "default_inventory",
+        temperature: 0.2,
+        maxTokens: 300,
+        lastValidatedAt: "spoofed",
+        lastValidatedBy: "spoofed-user"
+      }
+    });
+
+    expect(parsed.config).not.toHaveProperty("lastValidatedAt");
+    expect(parsed.config).not.toHaveProperty("lastValidatedBy");
   });
 
   it("validates vision requests", () => {

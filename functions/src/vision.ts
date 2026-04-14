@@ -1,3 +1,5 @@
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import { HttpsError } from "firebase-functions/v2/https";
 import { FieldValue, db, paths, storage } from "./shared/firestore.js";
 import { requireHouseholdMember } from "./shared/authz.js";
@@ -64,6 +66,107 @@ type ResolvedImage = {
 
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8 MB
 export const IMAGE_FETCH_TIMEOUT_MS = 15_000;
+const MAX_IMAGE_REDIRECTS = 3;
+const STORAGE_PATH_PREFIX = "households/";
+
+function localImageFetchAllowed() {
+  return process.env.FUNCTIONS_EMULATOR === "true" || !!process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+}
+
+function isBlockedHostname(hostname: string) {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized.endsWith(".localhost") ||
+    normalized === "metadata.google.internal"
+  );
+}
+
+function isBlockedIpv4(address: string) {
+  const octets = address.split(".").map((part) => Number.parseInt(part, 10));
+  if (octets.length !== 4 || octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return false;
+  }
+  const [a, b] = octets;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
+}
+
+function isBlockedIpv6(address: string) {
+  const normalized = address.toLowerCase();
+  if (normalized === "::" || normalized === "::1" || normalized.startsWith("fc") || normalized.startsWith("fd")) {
+    return true;
+  }
+  if (normalized.startsWith("fe80:")) return true;
+  const mappedIpv4 = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  return mappedIpv4 ? isBlockedIpv4(mappedIpv4[1]) : false;
+}
+
+function isBlockedIpAddress(address: string) {
+  switch (isIP(address)) {
+    case 4:
+      return isBlockedIpv4(address);
+    case 6:
+      return isBlockedIpv6(address);
+    default:
+      return false;
+  }
+}
+
+async function assertSafeImageUrl(urlString: string): Promise<URL> {
+  let parsed: URL;
+  try {
+    parsed = new URL(urlString);
+  } catch {
+    throw new HttpsError("invalid-argument", "Image URL must be a valid absolute URL");
+  }
+
+  const allowLocal = localImageFetchAllowed();
+  if (parsed.protocol !== "https:" && !(allowLocal && parsed.protocol === "http:")) {
+    throw new HttpsError("invalid-argument", "Image URL must use HTTPS");
+  }
+  if (parsed.username || parsed.password) {
+    throw new HttpsError("invalid-argument", "Image URL cannot include credentials");
+  }
+
+  if (!allowLocal && isBlockedHostname(parsed.hostname)) {
+    throw new HttpsError("permission-denied", "Image URL must not target local or metadata hosts");
+  }
+  if (!allowLocal && isBlockedIpAddress(parsed.hostname)) {
+    throw new HttpsError("permission-denied", "Image URL must not target private network addresses");
+  }
+
+  if (!allowLocal) {
+    let addresses: Array<{ address: string }>;
+    try {
+      addresses = await lookup(parsed.hostname, { all: true, verbatim: true });
+    } catch {
+      throw new HttpsError("failed-precondition", "Image URL host could not be resolved");
+    }
+    if (!addresses.length) {
+      throw new HttpsError("failed-precondition", "Image URL host did not resolve to an address");
+    }
+    if (addresses.some((entry) => isBlockedIpAddress(entry.address))) {
+      throw new HttpsError("permission-denied", "Image URL must not resolve to a private network address");
+    }
+  }
+
+  return parsed;
+}
+
+function assertStoragePathBelongsToHousehold(storagePath: string, householdId: string) {
+  const expectedPrefix = `${STORAGE_PATH_PREFIX}${householdId}/`;
+  if (!storagePath.startsWith(expectedPrefix)) {
+    throw new HttpsError("permission-denied", "Image storage path must stay inside the household namespace");
+  }
+}
 
 function tooLargeError(): HttpsError {
   return new HttpsError(
@@ -119,62 +222,85 @@ async function readBoundedBody(response: Response, maxBytes: number): Promise<Bu
 }
 
 async function fetchFromUrl(url: string): Promise<ResolvedImage> {
+  let currentUrl = await assertSafeImageUrl(url);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS);
-  let response: Response;
   try {
-    response = await fetch(url, { signal: controller.signal });
-  } catch (err) {
-    clearTimeout(timeout);
-    if ((err as { name?: string })?.name === "AbortError") {
-      throw new HttpsError("deadline-exceeded", "Image fetch timed out");
-    }
-    throw new HttpsError("failed-precondition", `Failed to fetch image: ${(err as Error)?.message ?? "network error"}`);
-  }
-  try {
-    if (!response.ok) {
-      throw new HttpsError("failed-precondition", `Failed to fetch image (${response.status})`);
-    }
-    const mimeType = response.headers.get("content-type") ?? "image/jpeg";
-    assertMimeType(mimeType);
-
-    const lengthHeader = response.headers.get("content-length");
-    if (lengthHeader) {
-      const declared = Number.parseInt(lengthHeader, 10);
-      if (Number.isFinite(declared) && declared > MAX_IMAGE_BYTES) {
-        throw tooLargeError();
+    for (let redirects = 0; redirects <= MAX_IMAGE_REDIRECTS; redirects++) {
+      let response: Response;
+      try {
+        response = await fetch(currentUrl, { signal: controller.signal, redirect: "manual" });
+      } catch (err) {
+        if ((err as { name?: string })?.name === "AbortError") {
+          throw new HttpsError("deadline-exceeded", "Image fetch timed out");
+        }
+        throw new HttpsError(
+          "failed-precondition",
+          `Failed to fetch image: ${(err as Error)?.message ?? "network error"}`
+        );
       }
-    }
 
-    const bytes = await readBoundedBody(response, MAX_IMAGE_BYTES);
-    if (bytes.length === 0) {
-      throw new HttpsError("invalid-argument", "Image is empty");
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        if (redirects === MAX_IMAGE_REDIRECTS) {
+          throw new HttpsError("failed-precondition", "Image fetch exceeded redirect limit");
+        }
+        const location = response.headers.get("location");
+        if (!location) {
+          throw new HttpsError("failed-precondition", "Image fetch redirect was missing a location");
+        }
+        currentUrl = await assertSafeImageUrl(new URL(location, currentUrl).toString());
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new HttpsError("failed-precondition", `Failed to fetch image (${response.status})`);
+      }
+      const mimeType = response.headers.get("content-type") ?? "image/jpeg";
+      assertMimeType(mimeType);
+
+      const lengthHeader = response.headers.get("content-length");
+      if (lengthHeader) {
+        const declared = Number.parseInt(lengthHeader, 10);
+        if (Number.isFinite(declared) && declared > MAX_IMAGE_BYTES) {
+          throw tooLargeError();
+        }
+      }
+
+      const bytes = await readBoundedBody(response, MAX_IMAGE_BYTES);
+      if (bytes.length === 0) {
+        throw new HttpsError("invalid-argument", "Image is empty");
+      }
+      return {
+        bytes,
+        mimeType,
+        sourceUrl: currentUrl.toString()
+      };
     }
-    return {
-      bytes,
-      mimeType,
-      sourceUrl: url
-    };
+    throw new HttpsError("failed-precondition", "Image fetch failed before receiving a response");
   } finally {
     clearTimeout(timeout);
   }
 }
 
-async function resolveImage(imageRef: { storagePath?: string; downloadUrl?: string; imageUrl?: string }) {
+async function resolveImage(imageRef: { storagePath?: string; downloadUrl?: string; imageUrl?: string }, householdId: string) {
+  if (imageRef.storagePath) {
+    assertStoragePathBelongsToHousehold(imageRef.storagePath, householdId);
+    const bucket = storage.bucket();
+    const file = bucket.file(imageRef.storagePath);
+    const [exists] = await file.exists();
+    if (!exists) throw new HttpsError("not-found", "Image file not found in storage");
+    const [signedUrl] = await file.getSignedUrl({
+      action: "read",
+      expires: Date.now() + 5 * 60 * 1000
+    });
+    return fetchFromUrl(signedUrl);
+  }
   if (imageRef.imageUrl) return fetchFromUrl(imageRef.imageUrl);
   if (imageRef.downloadUrl) return fetchFromUrl(imageRef.downloadUrl);
   if (!imageRef.storagePath) {
     throw new HttpsError("invalid-argument", "Image reference is missing storagePath/downloadUrl/imageUrl");
   }
-  const bucket = storage.bucket();
-  const file = bucket.file(imageRef.storagePath);
-  const [exists] = await file.exists();
-  if (!exists) throw new HttpsError("not-found", "Image file not found in storage");
-  const [signedUrl] = await file.getSignedUrl({
-    action: "read",
-    expires: Date.now() + 5 * 60 * 1000
-  });
-  return fetchFromUrl(signedUrl);
+  throw new HttpsError("invalid-argument", "Image reference could not be resolved");
 }
 
 export async function visionCategorizeItemImageHandler(raw: unknown, uid: string) {
@@ -187,7 +313,10 @@ export async function visionCategorizeItemImageHandler(raw: unknown, uid: string
   // provider call). If the caller has blown their daily limit we fail fast.
   const quota = await enforceVisionQuota(input.householdId, uid);
 
-  const image = await resolveImage("imageUrl" in input.imageRef ? { imageUrl: input.imageRef.imageUrl } : input.imageRef);
+  const image = await resolveImage(
+    "imageUrl" in input.imageRef ? { imageUrl: input.imageRef.imageUrl } : input.imageRef,
+    input.householdId
+  );
   const adapter = getVisionAdapter(config.providerType);
   const prompt = inventoryVisionPrompt({ areaName: input.context?.areaName });
 

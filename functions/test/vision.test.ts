@@ -6,6 +6,9 @@ const visionJobWrites: Array<{ path: string; data: Record<string, unknown> }> = 
 const quotaStore = new Map<string, { count: number }>();
 const storageFileCalls: Array<{ path: string }> = [];
 let storageFileExists = true;
+const lookupMock = vi.fn<
+  (hostname: string) => Promise<Array<{ address: string; family: number }>>
+>();
 
 const fakePaths = {
   household: (h: string) => `households/${h}`,
@@ -83,6 +86,10 @@ vi.mock("../src/shared/firestore.js", () => ({
   auth: {},
   FieldValue: { serverTimestamp: () => "__SERVER_TS__" },
   paths: fakePaths
+}));
+
+vi.mock("node:dns/promises", () => ({
+  lookup: (hostname: string) => lookupMock(hostname)
 }));
 
 vi.mock("../src/shared/authz.js", () => ({
@@ -169,6 +176,11 @@ describe("visionCategorizeItemImageHandler", () => {
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     loadConfigMock.mockReset();
+    lookupMock.mockReset();
+    lookupMock.mockImplementation(async (hostname: string) => {
+      if (hostname === "localhost") return [{ address: "127.0.0.1", family: 4 }];
+      return [{ address: "93.184.216.34", family: 4 }];
+    });
     delete process.env.VISION_DAILY_PER_USER_LIMIT;
   });
 
@@ -301,16 +313,16 @@ describe("visionCategorizeItemImageHandler", () => {
     const result = await visionCategorizeItemImageHandler(
       {
         householdId: "h1",
-        imageRef: { storagePath: "drafts/h1/uid-1/capture.jpg" }
+        imageRef: { storagePath: "households/h1/drafts/uid-1/images/capture.jpg" }
       },
       "uid-1"
     );
 
     expect(result.suggestion.suggestedName).toBe("Desk Lamp");
-    expect(storageFileCalls).toEqual([{ path: "drafts/h1/uid-1/capture.jpg" }]);
+    expect(storageFileCalls).toEqual([{ path: "households/h1/drafts/uid-1/images/capture.jpg" }]);
     // First fetch must target the signed URL returned by the mocked bucket.
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      "https://signed.test/drafts%2Fh1%2Fuid-1%2Fcapture.jpg"
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      "https://signed.test/households%2Fh1%2Fdrafts%2Fuid-1%2Fimages%2Fcapture.jpg"
     );
     expect(visionJobWrites).toHaveLength(1);
   });
@@ -322,12 +334,63 @@ describe("visionCategorizeItemImageHandler", () => {
     const { visionCategorizeItemImageHandler } = await import("../src/vision.js");
     await expect(
       visionCategorizeItemImageHandler(
-        { householdId: "h1", imageRef: { storagePath: "drafts/h1/uid-1/missing.jpg" } },
+        { householdId: "h1", imageRef: { storagePath: "households/h1/drafts/uid-1/images/missing.jpg" } },
         "uid-1"
       )
     ).rejects.toThrow(/not found in storage/);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(visionJobWrites).toHaveLength(0);
+  });
+
+  it("rejects storage paths that point outside the caller's household namespace", async () => {
+    loadConfigMock.mockResolvedValue({ config: baseConfig, apiKey: "sk-test" });
+
+    const { visionCategorizeItemImageHandler } = await import("../src/vision.js");
+    await expect(
+      visionCategorizeItemImageHandler(
+        { householdId: "h1", imageRef: { storagePath: "households/other-household/items/item-1/images/leak.jpg" } },
+        "uid-1"
+      )
+    ).rejects.toThrow(/household namespace/);
+    expect(storageFileCalls).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("ignores a caller-supplied downloadUrl when a trusted storagePath is present", async () => {
+    loadConfigMock.mockResolvedValue({ config: baseConfig, apiKey: "sk-test" });
+    fetchMock
+      .mockResolvedValueOnce(imageResponse(Buffer.from("signed-bytes"), "image/jpeg"))
+      .mockResolvedValueOnce(openaiResponse(fakeSuggestion));
+
+    const { visionCategorizeItemImageHandler } = await import("../src/vision.js");
+    await visionCategorizeItemImageHandler(
+      {
+        householdId: "h1",
+        imageRef: {
+          storagePath: "households/h1/items/item-1/images/capture.jpg",
+          downloadUrl: "https://attacker.test/private.jpg"
+        }
+      },
+      "uid-1"
+    );
+
+    expect(storageFileCalls).toEqual([{ path: "households/h1/items/item-1/images/capture.jpg" }]);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      "https://signed.test/households%2Fh1%2Fitems%2Fitem-1%2Fimages%2Fcapture.jpg"
+    );
+  });
+
+  it("rejects image URLs that target private-network hosts", async () => {
+    loadConfigMock.mockResolvedValue({ config: baseConfig, apiKey: "sk-test" });
+
+    const { visionCategorizeItemImageHandler } = await import("../src/vision.js");
+    await expect(
+      visionCategorizeItemImageHandler(
+        { householdId: "h1", imageRef: { imageUrl: "https://localhost/private.jpg" } },
+        "uid-1"
+      )
+    ).rejects.toThrow(/local or metadata hosts/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("pre-rejects images when Content-Length exceeds the limit (without buffering)", async () => {

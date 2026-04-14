@@ -79,6 +79,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     setPackingListsState(emptyState());
     setLlmConfig(null);
     setLlmConfigMeta({ fromCache: true, hasPendingWrites: false });
+    setLlmConfigLoaded(false);
     setErrorsBySource(emptyErrors());
   }, [householdId]);
 

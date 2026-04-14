@@ -19,6 +19,11 @@ export const llmConfigSchema = z.object({
 });
 export type HouseholdLlmConfig = z.infer<typeof llmConfigSchema>;
 
+export const editableLlmConfigSchema = llmConfigSchema.omit({
+  lastValidatedAt: true,
+  lastValidatedBy: true
+});
+
 export const createInviteInputSchema = z.object({
   householdId: z.string().min(1),
   role: roleSchema.refine((r) => r !== "OWNER", "Owner invites are not supported via link"),
@@ -32,7 +37,7 @@ export const acceptInviteInputSchema = z.object({
 
 export const saveLlmConfigInputSchema = z.object({
   householdId: z.string().min(1),
-  config: llmConfigSchema
+  config: editableLlmConfigSchema
 });
 
 export const setLlmSecretInputSchema = z.object({
