@@ -6,6 +6,8 @@ const visionJobWrites: Array<{ path: string; data: Record<string, unknown> }> = 
 const quotaStore = new Map<string, { count: number }>();
 const storageFileCalls: Array<{ path: string }> = [];
 let storageFileExists = true;
+let storageFileBytes = Buffer.from("storage-bytes");
+let storageFileMimeType = "image/jpeg";
 const lookupMock = vi.fn<
   (hostname: string) => Promise<Array<{ address: string; family: number }>>
 >();
@@ -72,8 +74,14 @@ const fakeStorage = {
         async exists() {
           return [storageFileExists];
         },
-        async getSignedUrl() {
-          return [`https://signed.test/${encodeURIComponent(p)}`];
+        async getMetadata() {
+          return [{
+            contentType: storageFileMimeType,
+            size: String(storageFileBytes.length)
+          }];
+        },
+        async download() {
+          return [storageFileBytes];
         }
       };
     }
@@ -173,6 +181,8 @@ describe("visionCategorizeItemImageHandler", () => {
     quotaStore.clear();
     storageFileCalls.length = 0;
     storageFileExists = true;
+    storageFileBytes = Buffer.from("storage-bytes");
+    storageFileMimeType = "image/jpeg";
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     loadConfigMock.mockReset();
@@ -303,11 +313,10 @@ describe("visionCategorizeItemImageHandler", () => {
     ).rejects.toThrow(/Unsupported image MIME/);
   });
 
-  it("resolves images via the storagePath branch (signed URL) and routes through the provider", async () => {
+  it("resolves images via the storagePath branch and routes through the provider", async () => {
     loadConfigMock.mockResolvedValue({ config: baseConfig, apiKey: "sk-test" });
-    fetchMock
-      .mockResolvedValueOnce(imageResponse(Buffer.from("signed-bytes"), "image/jpeg"))
-      .mockResolvedValueOnce(openaiResponse(fakeSuggestion));
+    storageFileBytes = Buffer.from("stored-image-bytes");
+    fetchMock.mockResolvedValueOnce(openaiResponse(fakeSuggestion));
 
     const { visionCategorizeItemImageHandler } = await import("../src/vision.js");
     const result = await visionCategorizeItemImageHandler(
@@ -320,10 +329,7 @@ describe("visionCategorizeItemImageHandler", () => {
 
     expect(result.suggestion.suggestedName).toBe("Desk Lamp");
     expect(storageFileCalls).toEqual([{ path: "households/h1/drafts/uid-1/images/capture.jpg" }]);
-    // First fetch must target the signed URL returned by the mocked bucket.
-    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
-      "https://signed.test/households%2Fh1%2Fdrafts%2Fuid-1%2Fimages%2Fcapture.jpg"
-    );
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://api.openai.test/v1/chat/completions");
     expect(visionJobWrites).toHaveLength(1);
   });
 
@@ -358,9 +364,7 @@ describe("visionCategorizeItemImageHandler", () => {
 
   it("ignores a caller-supplied downloadUrl when a trusted storagePath is present", async () => {
     loadConfigMock.mockResolvedValue({ config: baseConfig, apiKey: "sk-test" });
-    fetchMock
-      .mockResolvedValueOnce(imageResponse(Buffer.from("signed-bytes"), "image/jpeg"))
-      .mockResolvedValueOnce(openaiResponse(fakeSuggestion));
+    fetchMock.mockResolvedValueOnce(openaiResponse(fakeSuggestion));
 
     const { visionCategorizeItemImageHandler } = await import("../src/vision.js");
     await visionCategorizeItemImageHandler(
@@ -375,9 +379,7 @@ describe("visionCategorizeItemImageHandler", () => {
     );
 
     expect(storageFileCalls).toEqual([{ path: "households/h1/items/item-1/images/capture.jpg" }]);
-    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
-      "https://signed.test/households%2Fh1%2Fitems%2Fitem-1%2Fimages%2Fcapture.jpg"
-    );
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://api.openai.test/v1/chat/completions");
   });
 
   it("rejects image URLs that target private-network hosts", async () => {

@@ -282,18 +282,40 @@ async function fetchFromUrl(url: string): Promise<ResolvedImage> {
   }
 }
 
+async function readStorageFile(storagePath: string): Promise<ResolvedImage> {
+  const bucket = storage.bucket();
+  const file = bucket.file(storagePath);
+  const [exists] = await file.exists();
+  if (!exists) throw new HttpsError("not-found", "Image file not found in storage");
+
+  const [metadata] = await file.getMetadata();
+  const mimeType = metadata.contentType ?? "image/jpeg";
+  assertMimeType(mimeType);
+
+  const declaredSize = Number.parseInt(String(metadata.size ?? ""), 10);
+  if (Number.isFinite(declaredSize) && declaredSize > MAX_IMAGE_BYTES) {
+    throw tooLargeError();
+  }
+
+  const [bytes] = await file.download();
+  if (bytes.length === 0) {
+    throw new HttpsError("invalid-argument", "Image is empty");
+  }
+  if (bytes.length > MAX_IMAGE_BYTES) {
+    throw tooLargeError();
+  }
+
+  return {
+    bytes,
+    mimeType,
+    sourceUrl: `storage://${storagePath}`
+  };
+}
+
 async function resolveImage(imageRef: { storagePath?: string; downloadUrl?: string; imageUrl?: string }, householdId: string) {
   if (imageRef.storagePath) {
     assertStoragePathBelongsToHousehold(imageRef.storagePath, householdId);
-    const bucket = storage.bucket();
-    const file = bucket.file(imageRef.storagePath);
-    const [exists] = await file.exists();
-    if (!exists) throw new HttpsError("not-found", "Image file not found in storage");
-    const [signedUrl] = await file.getSignedUrl({
-      action: "read",
-      expires: Date.now() + 5 * 60 * 1000
-    });
-    return fetchFromUrl(signedUrl);
+    return readStorageFile(imageRef.storagePath);
   }
   if (imageRef.imageUrl) return fetchFromUrl(imageRef.imageUrl);
   if (imageRef.downloadUrl) return fetchFromUrl(imageRef.downloadUrl);
