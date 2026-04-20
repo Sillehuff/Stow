@@ -2,12 +2,24 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { logger } from "firebase-functions";
 import { ZodError } from "zod";
-import { createHouseholdInviteHandler, acceptHouseholdInviteHandler } from "./invites.js";
+import { bootstrapHouseholdHandler } from "./bootstrap.js";
+import { createHouseholdInviteHandler, acceptHouseholdInviteHandler, revokeHouseholdInviteHandler } from "./invites.js";
 import {
   saveHouseholdLlmConfigHandler,
   setHouseholdLlmSecretHandler,
   validateHouseholdLlmConfigHandler
 } from "./llmConfig.js";
+import { removeHouseholdMemberHandler, updateHouseholdMemberRoleHandler } from "./members.js";
+import {
+  clearPackingListPackedHandler,
+  createPackingListHandler,
+  deleteAreaHandler,
+  deleteItemHandler,
+  deletePackingListHandler,
+  deleteSpaceHandler,
+  togglePackingListItemHandler,
+  updatePackingListHandler
+} from "./stow.js";
 import { visionCategorizeItemImageHandler } from "./vision.js";
 
 setGlobalOptions({
@@ -37,12 +49,53 @@ export const createHouseholdInvite = onCall(async (request) => {
   }
 });
 
+export const bootstrapHousehold = onCall(async (request) => {
+  try {
+    return await bootstrapHouseholdHandler(
+      request.auth ? { uid: request.auth.uid, token: request.auth.token as { email?: string; name?: string } } : undefined
+    );
+  } catch (error) {
+    throw mapError(error);
+  }
+});
+
 export const acceptHouseholdInvite = onCall(async (request) => {
   try {
     return await acceptHouseholdInviteHandler(
       request.data,
       request.auth ? { uid: request.auth.uid, token: request.auth.token as { email?: string } } : undefined
     );
+  } catch (error) {
+    throw mapError(error);
+  }
+});
+
+export const revokeHouseholdInvite = onCall(async (request) => {
+  try {
+    return await revokeHouseholdInviteHandler(
+      request.data,
+      request.auth ? { uid: request.auth.uid } : undefined
+    );
+  } catch (error) {
+    throw mapError(error);
+  }
+});
+
+export const updateHouseholdMemberRole = onCall(async (request) => {
+  try {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+    return await updateHouseholdMemberRoleHandler(request.data, uid);
+  } catch (error) {
+    throw mapError(error);
+  }
+});
+
+export const removeHouseholdMember = onCall(async (request) => {
+  try {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+    return await removeHouseholdMemberHandler(request.data, uid);
   } catch (error) {
     throw mapError(error);
   }
@@ -83,6 +136,86 @@ export const visionCategorizeItemImage = onCall(async (request) => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
     return await visionCategorizeItemImageHandler(request.data, uid);
+  } catch (error) {
+    throw mapError(error);
+  }
+});
+
+export const deleteHouseholdArea = onCall(async (request) => {
+  try {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+    return await deleteAreaHandler(request.data, uid);
+  } catch (error) {
+    throw mapError(error);
+  }
+});
+
+export const deleteHouseholdSpace = onCall(async (request) => {
+  try {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+    return await deleteSpaceHandler(request.data, uid);
+  } catch (error) {
+    throw mapError(error);
+  }
+});
+
+export const deleteHouseholdItem = onCall(async (request) => {
+  try {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+    return await deleteItemHandler(request.data, uid);
+  } catch (error) {
+    throw mapError(error);
+  }
+});
+
+export const createHouseholdPackingList = onCall(async (request) => {
+  try {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+    return await createPackingListHandler(request.data, uid);
+  } catch (error) {
+    throw mapError(error);
+  }
+});
+
+export const updateHouseholdPackingList = onCall(async (request) => {
+  try {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+    return await updatePackingListHandler(request.data, uid);
+  } catch (error) {
+    throw mapError(error);
+  }
+});
+
+export const deleteHouseholdPackingList = onCall(async (request) => {
+  try {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+    return await deletePackingListHandler(request.data, uid);
+  } catch (error) {
+    throw mapError(error);
+  }
+});
+
+export const toggleHouseholdPackingListItem = onCall(async (request) => {
+  try {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+    return await togglePackingListItemHandler(request.data, uid);
+  } catch (error) {
+    throw mapError(error);
+  }
+});
+
+export const clearHouseholdPackingListPacked = onCall(async (request) => {
+  try {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+    return await clearPackingListPackedHandler(request.data, uid);
   } catch (error) {
     throw mapError(error);
   }

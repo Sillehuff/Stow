@@ -45,7 +45,8 @@ import type { ImageRef, Item, PackingList, Role, SpaceIcon } from "@/types/domai
 import type { HouseholdLlmConfig, VisionSuggestion } from "@/types/llm";
 import { storagePaths } from "@/lib/firebase/paths";
 import { toLoggedUserErrorMessage, toUserErrorMessage } from "@/lib/firebase/errors";
-import { imageRefFromUrl, uploadFileToStorage } from "@/lib/firebase/storage";
+import { imageRefFromUrl, uploadFileToStorage, uploadImageUrlToStorage } from "@/lib/firebase/storage";
+import { randomHexColor, withAlpha } from "@/lib/ui/colors";
 
 const P = {
   ink: "#1A1A2E",
@@ -103,6 +104,33 @@ type VisionDraft = {
   name: string;
 };
 
+type DeleteReassignForm = {
+  reassignSpaceId: string;
+  reassignAreaId: string;
+};
+
+type DeleteDestinationOption = {
+  spaceId: string;
+  spaceName: string;
+  areaId: string;
+  areaName: string;
+};
+
+type DeleteLockFields = {
+  deleteTargetSpaceId?: string;
+  deleteTargetAreaId?: string;
+};
+
+type PackingListVisibleState = {
+  visibleItemIds: string[];
+  visiblePackedItemIds: string[];
+};
+
+const EMPTY_PACKING_LIST_VISIBLE_STATE: PackingListVisibleState = {
+  visibleItemIds: [],
+  visiblePackedItemIds: []
+};
+
 type FirebaseFunctionsModule = typeof import("@/lib/firebase/functions");
 type QrCodeModule = typeof import("qrcode");
 
@@ -121,6 +149,91 @@ function loadQrCodeModule() {
     qrCodeModulePromise = import("qrcode");
   }
   return qrCodeModulePromise;
+}
+
+function createItemEditForm(item: Item): AddItemForm {
+  return {
+    name: item.name,
+    kind: item.kind,
+    spaceId: item.spaceId,
+    areaId: item.areaId,
+    value: item.value != null ? String(item.value) : "",
+    isPriceless: Boolean(item.isPriceless),
+    tags: item.tags.join(", "),
+    notes: item.notes ?? "",
+    imageUrl: item.image?.downloadUrl ?? "",
+    imageFile: null
+  };
+}
+
+function readDeleteReassignForm(value: DeleteLockFields | null | undefined): DeleteReassignForm | null {
+  if (!value) return null;
+  const reassignSpaceId = typeof value.deleteTargetSpaceId === "string" ? value.deleteTargetSpaceId : "";
+  const reassignAreaId = typeof value.deleteTargetAreaId === "string" ? value.deleteTargetAreaId : "";
+  if (!reassignSpaceId || !reassignAreaId) return null;
+  return { reassignSpaceId, reassignAreaId };
+}
+
+function matchesDeleteDestination(
+  candidate: DeleteReassignForm | null | undefined,
+  destinations: Array<{ spaceId: string; areaId: string }>
+) {
+  if (!candidate) return false;
+  return destinations.some(
+    (destination) =>
+      destination.spaceId === candidate.reassignSpaceId && destination.areaId === candidate.reassignAreaId
+  );
+}
+
+function resolveDeleteReassignForm(
+  current: DeleteReassignForm | null,
+  locked: DeleteReassignForm | null,
+  destinations: Array<{ spaceId: string; areaId: string }>,
+  options?: { allowAutomaticFallback?: boolean }
+): DeleteReassignForm {
+  if (matchesDeleteDestination(locked, destinations)) {
+    return locked!;
+  }
+  if (matchesDeleteDestination(current, destinations)) {
+    return current!;
+  }
+  if (options?.allowAutomaticFallback === false) {
+    return { reassignSpaceId: "", reassignAreaId: "" };
+  }
+  const firstDestination = destinations[0];
+  return firstDestination
+    ? { reassignSpaceId: firstDestination.spaceId, reassignAreaId: firstDestination.areaId }
+    : { reassignSpaceId: "", reassignAreaId: "" };
+}
+
+function formatDeleteDestinationLabel(
+  candidate: DeleteReassignForm | null | undefined,
+  destinations: DeleteDestinationOption[],
+  spaceNameById: Record<string, string>
+) {
+  if (!candidate) return null;
+  const destination = destinations.find(
+    (option) =>
+      option.spaceId === candidate.reassignSpaceId && option.areaId === candidate.reassignAreaId
+  );
+  if (destination) {
+    return `${destination.spaceName} / ${destination.areaName}`;
+  }
+  const spaceName = spaceNameById[candidate.reassignSpaceId];
+  if (!spaceName) return null;
+  return `${spaceName} / deleted area`;
+}
+
+function hasDeleteLock(value: unknown): value is DeleteLockFields & { deletingAt: unknown } {
+  return Boolean(value && typeof value === "object" && "deletingAt" in value && (value as { deletingAt?: unknown }).deletingAt);
+}
+
+function createMoveItemForm(item: Item) {
+  return {
+    spaceId: item.spaceId,
+    areaId: item.areaId,
+    note: ""
+  };
 }
 
 function iconForSpace(icon: string) {
@@ -211,16 +324,70 @@ function focusableElements(container: HTMLElement) {
   );
 }
 
+function handleDialogKeyDown(
+  event: ReactKeyboardEvent<HTMLElement>,
+  container: HTMLElement | null,
+  onClose: () => void
+) {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    onClose();
+    return;
+  }
+  if (event.key !== "Tab" || !container) return;
+
+  event.stopPropagation();
+  const items = focusableElements(container);
+  if (items.length === 0) {
+    event.preventDefault();
+    container.focus();
+    return;
+  }
+  const first = items[0];
+  const last = items[items.length - 1];
+  const active = document.activeElement as HTMLElement | null;
+  if (event.shiftKey && active === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function restoreDialogFocus(previousFocus: HTMLElement | null) {
+  window.requestAnimationFrame(() => {
+    if (previousFocus?.isConnected) {
+      previousFocus.focus();
+      return;
+    }
+    const visibleAppContent = document.querySelector<HTMLElement>(".app-content:not([aria-hidden='true'])");
+    const fallbackTarget = visibleAppContent ? focusableElements(visibleAppContent)[0] : null;
+    fallbackTarget?.focus();
+  });
+}
+
 function Modal({
   open,
   title,
   onClose,
-  children
+  children,
+  dialogRole = "dialog",
+  descriptionId,
+  hiddenFromAccessibility = false,
+  dismissDisabled = false,
+  restoreFocusTarget = null
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
+  dialogRole?: "dialog" | "alertdialog";
+  descriptionId?: string;
+  hiddenFromAccessibility?: boolean;
+  dismissDisabled?: boolean;
+  restoreFocusTarget?: HTMLElement | null;
 }) {
   const titleId = useId();
   const sheetRef = useRef<HTMLDivElement | null>(null);
@@ -234,61 +401,47 @@ function Modal({
     const frame = window.requestAnimationFrame(() => {
       const sheet = sheetRef.current;
       if (!sheet) return;
-      const firstFocusable = focusableElements(sheet)[0];
+      const firstFocusable =
+        sheet.querySelector<HTMLElement>(
+          "[autofocus], .sheet-body input:not([type='hidden']):not([disabled]), .sheet-body textarea:not([disabled]), .sheet-body select:not([disabled]), .sheet-body button.primary:not([disabled]), .sheet-body button:not([disabled])"
+        ) ??
+        focusableElements(sheet)[0];
       (firstFocusable ?? sheet).focus();
     });
 
     return () => {
       window.cancelAnimationFrame(frame);
-      previousFocusRef.current?.focus?.();
+      restoreDialogFocus(restoreFocusTarget ?? previousFocusRef.current);
     };
-  }, [open]);
+  }, [open, restoreFocusTarget]);
+
+  const requestClose = () => {
+    if (dismissDisabled) return;
+    onClose();
+  };
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-    if (event.key !== "Tab") return;
-
-    const sheet = sheetRef.current;
-    if (!sheet) return;
-    const items = focusableElements(sheet);
-    if (items.length === 0) {
-      event.preventDefault();
-      sheet.focus();
-      return;
-    }
-    const first = items[0];
-    const last = items[items.length - 1];
-    const active = document.activeElement as HTMLElement | null;
-    if (event.shiftKey && active === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first.focus();
-    }
+    handleDialogKeyDown(event, sheetRef.current, requestClose);
   };
 
   if (!open) return null;
   return (
-    <div className="overlay">
-      <div className="overlay-backdrop" onClick={onClose} />
+    <div className="overlay" aria-hidden={hiddenFromAccessibility || undefined}>
+      <div className="overlay-backdrop" onClick={requestClose} />
       <div
         ref={sheetRef}
         className="sheet"
-        role="dialog"
-        aria-modal="true"
+        role={dialogRole}
+        aria-modal={hiddenFromAccessibility ? undefined : "true"}
         aria-labelledby={titleId}
+        aria-describedby={descriptionId}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
       >
         <div className="sheet-handle" />
         <div className="sheet-head">
           <h3 id={titleId}>{title}</h3>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
+          <button type="button" className="icon-btn" onClick={requestClose} aria-label="Close" disabled={dismissDisabled}>
             <X size={14} />
           </button>
         </div>
@@ -547,7 +700,16 @@ function formatCurrency(value?: number, isPriceless?: boolean) {
 }
 
 function randomColor() {
-  return `hsl(${Math.floor(Math.random() * 360)} 50% 45%)`;
+  return randomHexColor();
+}
+
+function inviteTokenFromUrl(inviteUrl: string) {
+  if (!inviteUrl) return "";
+  try {
+    return new URL(inviteUrl).searchParams.get("token") ?? "";
+  } catch {
+    return "";
+  }
 }
 
 function useToast() {
@@ -595,6 +757,25 @@ async function resolveImageRef({
 
   if (url.trim()) return imageRefFromUrl(url);
   return undefined;
+}
+
+async function resolveVisionImageRef({
+  householdId,
+  targetId,
+  file,
+  url
+}: {
+  householdId: string;
+  targetId: string;
+  file: File | null;
+  url: string;
+}): Promise<ImageRef | undefined> {
+  if (file) {
+    return resolveImageRef({ householdId, target: "draft", targetId, file, url: "" });
+  }
+  if (!url.trim()) return undefined;
+  const safeName = `${Date.now()}-vision-remote`;
+  return uploadImageUrlToStorage(storagePaths.draftImage(householdId, targetId, safeName), url.trim());
 }
 
 function NavButton({
@@ -654,6 +835,7 @@ export function StowApp({
   const [fabOpen, setFabOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [delConfirm, setDelConfirm] = useState<string | null>(null);
+  const [itemDeleteWorkingId, setItemDeleteWorkingId] = useState<string | null>(null);
   const [showQrForSpaceId, setShowQrForSpaceId] = useState<string | null>(null);
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -676,6 +858,27 @@ export function StowApp({
   const [householdSaveWorking, setHouseholdSaveWorking] = useState(false);
   const [memberActionWorkingUid, setMemberActionWorkingUid] = useState<string | null>(null);
   const [inviteActionWorkingId, setInviteActionWorkingId] = useState<string | null>(null);
+  const itemDetailTitleId = useId();
+  const itemDetailDescriptionId = useId();
+  const itemDetailRef = useRef<HTMLDivElement | null>(null);
+  const itemDetailBackButtonRef = useRef<HTMLButtonElement | null>(null);
+  const itemDetailEditTriggerRef = useRef<HTMLElement | null>(null);
+  const itemDetailPreviousFocusRef = useRef<HTMLElement | null>(null);
+  const spaceEditTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const areaEditTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const deleteAreaReturnFocusRef = useRef<HTMLElement | null>(null);
+  const deleteSpaceReturnFocusRef = useRef<HTMLElement | null>(null);
+  const selectedItemDraftIdRef = useRef<string | null>(null);
+  const pendingInviteLinkTokenRef = useRef<string | null>(null);
+  const previousFabContextKeyRef = useRef<string | null>(null);
+  const fabWrapRef = useRef<HTMLDivElement | null>(null);
+  const fabButtonRef = useRef<HTMLButtonElement | null>(null);
+  const packingListMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const packingListMenuButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [isWideLayout, setIsWideLayout] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(min-width: 1024px)").matches;
+  });
 
   const [llmForm, setLlmForm] = useState<HouseholdLlmConfig>({
     enabled: false,
@@ -786,12 +989,41 @@ export function StowApp({
   }, [workspace.llmConfig]);
 
   const spaces = workspace.spaces;
+  const areas = workspace.areas;
   const items = workspace.items;
+  const pendingDeletedItems = workspace.pendingDeletedItems;
   const members = workspace.members;
   const invites = workspace.invites ?? [];
   const currentSpace = spaces.find((space) => space.id === selectedSpaceId) ?? null;
   const currentArea = currentSpace?.areas.find((area) => area.id === selectedAreaId) ?? null;
-  const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
+  const isCurrentSpaceDeleteLocked = hasDeleteLock(currentSpace);
+  const isCurrentAreaDeleteLocked = hasDeleteLock(currentArea);
+  const currentSpaceLockedTarget = readDeleteReassignForm(currentSpace as DeleteLockFields | null);
+  const currentAreaLockedTarget = readDeleteReassignForm(currentArea as DeleteLockFields | null);
+  const selectedActiveItem = items.find((item) => item.id === selectedItemId) ?? null;
+  const selectedPendingDeletedItem = pendingDeletedItems.find((item) => item.id === selectedItemId) ?? null;
+  const selectedItem = selectedActiveItem ?? selectedPendingDeletedItem ?? null;
+  const isSelectedItemPendingDelete = Boolean(selectedPendingDeletedItem);
+  const isDeletingSelectedItem = Boolean(selectedItem && itemDeleteWorkingId === selectedItem.id);
+  const deletingSpaces = spaces.filter((space) => hasDeleteLock(space));
+  const deletingAreas = areas.filter((area) => hasDeleteLock(area));
+  const isItemDetailOpen = Boolean(selectedItem && editItemForm);
+  const isEditItemDirty = Boolean(
+    selectedItem &&
+    editItemForm &&
+    (
+      editItemForm.name !== selectedItem.name ||
+      editItemForm.kind !== selectedItem.kind ||
+      editItemForm.spaceId !== selectedItem.spaceId ||
+      editItemForm.areaId !== selectedItem.areaId ||
+      editItemForm.value !== (selectedItem.value != null ? String(selectedItem.value) : "") ||
+      editItemForm.isPriceless !== Boolean(selectedItem.isPriceless) ||
+      editItemForm.tags !== selectedItem.tags.join(", ") ||
+      editItemForm.notes !== (selectedItem.notes ?? "") ||
+      editItemForm.imageUrl !== (selectedItem.image?.downloadUrl ?? "") ||
+      Boolean(editItemForm.imageFile)
+    )
+  );
   const currentUserMember = members.find((member) => member.uid === user.uid) ?? null;
   const isAdmin = Boolean(currentUserMember && (currentUserMember.role === "OWNER" || currentUserMember.role === "ADMIN"));
   const isOwner = currentUserMember?.role === "OWNER";
@@ -830,6 +1062,28 @@ export function StowApp({
     });
   const packingLists = workspace.packingLists;
   const activePackingList = activePackingListId ? packingLists.find((pl) => pl.id === activePackingListId) ?? null : null;
+  const packingListVisibleStateById = useMemo<Map<string, PackingListVisibleState>>(() => {
+    const visibleItemIds = new Set(items.map((item) => item.id));
+    return new Map(
+      packingLists.map((list) => {
+        const nextVisibleItemIds: string[] = [];
+        for (const itemId of list.itemIds) {
+          if (!visibleItemIds.has(itemId) || nextVisibleItemIds.includes(itemId)) continue;
+          nextVisibleItemIds.push(itemId);
+        }
+        const allowedVisibleIds = new Set(nextVisibleItemIds);
+        const nextVisiblePackedItemIds: string[] = [];
+        for (const itemId of list.packedItemIds) {
+          if (!allowedVisibleIds.has(itemId) || nextVisiblePackedItemIds.includes(itemId)) continue;
+          nextVisiblePackedItemIds.push(itemId);
+        }
+        return [list.id, { visibleItemIds: nextVisibleItemIds, visiblePackedItemIds: nextVisiblePackedItemIds }];
+      })
+    );
+  }, [items, packingLists]);
+  const activePackingListVisibleState = activePackingList
+    ? (packingListVisibleStateById.get(activePackingList.id) ?? EMPTY_PACKING_LIST_VISIBLE_STATE)
+    : null;
   const activeInvites = invites
     .filter((invite) => !invite.acceptedAt)
     .filter((invite) => {
@@ -840,9 +1094,11 @@ export function StowApp({
       }
     });
   const deleteAreaDestinations = useMemo(() => {
-    const result: Array<{ spaceId: string; spaceName: string; areaId: string; areaName: string }> = [];
+    const result: DeleteDestinationOption[] = [];
     for (const space of spaces) {
+      if (hasDeleteLock(space)) continue;
       for (const area of space.areas) {
+        if (hasDeleteLock(area)) continue;
         if (space.id === selectedSpaceId && area.id === selectedAreaId) continue;
         result.push({ spaceId: space.id, spaceName: space.name, areaId: area.id, areaName: area.name });
       }
@@ -850,10 +1106,12 @@ export function StowApp({
     return result;
   }, [selectedAreaId, selectedSpaceId, spaces]);
   const deleteSpaceDestinations = useMemo(() => {
-    const result: Array<{ spaceId: string; spaceName: string; areaId: string; areaName: string }> = [];
+    const result: DeleteDestinationOption[] = [];
     for (const space of spaces) {
+      if (hasDeleteLock(space)) continue;
       if (space.id === selectedSpaceId) continue;
       for (const area of space.areas) {
+        if (hasDeleteLock(area)) continue;
         result.push({ spaceId: space.id, spaceName: space.name, areaId: area.id, areaName: area.name });
       }
     }
@@ -901,14 +1159,50 @@ export function StowApp({
   }, [householdId, searchQuery]);
 
   const activeListItems = useMemo(() => {
-    if (!activePackingList) return [];
-    const idSet = new Set(activePackingList.itemIds);
+    if (!activePackingListVisibleState) return [];
+    const idSet = new Set(activePackingListVisibleState.visibleItemIds);
     return items.filter((item) => idSet.has(item.id));
-  }, [activePackingList, items]);
+  }, [activePackingListVisibleState, items]);
 
-  const activeListPackedCount = activePackingList
-    ? activeListItems.filter((item) => activePackingList.packedItemIds.includes(item.id)).length
+  const activeListPackedCount = activePackingListVisibleState
+    ? activePackingListVisibleState.visiblePackedItemIds.length
     : 0;
+  const selectedItemInActivePackingList = Boolean(
+    selectedItem && activePackingListVisibleState?.visibleItemIds.includes(selectedItem.id)
+  );
+  const itemDetailUsesPackingListState = tab === "packing" && Boolean(activePackingList) && selectedItemInActivePackingList;
+  const itemDetailPacked = selectedItem
+    ? itemDetailUsesPackingListState
+      ? Boolean(activePackingListVisibleState?.visiblePackedItemIds.includes(selectedItem.id))
+      : Boolean(selectedItem.isPacked)
+    : false;
+  const fabContextKey = [tab, selectedSpaceId ?? "", selectedAreaId ?? "", selectedItemId ?? ""].join("::");
+  const itemDetailActsAsModal = !isWideLayout && !showMoveItem && !delConfirm;
+
+  useEffect(() => {
+    const currentInviteToken = inviteTokenFromUrl(inviteLink);
+    if (!currentInviteToken) return;
+    const inviteStillActive = activeInvites.some((invite) => invite.token === currentInviteToken);
+    if (inviteStillActive) {
+      if (pendingInviteLinkTokenRef.current === currentInviteToken) {
+        pendingInviteLinkTokenRef.current = null;
+      }
+      return;
+    }
+    if (pendingInviteLinkTokenRef.current === currentInviteToken) return;
+    setInviteLink("");
+  }, [activeInvites, inviteLink]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+    const syncWideLayout = () => setIsWideLayout(mediaQuery.matches);
+    syncWideLayout();
+    mediaQuery.addEventListener("change", syncWideLayout);
+    return () => {
+      mediaQuery.removeEventListener("change", syncWideLayout);
+    };
+  }, []);
 
   useEffect(() => {
     if (!showQrForSpaceId) {
@@ -934,28 +1228,103 @@ export function StowApp({
 
   useEffect(() => {
     if (!selectedItem) {
+      selectedItemDraftIdRef.current = null;
       setEditItemForm(null);
       setMoveItemForm(null);
+      setEditing(false);
       return;
     }
-    setEditItemForm({
-      name: selectedItem.name,
-      kind: selectedItem.kind,
-      spaceId: selectedItem.spaceId,
-      areaId: selectedItem.areaId,
-      value: selectedItem.value ? String(selectedItem.value) : "",
-      isPriceless: Boolean(selectedItem.isPriceless),
-      tags: selectedItem.tags.join(", "),
-      notes: selectedItem.notes ?? "",
-      imageUrl: selectedItem.image?.downloadUrl ?? "",
-      imageFile: null
+    const selectedItemChanged = selectedItemDraftIdRef.current !== selectedItem.id;
+    if (selectedItemChanged || !editing) {
+      setEditItemForm(createItemEditForm(selectedItem));
+      setMoveItemForm(createMoveItemForm(selectedItem));
+    }
+    selectedItemDraftIdRef.current = selectedItem.id;
+  }, [editing, selectedItem]);
+
+  useEffect(() => {
+    if (!isSelectedItemPendingDelete) return;
+    setEditing(false);
+    setShowMoveItem(false);
+  }, [isSelectedItemPendingDelete]);
+
+  useEffect(() => {
+    if (!isItemDetailOpen) return;
+
+    itemDetailPreviousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    const frame = window.requestAnimationFrame(() => {
+      const preferredFocus = itemDetailBackButtonRef.current;
+      if (preferredFocus) {
+        preferredFocus.focus();
+        return;
+      }
+      const dialog = itemDetailRef.current;
+      if (!dialog) return;
+      const firstFocusable = focusableElements(dialog)[0];
+      (firstFocusable ?? dialog).focus();
     });
-    setMoveItemForm({
-      spaceId: selectedItem.spaceId,
-      areaId: selectedItem.areaId,
-      note: ""
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      restoreDialogFocus(itemDetailPreviousFocusRef.current);
+    };
+  }, [isItemDetailOpen]);
+
+  useEffect(() => {
+    if (!isItemDetailOpen || !editing) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const dialog = itemDetailRef.current;
+      if (!dialog) return;
+      const firstField =
+        dialog.querySelector<HTMLElement>(
+          ".item-detail-content .field .input:not([disabled]), .item-detail-content .field .select:not([disabled]), .item-detail-content .field .textarea:not([disabled])"
+        ) ?? dialog.querySelector<HTMLElement>(".item-detail-content button:not([disabled])");
+      (firstField ?? dialog).focus();
     });
-  }, [selectedItem]);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [editing, isItemDetailOpen]);
+
+  useEffect(() => {
+    if (!fabOpen) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const firstAction = fabWrapRef.current?.querySelector<HTMLElement>(".fab-menu-item");
+      firstAction?.focus();
+    });
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && fabWrapRef.current?.contains(target)) return;
+      setFabOpen(false);
+    };
+
+    const handleFocusIn = (event: FocusEvent) => {
+      const target = event.target as Node | null;
+      if (target && fabWrapRef.current?.contains(target)) return;
+      setFabOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("focusin", handleFocusIn);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("focusin", handleFocusIn);
+    };
+  }, [fabOpen]);
+
+  useEffect(() => {
+    if (previousFabContextKeyRef.current && previousFabContextKeyRef.current !== fabContextKey && fabOpen) {
+      setFabOpen(false);
+    }
+    previousFabContextKeyRef.current = fabContextKey;
+  }, [fabContextKey, fabOpen]);
 
   useEffect(() => {
     if (!currentSpace) {
@@ -982,11 +1351,11 @@ export function StowApp({
       imageUrl: currentArea.image?.downloadUrl ?? "",
       imageFile: null
     });
-    const firstDestination = deleteAreaDestinations[0];
-    setDeleteAreaForm(
-      firstDestination
-        ? { reassignSpaceId: firstDestination.spaceId, reassignAreaId: firstDestination.areaId }
-        : { reassignSpaceId: "", reassignAreaId: "" }
+    const lockedTarget = readDeleteReassignForm(currentArea as DeleteLockFields);
+    setDeleteAreaForm((prev) =>
+      resolveDeleteReassignForm(prev, lockedTarget, deleteAreaDestinations, {
+        allowAutomaticFallback: !hasDeleteLock(currentArea) || matchesDeleteDestination(lockedTarget, deleteAreaDestinations)
+      })
     );
   }, [currentArea, deleteAreaDestinations]);
 
@@ -995,11 +1364,11 @@ export function StowApp({
       setDeleteSpaceForm(null);
       return;
     }
-    const firstDestination = deleteSpaceDestinations[0];
-    setDeleteSpaceForm(
-      firstDestination
-        ? { reassignSpaceId: firstDestination.spaceId, reassignAreaId: firstDestination.areaId }
-        : { reassignSpaceId: "", reassignAreaId: "" }
+    const lockedTarget = readDeleteReassignForm(currentSpace as DeleteLockFields);
+    setDeleteSpaceForm((prev) =>
+      resolveDeleteReassignForm(prev, lockedTarget, deleteSpaceDestinations, {
+        allowAutomaticFallback: !hasDeleteLock(currentSpace) || matchesDeleteDestination(lockedTarget, deleteSpaceDestinations)
+      })
     );
   }, [currentSpace, deleteSpaceDestinations]);
 
@@ -1062,6 +1431,41 @@ export function StowApp({
       setHouseholdNameInput(workspace.household.name);
     }
   }, [workspace.household?.name]);
+
+  useEffect(() => {
+    if (!packingListMenuOpen || typeof document === "undefined") return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      const menu = packingListMenuRefs.current[packingListMenuOpen];
+      const button = packingListMenuButtonRefs.current[packingListMenuOpen];
+      if ((menu && target && menu.contains(target)) || (button && target && button.contains(target))) {
+        return;
+      }
+      setPackingListMenuOpen(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      packingListMenuButtonRefs.current[packingListMenuOpen]?.focus();
+      setPackingListMenuOpen(null);
+    };
+
+    const frame = window.requestAnimationFrame(() => {
+      const firstItem = packingListMenuRefs.current[packingListMenuOpen]?.querySelector<HTMLButtonElement>('[role="menuitem"]');
+      firstItem?.focus();
+    });
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [packingListMenuOpen]);
 
   function updateCurrentQuery(
     changes: Record<string, string | null | undefined | string[]>,
@@ -1308,6 +1712,11 @@ export function StowApp({
         : editItemForm.imageUrl.trim()
           ? imageRefFromUrl(editItemForm.imageUrl)
           : null;
+      const nextTags = editItemForm.tags
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean);
+      const nextValue = editItemForm.isPriceless ? null : editItemForm.value ? Number(editItemForm.value) : null;
       await workspace.actions.updateItem({
         householdId,
         itemId: selectedItem.id,
@@ -1316,18 +1725,30 @@ export function StowApp({
           name: editItemForm.name.trim(),
           kind: editItemForm.kind,
           notes: editItemForm.notes,
-          value: editItemForm.isPriceless ? undefined : editItemForm.value ? Number(editItemForm.value) : undefined,
+          value: nextValue,
           isPriceless: editItemForm.isPriceless,
           image: patchImage,
-          tags: editItemForm.tags
-            .split(",")
-            .map((value) => value.trim())
-            .filter(Boolean),
+          tags: nextTags,
           spaceId: space.id,
           areaId: area.id,
           areaNameSnapshot: area.name
         }
       });
+      const savedItem: Item = {
+        ...selectedItem,
+        name: editItemForm.name.trim(),
+        kind: editItemForm.kind,
+        notes: editItemForm.notes,
+        value: nextValue ?? undefined,
+        isPriceless: editItemForm.isPriceless,
+        image: patchImage ?? undefined,
+        tags: nextTags,
+        spaceId: space.id,
+        areaId: area.id,
+        areaNameSnapshot: area.name
+      };
+      setEditItemForm(createItemEditForm(savedItem));
+      setMoveItemForm(createMoveItemForm(savedItem));
       flash("Item updated");
       if (options?.closeAfterSave) {
         setEditing(false);
@@ -1357,22 +1778,19 @@ export function StowApp({
     setVisionWorking(true);
     try {
       const draftId = crypto.randomUUID();
-      const uploadRef = await resolveImageRef({
+      const uploadRef = await resolveVisionImageRef({
         householdId,
-        target: "draft",
         targetId: draftId,
         file: visionDraft.imageFile,
         url: visionDraft.imageUrl ?? ""
       });
       let response: { suggestion: VisionSuggestion } | null = null;
       try {
-        if (uploadRef?.storagePath || uploadRef?.downloadUrl) {
+        if (uploadRef?.storagePath) {
           const { visionCategorizeItemImage } = await loadFirebaseFunctionsModule();
           response = await visionCategorizeItemImage({
             householdId,
-            imageRef: uploadRef.storagePath
-              ? { storagePath: uploadRef.storagePath, downloadUrl: uploadRef.downloadUrl }
-              : { imageUrl: uploadRef.downloadUrl! },
+            imageRef: { storagePath: uploadRef.storagePath, downloadUrl: uploadRef.downloadUrl },
             context: {
               spaceId: visionDraft.spaceId,
               areaId: visionDraft.areaId,
@@ -1463,19 +1881,34 @@ export function StowApp({
     }
   }
 
-  async function createInviteForRole(role: Role) {
+  async function createInviteForRole(role: Role, options?: { replaceInviteId?: string; successMessage?: string }) {
     setInviteWorking(true);
     try {
       const { createHouseholdInvite } = await loadFirebaseFunctionsModule();
-      const result = await createHouseholdInvite({ householdId, role, expiresInHours: 72 });
+      const result = await createHouseholdInvite(
+        options?.replaceInviteId
+          ? {
+              householdId,
+              role,
+              expiresInHours: 72,
+              replaceInviteId: options.replaceInviteId
+            }
+          : {
+              householdId,
+              role,
+              expiresInHours: 72
+            }
+      );
       const inviteUrl = new URL(result.inviteUrl, window.location.origin);
       inviteUrl.searchParams.set("role", role);
       inviteUrl.searchParams.set("expiresAt", result.expiresAt);
       if (workspace.household?.name) inviteUrl.searchParams.set("householdName", workspace.household.name);
       if (user.displayName || user.email) inviteUrl.searchParams.set("inviter", user.displayName || user.email || "");
+      pendingInviteLinkTokenRef.current = inviteTokenFromUrl(inviteUrl.toString());
       setInviteLink(inviteUrl.toString());
-      flash("Invite link created");
+      flash(options?.successMessage ?? "Invite link created");
     } catch (error) {
+      pendingInviteLinkTokenRef.current = null;
       flash(toLoggedUserErrorMessage(error, "Failed to create invite"));
     } finally {
       setInviteWorking(false);
@@ -1507,6 +1940,13 @@ export function StowApp({
 
   async function saveEditedSpace() {
     if (!currentSpace || !editSpaceForm || !editSpaceForm.name.trim()) return;
+    if (hasDeleteLock(currentSpace)) {
+      deleteSpaceReturnFocusRef.current = spaceEditTriggerRef.current;
+      setShowEditSpace(false);
+      setShowDeleteSpace(true);
+      flash("Finish deleting this space before editing it");
+      return;
+    }
     setSaving(true);
     try {
       const image = await resolveImageRef({
@@ -1537,6 +1977,13 @@ export function StowApp({
 
   async function saveEditedArea() {
     if (!currentSpace || !currentArea || !editAreaForm || !editAreaForm.name.trim()) return;
+    if (hasDeleteLock(currentArea)) {
+      deleteAreaReturnFocusRef.current = areaEditTriggerRef.current;
+      setShowEditArea(false);
+      setShowDeleteArea(true);
+      flash("Finish deleting this area before editing it");
+      return;
+    }
     setSaving(true);
     try {
       const image = await resolveImageRef({
@@ -1562,6 +2009,24 @@ export function StowApp({
     } finally {
       setSaving(false);
     }
+  }
+
+  function openCurrentSpaceDialog() {
+    if (isCurrentSpaceDeleteLocked) {
+      deleteSpaceReturnFocusRef.current = spaceEditTriggerRef.current;
+      setShowDeleteSpace(true);
+      return;
+    }
+    setShowEditSpace(true);
+  }
+
+  function openCurrentAreaDialog() {
+    if (isCurrentAreaDeleteLocked) {
+      deleteAreaReturnFocusRef.current = areaEditTriggerRef.current;
+      setShowDeleteArea(true);
+      return;
+    }
+    setShowEditArea(true);
   }
 
   async function saveMovedItem() {
@@ -1649,9 +2114,7 @@ export function StowApp({
     if (!window.confirm("Regenerate this invite? The current invite link will be revoked.")) return;
     setInviteActionWorkingId(inviteId);
     try {
-      await createInviteForRole(role);
-      await workspace.actions.revokeInvite({ householdId, inviteId });
-      flash("Invite regenerated");
+      await createInviteForRole(role, { replaceInviteId: inviteId, successMessage: "Invite regenerated" });
     } catch (error) {
       flash(toLoggedUserErrorMessage(error, "Failed to regenerate invite"));
     } finally {
@@ -1685,23 +2148,48 @@ export function StowApp({
     }
   }
 
+  function handlePackingListMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (!packingListMenuOpen) return;
+    if (event.key === "Tab") {
+      event.preventDefault();
+      packingListMenuButtonRefs.current[packingListMenuOpen]?.focus();
+      setPackingListMenuOpen(null);
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+
+    const items = Array.from(
+      packingListMenuRefs.current[packingListMenuOpen]?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []
+    );
+    if (items.length === 0) return;
+
+    event.preventDefault();
+    const activeIndex = items.findIndex((item) => item === document.activeElement);
+    if (event.key === "Home") {
+      items[0]?.focus();
+      return;
+    }
+    if (event.key === "End") {
+      items.at(-1)?.focus();
+      return;
+    }
+
+    const delta = event.key === "ArrowUp" ? -1 : 1;
+    const nextIndex = activeIndex === -1 ? 0 : (activeIndex + delta + items.length) % items.length;
+    items[nextIndex]?.focus();
+  }
+
   async function confirmDeleteArea() {
     if (!currentSpace || !currentArea || !workspace.userId) return;
-    const needsReassign = currentAreaItemCount > 0;
-    const target = needsReassign
-      ? deleteAreaDestinations.find(
-          (candidate) =>
-            candidate.spaceId === deleteAreaForm?.reassignSpaceId && candidate.areaId === deleteAreaForm?.reassignAreaId
-        )
-      : undefined;
-    if (needsReassign && !target) {
+    if (needsAreaDeleteDestinationChoice && !areaDeleteTarget) {
       flash("Select a destination area before deleting");
       return;
     }
     if (
+      !isCurrentAreaDeleteLocked &&
       !window.confirm(
-        needsReassign
-          ? `Delete "${currentArea.name}" and move its items to "${target?.areaName}"?`
+        areaDeleteTarget
+          ? `Delete "${currentArea.name}" and move its items to "${areaDeleteTarget.areaName}"?`
           : `Delete "${currentArea.name}"?`
       )
     ) {
@@ -1714,8 +2202,12 @@ export function StowApp({
         spaceId: currentSpace.id,
         areaId: currentArea.id,
         userId: workspace.userId,
-        reassignTo: target
-          ? { spaceId: target.spaceId, areaId: target.areaId, areaNameSnapshot: target.areaName }
+        reassignTo: areaDeleteTarget
+          ? {
+              spaceId: areaDeleteTarget.spaceId,
+              areaId: areaDeleteTarget.areaId,
+              areaNameSnapshot: areaDeleteTarget.areaName
+            }
           : undefined
       });
       setShowDeleteArea(false);
@@ -1731,21 +2223,15 @@ export function StowApp({
 
   async function confirmDeleteSpace() {
     if (!currentSpace || !workspace.userId) return;
-    const needsReassign = currentSpaceItemCount > 0;
-    const target = needsReassign
-      ? deleteSpaceDestinations.find(
-          (candidate) =>
-            candidate.spaceId === deleteSpaceForm?.reassignSpaceId && candidate.areaId === deleteSpaceForm?.reassignAreaId
-        )
-      : undefined;
-    if (needsReassign && !target) {
+    if (needsSpaceDeleteDestinationChoice && !spaceDeleteTarget) {
       flash("Select a destination space and area before deleting");
       return;
     }
     if (
+      !isCurrentSpaceDeleteLocked &&
       !window.confirm(
-        needsReassign
-          ? `Delete "${currentSpace.name}" and move its items to "${target?.spaceName} / ${target?.areaName}"?`
+        spaceDeleteTarget
+          ? `Delete "${currentSpace.name}" and move its items to "${spaceDeleteTarget.spaceName} / ${spaceDeleteTarget.areaName}"?`
           : `Delete "${currentSpace.name}"?`
       )
     ) {
@@ -1757,8 +2243,12 @@ export function StowApp({
         householdId,
         spaceId: currentSpace.id,
         userId: workspace.userId,
-        reassignTo: target
-          ? { spaceId: target.spaceId, areaId: target.areaId, areaNameSnapshot: target.areaName }
+        reassignTo: spaceDeleteTarget
+          ? {
+              spaceId: spaceDeleteTarget.spaceId,
+              areaId: spaceDeleteTarget.areaId,
+              areaNameSnapshot: spaceDeleteTarget.areaName
+            }
           : undefined
       });
       setShowDeleteSpace(false);
@@ -1769,6 +2259,27 @@ export function StowApp({
       flash(toLoggedUserErrorMessage(error, "Failed to delete space"));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function runDeleteItem(itemId: string) {
+    if (!workspace.userId || itemDeleteWorkingId === itemId) return;
+    setItemDeleteWorkingId(itemId);
+    try {
+      await workspace.actions.deleteItem({ householdId, itemId, userId: workspace.userId });
+      setDelConfirm((current) => (current === itemId ? null : current));
+      setEditing(false);
+      setShowMoveItem(false);
+      if (selectedItemId === itemId) {
+        flash("Item deleted");
+        closeItemDetail();
+      } else {
+        flash("Delete cleanup finished");
+      }
+    } catch (error) {
+      flash(toLoggedUserErrorMessage(error, "Failed to delete item"));
+    } finally {
+      setItemDeleteWorkingId((current) => (current === itemId ? null : current));
     }
   }
 
@@ -1872,6 +2383,8 @@ export function StowApp({
   }
 
   async function handleDeletePackingList(listId: string) {
+    const targetList = packingLists.find((list) => list.id === listId);
+    if (!window.confirm(`Delete "${targetList?.name ?? "this packing list"}"?`)) return;
     try {
       await workspace.actions.deletePackingList({ householdId, listId });
       if (activePackingListId === listId) navigate("/packing");
@@ -1882,19 +2395,19 @@ export function StowApp({
   }
 
   function openPackingItemPicker() {
-    if (!activePackingList) return;
-    setPackingItemPickerSelected(new Set(activePackingList.itemIds));
+    if (!activePackingListVisibleState) return;
+    setPackingItemPickerSelected(new Set(activePackingListVisibleState.visibleItemIds));
     setPackingItemPickerSearch("");
     setImportFromListId(null);
     setShowPackingItemPicker(true);
   }
 
   async function savePackingItemSelection() {
-    if (!workspace.userId || !activePackingList) return;
+    if (!workspace.userId || !activePackingList || !activePackingListVisibleState) return;
     setSaving(true);
     try {
       const newItemIds = [...packingItemPickerSelected];
-      const newPackedItemIds = activePackingList.packedItemIds.filter((id) => newItemIds.includes(id));
+      const newPackedItemIds = activePackingListVisibleState.visiblePackedItemIds.filter((id) => newItemIds.includes(id));
       await workspace.actions.updatePackingList({
         householdId,
         listId: activePackingList.id,
@@ -1925,10 +2438,10 @@ export function StowApp({
   }
 
   async function handleRemoveFromPackingList(itemId: string) {
-    if (!workspace.userId || !activePackingList) return;
+    if (!workspace.userId || !activePackingList || !activePackingListVisibleState) return;
     try {
-      const newItemIds = activePackingList.itemIds.filter((id) => id !== itemId);
-      const newPackedItemIds = activePackingList.packedItemIds.filter((id) => id !== itemId);
+      const newItemIds = activePackingListVisibleState.visibleItemIds.filter((id) => id !== itemId);
+      const newPackedItemIds = activePackingListVisibleState.visiblePackedItemIds.filter((id) => id !== itemId);
       await workspace.actions.updatePackingList({
         householdId,
         listId: activePackingList.id,
@@ -1980,6 +2493,42 @@ export function StowApp({
   }
 
   const spaceNameById = useMemo(() => Object.fromEntries(spaces.map((space) => [space.id, space.name])), [spaces]);
+  const selectedAreaDeleteDestination =
+    deleteAreaDestinations.find(
+      (candidate) =>
+        candidate.spaceId === deleteAreaForm?.reassignSpaceId && candidate.areaId === deleteAreaForm?.reassignAreaId
+    ) ?? null;
+  const selectedSpaceDeleteDestination =
+    deleteSpaceDestinations.find(
+      (candidate) =>
+        candidate.spaceId === deleteSpaceForm?.reassignSpaceId && candidate.areaId === deleteSpaceForm?.reassignAreaId
+    ) ?? null;
+  const currentAreaLockedDestination =
+    deleteAreaDestinations.find(
+      (candidate) =>
+        candidate.spaceId === currentAreaLockedTarget?.reassignSpaceId &&
+        candidate.areaId === currentAreaLockedTarget?.reassignAreaId
+    ) ?? null;
+  const currentSpaceLockedDestination =
+    deleteSpaceDestinations.find(
+      (candidate) =>
+        candidate.spaceId === currentSpaceLockedTarget?.reassignSpaceId &&
+        candidate.areaId === currentSpaceLockedTarget?.reassignAreaId
+    ) ?? null;
+  const areaDeleteTarget = currentAreaLockedDestination ?? selectedAreaDeleteDestination;
+  const spaceDeleteTarget = currentSpaceLockedDestination ?? selectedSpaceDeleteDestination;
+  const needsAreaDeleteDestinationChoice = currentAreaItemCount > 0 && !currentAreaLockedDestination;
+  const needsSpaceDeleteDestinationChoice = currentSpaceItemCount > 0 && !currentSpaceLockedDestination;
+  const currentAreaLockedTargetLabel = formatDeleteDestinationLabel(
+    currentAreaLockedTarget,
+    deleteAreaDestinations,
+    spaceNameById
+  );
+  const currentSpaceLockedTargetLabel = formatDeleteDestinationLabel(
+    currentSpaceLockedTarget,
+    deleteSpaceDestinations,
+    spaceNameById
+  );
 
   const activeScreen = () => {
     if (tab === "search") {
@@ -2001,9 +2550,11 @@ export function StowApp({
                 <Search size={16} />
                 <input
                   className="input"
+                  id="search-query-input"
                   value={searchQuery}
                   onChange={(e) => updateCurrentQuery({ q: e.target.value }, { replace: true })}
                   placeholder="Items, tags, or spaces…"
+                  aria-label="Search inventory"
                   style={{ borderColor: searchQuery ? P.accent : undefined }}
                 />
                 {searchQuery ? (
@@ -2030,6 +2581,7 @@ export function StowApp({
             <div className="search-filter-row">
               <Select
                 value={searchSpaceFilter}
+                aria-label="Filter results by space"
                 onChange={(e) =>
                   updateCurrentQuery({ spaceId: e.target.value || null, areaId: null }, { replace: true })
                 }
@@ -2043,6 +2595,7 @@ export function StowApp({
               </Select>
               <Select
                 value={searchAreaFilter}
+                aria-label="Filter results by area"
                 onChange={(e) => updateCurrentQuery({ areaId: e.target.value || null }, { replace: true })}
                 disabled={!searchSpaceFilter}
               >
@@ -2057,6 +2610,7 @@ export function StowApp({
             <div className="search-filter-row compact">
               <Select
                 value={searchPackedFilter}
+                aria-label="Filter results by packed status"
                 onChange={(e) => updateCurrentQuery({ packed: e.target.value === "all" ? null : e.target.value }, { replace: true })}
               >
                 <option value="all">Packed: All</option>
@@ -2065,6 +2619,7 @@ export function StowApp({
               </Select>
               <Select
                 value={searchKindFilter}
+                aria-label="Filter results by item type"
                 onChange={(e) => updateCurrentQuery({ kind: e.target.value === "all" ? null : e.target.value }, { replace: true })}
               >
                 <option value="all">Type: All</option>
@@ -2075,6 +2630,8 @@ export function StowApp({
                 type="button"
                 className={`packing-pill ${searchHasPhoto ? "active" : "inactive"}`}
                 onClick={() => updateCurrentQuery({ hasPhoto: searchHasPhoto ? null : "1" }, { replace: true })}
+                aria-label="Filter results to items with photos"
+                aria-pressed={searchHasPhoto}
               >
                 Has Photo
               </button>
@@ -2234,7 +2791,7 @@ export function StowApp({
     if (tab === "packing") {
       // ── Packing list detail view ──
       if (activePackingList) {
-        const packedSet = new Set(activePackingList.packedItemIds);
+        const packedSet = new Set(activePackingListVisibleState?.visiblePackedItemIds ?? []);
         return (
           <div className="screen" style={{ padding: 0 }}>
             <div className="tab-header" style={{ borderBottom: `1px solid ${P.borderL}` }}>
@@ -2359,68 +2916,83 @@ export function StowApp({
             ) : (
               <div className="stack">
                 {packingLists.map((pl) => {
-                  const totalCount = pl.itemIds.length;
-                  const packedCount = pl.packedItemIds.length;
+                  const visibleState = packingListVisibleStateById.get(pl.id) ?? EMPTY_PACKING_LIST_VISIBLE_STATE;
+                  const totalCount = visibleState.visibleItemIds.length;
+                  const packedCount = visibleState.visiblePackedItemIds.length;
                   const pct = totalCount ? Math.min((packedCount / totalCount) * 100, 100) : 0;
                   return (
-                    <button
-                      key={pl.id}
-                      type="button"
-                      className="packing-list-card"
-                      onClick={() => navigate(`/packing?listId=${pl.id}`)}
-                    >
-                      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-                        <div style={{ flex: 1 }}>
-                          <div className="row-title" style={{ fontSize: 16, marginBottom: 4 }}>{pl.name}</div>
-                          <div className="row-sub">{packedCount} of {totalCount} packed</div>
+                    <div key={pl.id} className="packing-list-card" onClick={() => navigate(`/packing?listId=${pl.id}`)}>
+                      <button
+                        type="button"
+                        className="packing-list-open"
+                        onClick={() => navigate(`/packing?listId=${pl.id}`)}
+                        aria-label={`Open packing list ${pl.name}`}
+                      >
+                        <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                          <div style={{ flex: 1 }}>
+                            <div className="row-title" style={{ fontSize: 16, marginBottom: 4 }}>{pl.name}</div>
+                            <div className="row-sub">{packedCount} of {totalCount} packed</div>
+                          </div>
                         </div>
-                        <div
-                          className="packing-list-menu-anchor"
-                          style={{ position: "relative" }}
-                          onClick={(e) => e.stopPropagation()}
+                        <div className="progress-track" style={{ marginTop: 8 }}>
+                          <div className="progress-bar" style={{ width: `${pct}%` }} />
+                        </div>
+                      </button>
+                      <div className="packing-list-menu-anchor" onClick={(event) => event.stopPropagation()}>
+                        <button
+                          type="button"
+                          ref={(node) => {
+                            packingListMenuButtonRefs.current[pl.id] = node;
+                          }}
+                          className="btn-icon"
+                          aria-label={`Options for ${pl.name}`}
+                          aria-haspopup="menu"
+                          aria-expanded={packingListMenuOpen === pl.id}
+                          aria-controls={packingListMenuOpen === pl.id ? `packing-list-menu-${pl.id}` : undefined}
+                          onClick={() => {
+                            setPackingListMenuOpen(packingListMenuOpen === pl.id ? null : pl.id);
+                          }}
                         >
-                          <button
-                            type="button"
-                            className="btn-icon"
-                            aria-label={`Options for ${pl.name}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPackingListMenuOpen(packingListMenuOpen === pl.id ? null : pl.id);
+                          <MoreHorizontal size={18} />
+                        </button>
+                        {packingListMenuOpen === pl.id ? (
+                          <div
+                            id={`packing-list-menu-${pl.id}`}
+                            ref={(node) => {
+                              packingListMenuRefs.current[pl.id] = node;
                             }}
+                            className="dropdown-menu"
+                            role="menu"
+                            aria-label={`${pl.name} actions`}
+                            onKeyDown={handlePackingListMenuKeyDown}
                           >
-                            <MoreHorizontal size={18} />
-                          </button>
-                          {packingListMenuOpen === pl.id ? (
-                            <div className="dropdown-menu" style={{ position: "absolute", right: 0, top: 28, zIndex: 10 }}>
-                              <button
-                                type="button"
-                                className="dropdown-item"
-                                onClick={() => {
-                                  setPackingListMenuOpen(null);
-                                  setEditingPackingList(pl);
-                                  setPackingListName(pl.name);
-                                }}
-                              >
-                                <Edit size={14} /> Rename
-                              </button>
-                              <button
-                                type="button"
-                                className="dropdown-item danger"
-                                onClick={() => {
-                                  setPackingListMenuOpen(null);
-                                  void handleDeletePackingList(pl.id);
-                                }}
-                              >
-                                <Trash2 size={14} /> Delete
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
+                            <button
+                              type="button"
+                              className="dropdown-item"
+                              role="menuitem"
+                              onClick={() => {
+                                setPackingListMenuOpen(null);
+                                setEditingPackingList(pl);
+                                setPackingListName(pl.name);
+                              }}
+                            >
+                              <Edit size={14} /> Rename
+                            </button>
+                            <button
+                              type="button"
+                              className="dropdown-item danger"
+                              role="menuitem"
+                              onClick={() => {
+                                setPackingListMenuOpen(null);
+                                void handleDeletePackingList(pl.id);
+                              }}
+                            >
+                              <Trash2 size={14} /> Delete
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
-                      <div className="progress-track" style={{ marginTop: 8 }}>
-                        <div className="progress-bar" style={{ width: `${pct}%` }} />
-                      </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -2432,7 +3004,7 @@ export function StowApp({
 
     if (tab === "settings") {
       return (
-        <div className="screen" style={{ padding: 0, overflowY: "auto", paddingBottom: 120 }}>
+        <div className="screen" style={{ padding: "0 0 120px", overflowY: "auto" }}>
           <div className="tab-header">
             <div className="row" style={{ justifyContent: "space-between" }}>
               <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900, color: P.ink }}>Settings</h1>
@@ -2470,6 +3042,7 @@ export function StowApp({
                     <div className="stack-sm" style={{ alignItems: "flex-end", minWidth: 132 }}>
                       <Select
                         value={member.role}
+                        aria-label={`Role for ${member.displayName || member.email || member.uid}`}
                         disabled={
                           memberActionWorkingUid === member.uid ||
                           (!isOwner && member.role === "OWNER") ||
@@ -2502,7 +3075,7 @@ export function StowApp({
               {isAdmin ? (
                 <>
                   <Field label="Invite role">
-                    <Select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as Role)}>
+                    <Select value={inviteRole} aria-label="Role for new household invite" onChange={(e) => setInviteRole(e.target.value as Role)}>
                       <option value="MEMBER">Member</option>
                       <option value="ADMIN">Admin</option>
                     </Select>
@@ -2708,7 +3281,7 @@ export function StowApp({
                       {space.image?.downloadUrl ? (
                         <img src={space.image.downloadUrl} alt="" style={{ width: 42, height: 42, borderRadius: 14, objectFit: "cover", border: `1px solid ${P.borderL}` }} />
                       ) : (
-                        <div style={{ width: 42, height: 42, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", background: `${space.color}14`, color: space.color }}>
+                        <div style={{ width: 42, height: 42, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", background: withAlpha(space.color, 0.08), color: space.color }}>
                           <Icon size={20} strokeWidth={1.8} />
                         </div>
                       )}
@@ -2753,12 +3326,13 @@ export function StowApp({
             {!selectedAreaId ? (
               <>
                 <button
+                  ref={spaceEditTriggerRef}
                   type="button"
                   className="icon-btn"
-                  onClick={() => setShowEditSpace(true)}
-                  aria-label="Edit space"
+                  onClick={openCurrentSpaceDialog}
+                  aria-label={isCurrentSpaceDeleteLocked ? "Finish deleting space" : "Edit space"}
                 >
-                  <Edit size={16} color={P.inkMuted} />
+                  {isCurrentSpaceDeleteLocked ? <Trash2 size={16} color={P.danger} /> : <Edit size={16} color={P.inkMuted} />}
                 </button>
                 <button
                   type="button"
@@ -2780,12 +3354,13 @@ export function StowApp({
               </>
             ) : (
               <button
+                ref={areaEditTriggerRef}
                 type="button"
                 className="icon-btn"
-                onClick={() => setShowEditArea(true)}
-                aria-label="Edit area"
+                onClick={openCurrentAreaDialog}
+                aria-label={isCurrentAreaDeleteLocked ? "Finish deleting area" : "Edit area"}
               >
-                <MoreHorizontal size={16} color={P.inkMuted} />
+                {isCurrentAreaDeleteLocked ? <Trash2 size={16} color={P.danger} /> : <MoreHorizontal size={16} color={P.inkMuted} />}
               </button>
             )}
           </div>
@@ -2807,7 +3382,7 @@ export function StowApp({
                 return (
                   <button key={area.id} className="area-card" onClick={() => navigateToSpaces(selectedSpaceId, area.id, new URLSearchParams([["spaceView", "items"]]))}>
                     <div className="area-card-body">
-                      <div className="area-card-head" style={{ background: `${currentSpace.color}12` }}>
+                      <div className="area-card-head" style={{ background: withAlpha(currentSpace.color, 0.07) }}>
                         {area.image?.downloadUrl ? <img src={area.image.downloadUrl} alt="" /> : <Box size={18} color={currentSpace.color} strokeWidth={1.8} />}
                       </div>
                       <div>
@@ -2841,6 +3416,7 @@ export function StowApp({
             <div className="search-filter-row compact">
               <Select
                 value={spaceItemsPackedFilter}
+                aria-label="Filter space items by packed status"
                 onChange={(e) => updateCurrentQuery({ spacePacked: e.target.value === "all" ? null : e.target.value }, { replace: true })}
               >
                 <option value="all">Status: All</option>
@@ -2849,6 +3425,7 @@ export function StowApp({
               </Select>
               <Select
                 value={spaceItemsKindFilter}
+                aria-label="Filter space items by item type"
                 onChange={(e) => updateCurrentQuery({ spaceKind: e.target.value === "all" ? null : e.target.value }, { replace: true })}
               >
                 <option value="all">Type: All</option>
@@ -2857,6 +3434,7 @@ export function StowApp({
               </Select>
               <Select
                 value={spaceItemsSort}
+                aria-label="Sort space items"
                 onChange={(e) => updateCurrentQuery({ spaceSort: e.target.value === "recent" ? null : e.target.value }, { replace: true })}
               >
                 <option value="recent">Sort: Recent</option>
@@ -2913,18 +3491,19 @@ export function StowApp({
         ) : null}
 
         {/* Expandable FAB */}
-        <div className="fab-wrap">
+        <div ref={fabWrapRef} className="fab-wrap" onKeyDown={handleFabKeyDown}>
           {fabOpen ? (
             <div className="fab-menu">
-              <button className="fab-menu-item" onClick={() => { setFabOpen(false); setShowScanner(true); }}>
+              <button type="button" className="fab-menu-item" onClick={() => { setFabOpen(false); setShowScanner(true); }}>
                 <Camera size={16} /> Scan Item
               </button>
-              <button className="fab-menu-item" onClick={() => { setFabOpen(false); setShowAddItem(true); }}>
+              <button type="button" className="fab-menu-item" onClick={() => { setFabOpen(false); setShowAddItem(true); }}>
                 <Edit size={16} /> Add Manually
               </button>
             </div>
           ) : null}
           <button
+            ref={fabButtonRef}
             type="button"
             className={`fab ${fabOpen ? "rotated" : ""}`}
             onClick={() => setFabOpen(!fabOpen)}
@@ -2938,22 +3517,225 @@ export function StowApp({
     );
   };
 
+  const hasBlockingOverlay =
+    showAddSpace ||
+    showAddArea ||
+    showAddItem ||
+    showScanner ||
+    showEditSpace ||
+    showEditArea ||
+    showDeleteArea ||
+    showDeleteSpace ||
+    showMoveItem ||
+    showCreatePackingList ||
+    showPackingItemPicker ||
+    Boolean(editingPackingList) ||
+    Boolean(showQrForSpaceId) ||
+    Boolean(selectedItem) ||
+    Boolean(delConfirm);
+  const shouldHideAppContent = hasBlockingOverlay && (!selectedItem || itemDetailActsAsModal || showMoveItem || Boolean(delConfirm));
+  const ignoreNextPopstateRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handlePopState = () => {
+      if (ignoreNextPopstateRef.current) {
+        ignoreNextPopstateRef.current = false;
+        return;
+      }
+    if (!editing) {
+      return;
+    }
+    if (!isEditItemDirty) {
+      void exitItemEditMode({ restoreFocus: false, confirmDiscard: false });
+      return;
+    }
+    if (window.confirm("Discard unsaved changes to this item?")) {
+      void exitItemEditMode({ restoreFocus: false, confirmDiscard: false });
+      return;
+    }
+      ignoreNextPopstateRef.current = true;
+      window.history.go(1);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [editing, isEditItemDirty]);
+
+  const enterItemEditMode = () => {
+    if (isSelectedItemPendingDelete) {
+      flash("Finish deleting this item before editing it.");
+      return;
+    }
+    itemDetailEditTriggerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : itemDetailBackButtonRef.current;
+    setEditing(true);
+  };
+
+  const restoreItemDetailEditFocus = () => {
+    window.requestAnimationFrame(() => {
+      const preferredFocus =
+        itemDetailEditTriggerRef.current?.isConnected ? itemDetailEditTriggerRef.current : itemDetailBackButtonRef.current;
+      preferredFocus?.focus();
+    });
+  };
+
+  const exitItemEditMode = (options?: { restoreFocus?: boolean; confirmDiscard?: boolean }) => {
+    if (!editing) return true;
+    if (options?.confirmDiscard !== false && isEditItemDirty && !window.confirm("Discard unsaved changes to this item?")) {
+      return false;
+    }
+    if (selectedItem) {
+      setEditItemForm(createItemEditForm(selectedItem));
+      setMoveItemForm(createMoveItemForm(selectedItem));
+    }
+    setEditing(false);
+    if (options?.restoreFocus !== false) {
+      restoreItemDetailEditFocus();
+    }
+    return true;
+  };
+
+  const closeItemDetailOverlay = () => {
+    if (!exitItemEditMode({ restoreFocus: false })) return;
+    closeItemDetail();
+  };
+
+  const isItemDetailNestedModalOpen = showMoveItem || Boolean(delConfirm);
+
+  const handleItemDetailKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (isItemDetailNestedModalOpen) return;
+    if (event.key === "Escape" && editing) {
+      event.preventDefault();
+      event.stopPropagation();
+      void exitItemEditMode();
+      return;
+    }
+    if (!itemDetailActsAsModal) return;
+    handleDialogKeyDown(event, itemDetailRef.current, closeItemDetailOverlay);
+  };
+
+  const handleFabKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!fabOpen) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      setFabOpen(false);
+      fabButtonRef.current?.focus();
+      return;
+    }
+    if (event.key !== "Tab" || !event.shiftKey || !fabWrapRef.current) return;
+    const items = focusableElements(fabWrapRef.current);
+    const first = items[0];
+    const last = items[items.length - 1];
+    if ((document.activeElement as HTMLElement | null) !== first || !last) return;
+    event.preventDefault();
+    last.focus();
+  };
+
   return (
     <div className="app-shell">
-      <div className={`phone-frame ${selectedItemId ? "item-detail-open" : ""}`}>
-        {activeScreen()}
+      <div className={`phone-frame ${selectedItem ? "item-detail-open" : ""}`}>
+        <div className="app-content" aria-hidden={shouldHideAppContent}>
+          {pendingDeletedItems.length > 0 || deletingAreas.length > 0 || deletingSpaces.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "12px 24px 0" }}>
+              {pendingDeletedItems.map((item) => {
+                const isRetrying = itemDeleteWorkingId === item.id;
+                return (
+                  <div
+                    key={item.id}
+                    className="banner warning"
+                    role="status"
+                    style={{ maxWidth: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}
+                  >
+                    <span>
+                      <strong>{item.name}</strong> is waiting for delete cleanup and stays hidden from inventory until it finishes.
+                    </span>
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ whiteSpace: "nowrap", minHeight: 40 }}
+                      disabled={!workspace.userId || isRetrying}
+                      onClick={() => void runDeleteItem(item.id)}
+                    >
+                      {isRetrying ? "Finishing…" : "Finish delete"}
+                    </button>
+                  </div>
+                );
+              })}
 
-        <nav className="bottom-nav">
-          <NavButton
-            active={tab === "spaces"}
-            label="Spaces"
-            icon={Home}
-            onClick={() => navigateToTab("spaces")}
-          />
-          <NavButton active={tab === "search"} label="Search" icon={Search} onClick={() => navigateToTab("search")} />
-          <NavButton active={tab === "packing"} label="Packing" icon={Package} onClick={() => navigateToTab("packing")} />
-          <NavButton active={tab === "settings"} label="Settings" icon={Settings} onClick={() => navigateToTab("settings")} />
-        </nav>
+              {deletingAreas.map((area) => (
+                <div
+                  key={`area:${area.spaceId}:${area.id}`}
+                  className="banner warning"
+                  role="status"
+                  style={{ maxWidth: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}
+                >
+                  <span>
+                    <strong>{area.name}</strong> is waiting for delete cleanup and stays protected until the delete finishes.
+                  </span>
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{ whiteSpace: "nowrap", minHeight: 40 }}
+                    onClick={(event) => {
+                      deleteAreaReturnFocusRef.current = event.currentTarget;
+                      navigateToSpaces(area.spaceId, area.id, new URLSearchParams([["spaceView", "items"]]));
+                      setShowDeleteSpace(false);
+                      setShowEditArea(false);
+                      setShowDeleteArea(true);
+                    }}
+                  >
+                    Finish delete
+                  </button>
+                </div>
+              ))}
+
+              {deletingSpaces.map((space) => (
+                <div
+                  key={`space:${space.id}`}
+                  className="banner warning"
+                  role="status"
+                  style={{ maxWidth: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}
+                >
+                  <span>
+                    <strong>{space.name}</strong> is waiting for delete cleanup and stays protected until the delete finishes.
+                  </span>
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{ whiteSpace: "nowrap", minHeight: 40 }}
+                    onClick={(event) => {
+                      deleteSpaceReturnFocusRef.current = event.currentTarget;
+                      navigateToSpaces(space.id);
+                      setShowDeleteArea(false);
+                      setShowEditSpace(false);
+                      setShowDeleteSpace(true);
+                    }}
+                  >
+                    Finish delete
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {activeScreen()}
+
+          <nav className="bottom-nav">
+            <NavButton
+              active={tab === "spaces"}
+              label="Spaces"
+              icon={Home}
+              onClick={() => navigateToTab("spaces")}
+            />
+            <NavButton active={tab === "search"} label="Search" icon={Search} onClick={() => navigateToTab("search")} />
+            <NavButton active={tab === "packing"} label="Packing" icon={Package} onClick={() => navigateToTab("packing")} />
+            <NavButton active={tab === "settings"} label="Settings" icon={Settings} onClick={() => navigateToTab("settings")} />
+          </nav>
+        </div>
 
         <Modal open={showAddSpace} title="New Space" onClose={() => setShowAddSpace(false)}>
           <form className="stack" onSubmit={(e) => void submitAddSpace(e)}>
@@ -3198,7 +3980,12 @@ export function StowApp({
           </div>
         </Modal>
 
-        <Modal open={showEditSpace && Boolean(currentSpace) && Boolean(editSpaceForm)} title="Edit Space" onClose={() => setShowEditSpace(false)}>
+        <Modal
+          open={showEditSpace && Boolean(currentSpace) && Boolean(editSpaceForm)}
+          title="Edit Space"
+          onClose={() => setShowEditSpace(false)}
+          hiddenFromAccessibility={showDeleteSpace}
+        >
           {editSpaceForm ? (
             <form className="stack" onSubmit={(e) => { e.preventDefault(); void saveEditedSpace(); }}>
               <Field label="Space name">
@@ -3235,7 +4022,11 @@ export function StowApp({
                 type="button"
                 className="btn danger"
                 disabled={spaces.length <= 1}
-                onClick={() => setShowDeleteSpace(true)}
+                onClick={() => {
+                  deleteSpaceReturnFocusRef.current = spaceEditTriggerRef.current;
+                  setShowEditSpace(false);
+                  setShowDeleteSpace(true);
+                }}
                 title={spaces.length <= 1 ? "Create another space before deleting the last one" : undefined}
               >
                 Delete Space
@@ -3244,7 +4035,12 @@ export function StowApp({
           ) : null}
         </Modal>
 
-        <Modal open={showEditArea && Boolean(currentArea) && Boolean(editAreaForm)} title="Edit Area" onClose={() => setShowEditArea(false)}>
+        <Modal
+          open={showEditArea && Boolean(currentArea) && Boolean(editAreaForm)}
+          title="Edit Area"
+          onClose={() => setShowEditArea(false)}
+          hiddenFromAccessibility={showDeleteArea}
+        >
           {editAreaForm ? (
             <form className="stack" onSubmit={(e) => { e.preventDefault(); void saveEditedArea(); }}>
               <Field label="Area name">
@@ -3266,7 +4062,11 @@ export function StowApp({
                 type="button"
                 className="btn danger"
                 disabled={(currentSpace?.areas.length ?? 0) <= 1 && currentAreaItemCount > 0 && deleteAreaDestinations.length === 0}
-                onClick={() => setShowDeleteArea(true)}
+                onClick={() => {
+                  deleteAreaReturnFocusRef.current = areaEditTriggerRef.current;
+                  setShowEditArea(false);
+                  setShowDeleteArea(true);
+                }}
               >
                 Delete Area
               </button>
@@ -3274,14 +4074,32 @@ export function StowApp({
           ) : null}
         </Modal>
 
-        <Modal open={showDeleteArea && Boolean(currentArea)} title="Delete Area" onClose={() => setShowDeleteArea(false)}>
+        <Modal
+          open={showDeleteArea && Boolean(currentArea)}
+          title={isCurrentAreaDeleteLocked ? "Finish deleting area" : "Delete Area"}
+          onClose={() => setShowDeleteArea(false)}
+          dismissDisabled={saving}
+          descriptionId="delete-area-description"
+          restoreFocusTarget={deleteAreaReturnFocusRef.current}
+        >
           <div className="stack">
-            <p className="muted">
-              {currentAreaItemCount > 0
-                ? `This area contains ${currentAreaItemCount} item${currentAreaItemCount === 1 ? "" : "s"}. Choose a destination before deleting.`
-                : "This area is empty and can be deleted now."}
+            <p id="delete-area-description" className="muted">
+              {isCurrentAreaDeleteLocked
+                ? currentAreaLockedDestination
+                  ? `Delete cleanup is already in progress. Finish deleting this area to keep moving any remaining items to ${currentAreaLockedTargetLabel}. That destination cannot change during this retry.`
+                  : currentAreaItemCount > 0
+                    ? "Delete cleanup is already in progress, but the original destination is no longer available. Choose a new destination to finish deleting this area."
+                    : "Delete cleanup is already in progress, but no items remain to move. Finish deleting this area to remove the protected shell."
+                : currentAreaItemCount > 0
+                  ? `This area contains ${currentAreaItemCount} item${currentAreaItemCount === 1 ? "" : "s"}. Choose a destination before deleting.`
+                  : "This area is empty and can be deleted now."}
             </p>
-            {currentAreaItemCount > 0 ? (
+            {currentAreaLockedDestination ? (
+              <div className="banner warning inline-error">
+                Remaining items are locked to <strong>{currentAreaLockedTargetLabel}</strong>.
+              </div>
+            ) : null}
+            {needsAreaDeleteDestinationChoice ? (
               <>
                 {deleteAreaDestinations.length === 0 ? (
                   <div className="banner error inline-error">No destination area available. Create another area first.</div>
@@ -3290,12 +4108,14 @@ export function StowApp({
                     <Field label="Move items to space">
                       <Select
                         value={deleteAreaForm?.reassignSpaceId || ""}
+                        disabled={saving}
                         onChange={(e) => {
                           const nextSpaceId = e.target.value;
                           const nextArea = deleteAreaDestinations.find((d) => d.spaceId === nextSpaceId);
                           setDeleteAreaForm(nextArea ? { reassignSpaceId: nextSpaceId, reassignAreaId: nextArea.areaId } : { reassignSpaceId: nextSpaceId, reassignAreaId: "" });
                         }}
                       >
+                        <option value="" disabled>Select a destination space</option>
                         {[...new Set(deleteAreaDestinations.map((d) => d.spaceId))].map((spaceId) => (
                           <option key={spaceId} value={spaceId}>{spaceNameById[spaceId]}</option>
                         ))}
@@ -3304,10 +4124,12 @@ export function StowApp({
                     <Field label="Move items to area">
                       <Select
                         value={deleteAreaForm?.reassignAreaId || ""}
+                        disabled={saving || !deleteAreaForm?.reassignSpaceId}
                         onChange={(e) => setDeleteAreaForm((prev) => prev ? { ...prev, reassignAreaId: e.target.value } : prev)}
                       >
+                        <option value="" disabled>Select a destination area</option>
                         {deleteAreaDestinations
-                          .filter((d) => d.spaceId === (deleteAreaForm?.reassignSpaceId || deleteAreaDestinations[0]?.spaceId))
+                          .filter((d) => d.spaceId === deleteAreaForm?.reassignSpaceId)
                           .map((d) => (
                             <option key={`${d.spaceId}:${d.areaId}`} value={d.areaId}>{d.areaName}</option>
                           ))}
@@ -3318,26 +4140,44 @@ export function StowApp({
               </>
             ) : null}
             <div className="row">
-              <button className="btn" onClick={() => setShowDeleteArea(false)}>Cancel</button>
+              <button className="btn" disabled={saving} onClick={() => setShowDeleteArea(false)}>Cancel</button>
               <button
                 className="btn danger"
-                disabled={saving || (currentAreaItemCount > 0 && deleteAreaDestinations.length === 0)}
+                disabled={saving || (needsAreaDeleteDestinationChoice && !areaDeleteTarget)}
                 onClick={() => void confirmDeleteArea()}
               >
-                {saving ? "Deleting…" : "Delete Area"}
+                {saving ? "Deleting…" : isCurrentAreaDeleteLocked ? "Finish delete" : "Delete Area"}
               </button>
             </div>
           </div>
         </Modal>
 
-        <Modal open={showDeleteSpace && Boolean(currentSpace)} title="Delete Space" onClose={() => setShowDeleteSpace(false)}>
+        <Modal
+          open={showDeleteSpace && Boolean(currentSpace)}
+          title={isCurrentSpaceDeleteLocked ? "Finish deleting space" : "Delete Space"}
+          onClose={() => setShowDeleteSpace(false)}
+          dismissDisabled={saving}
+          descriptionId="delete-space-description"
+          restoreFocusTarget={deleteSpaceReturnFocusRef.current}
+        >
           <div className="stack">
-            <p className="muted">
-              {currentSpaceItemCount > 0
-                ? `This space contains ${currentSpaceItemCount} item${currentSpaceItemCount === 1 ? "" : "s"}. Reassign items before deleting.`
-                : "This space is empty and can be deleted now."}
+            <p id="delete-space-description" className="muted">
+              {isCurrentSpaceDeleteLocked
+                ? currentSpaceLockedDestination
+                  ? `Delete cleanup is already in progress. Finish deleting this space to keep moving any remaining items to ${currentSpaceLockedTargetLabel}. That destination cannot change during this retry.`
+                  : currentSpaceItemCount > 0
+                    ? "Delete cleanup is already in progress, but the original destination is no longer available. Choose a new destination to finish deleting this space."
+                    : "Delete cleanup is already in progress, but no items remain to move. Finish deleting this space to remove the protected shell."
+                : currentSpaceItemCount > 0
+                  ? `This space contains ${currentSpaceItemCount} item${currentSpaceItemCount === 1 ? "" : "s"}. Reassign items before deleting.`
+                  : "This space is empty and can be deleted now."}
             </p>
-            {currentSpaceItemCount > 0 ? (
+            {currentSpaceLockedDestination ? (
+              <div className="banner warning inline-error">
+                Remaining items are locked to <strong>{currentSpaceLockedTargetLabel}</strong>.
+              </div>
+            ) : null}
+            {needsSpaceDeleteDestinationChoice ? (
               <>
                 {deleteSpaceDestinations.length === 0 ? (
                   <div className="banner error inline-error">No destination space/area available. Create another space with an area first.</div>
@@ -3346,12 +4186,14 @@ export function StowApp({
                     <Field label="Move items to space">
                       <Select
                         value={deleteSpaceForm?.reassignSpaceId || ""}
+                        disabled={saving}
                         onChange={(e) => {
                           const nextSpaceId = e.target.value;
                           const nextArea = deleteSpaceDestinations.find((d) => d.spaceId === nextSpaceId);
                           setDeleteSpaceForm(nextArea ? { reassignSpaceId: nextSpaceId, reassignAreaId: nextArea.areaId } : { reassignSpaceId: nextSpaceId, reassignAreaId: "" });
                         }}
                       >
+                        <option value="" disabled>Select a destination space</option>
                         {[...new Set(deleteSpaceDestinations.map((d) => d.spaceId))].map((spaceId) => (
                           <option key={spaceId} value={spaceId}>{spaceNameById[spaceId]}</option>
                         ))}
@@ -3360,10 +4202,12 @@ export function StowApp({
                     <Field label="Move items to area">
                       <Select
                         value={deleteSpaceForm?.reassignAreaId || ""}
+                        disabled={saving || !deleteSpaceForm?.reassignSpaceId}
                         onChange={(e) => setDeleteSpaceForm((prev) => prev ? { ...prev, reassignAreaId: e.target.value } : prev)}
                       >
+                        <option value="" disabled>Select a destination area</option>
                         {deleteSpaceDestinations
-                          .filter((d) => d.spaceId === (deleteSpaceForm?.reassignSpaceId || deleteSpaceDestinations[0]?.spaceId))
+                          .filter((d) => d.spaceId === deleteSpaceForm?.reassignSpaceId)
                           .map((d) => (
                             <option key={`${d.spaceId}:${d.areaId}`} value={d.areaId}>{d.areaName}</option>
                           ))}
@@ -3374,13 +4218,13 @@ export function StowApp({
               </>
             ) : null}
             <div className="row">
-              <button className="btn" onClick={() => setShowDeleteSpace(false)}>Cancel</button>
+              <button className="btn" disabled={saving} onClick={() => setShowDeleteSpace(false)}>Cancel</button>
               <button
                 className="btn danger"
-                disabled={saving || spaces.length <= 1 || (currentSpaceItemCount > 0 && deleteSpaceDestinations.length === 0)}
+                disabled={saving || spaces.length <= 1 || (needsSpaceDeleteDestinationChoice && !spaceDeleteTarget)}
                 onClick={() => void confirmDeleteSpace()}
               >
-                {saving ? "Deleting…" : "Delete Space"}
+                {saving ? "Deleting…" : isCurrentSpaceDeleteLocked ? "Finish delete" : "Delete Space"}
               </button>
             </div>
           </div>
@@ -3454,23 +4298,26 @@ export function StowApp({
               value={packingItemPickerSearch}
               onChange={(e) => setPackingItemPickerSearch(e.target.value)}
               placeholder="Search items…"
+              aria-label="Search items to add to the packing list"
             />
             {packingLists.length > 0 ? (
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                 <Select
                   value={importFromListId ?? ""}
+                  aria-label="Import items from another packing list"
                   onChange={(e) => {
                     const listId = e.target.value;
                     setImportFromListId(listId || null);
                     if (listId) {
                       const source = packingLists.find((pl) => pl.id === listId);
+                      const sourceVisibleState = packingListVisibleStateById.get(listId) ?? EMPTY_PACKING_LIST_VISIBLE_STATE;
                       if (source) {
                         setPackingItemPickerSelected((prev) => {
                           const next = new Set(prev);
-                          for (const id of source.itemIds) next.add(id);
+                          for (const id of sourceVisibleState.visibleItemIds) next.add(id);
                           return next;
                         });
-                        flash(`Imported ${source.itemIds.length} items from "${source.name}"`);
+                        flash(`Imported ${sourceVisibleState.visibleItemIds.length} items from "${source.name}"`);
                       }
                     }
                   }}
@@ -3479,7 +4326,9 @@ export function StowApp({
                   {packingLists
                     .filter((pl) => pl.id !== activePackingListId)
                     .map((pl) => (
-                      <option key={pl.id} value={pl.id}>{pl.name} ({pl.itemIds.length})</option>
+                      <option key={pl.id} value={pl.id}>
+                        {pl.name} ({(packingListVisibleStateById.get(pl.id) ?? EMPTY_PACKING_LIST_VISIBLE_STATE).visibleItemIds.length})
+                      </option>
                     ))}
                 </Select>
               </div>
@@ -3498,7 +4347,7 @@ export function StowApp({
                     {filtered.map((item) => {
                       const checked = packingItemPickerSelected.has(item.id);
                       return (
-                        <label key={item.id} className="picker-item" style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", cursor: "pointer" }}>
+                        <label key={item.id} className="picker-item" style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 44, padding: "8px 0", cursor: "pointer" }}>
                           <input
                             type="checkbox"
                             checked={checked}
@@ -3536,11 +4385,31 @@ export function StowApp({
 
         {/* ── Item Detail (Full-Screen Overlay) ── */}
         {selectedItem && editItemForm ? (
-          <div className="item-detail">
+          <div
+            ref={itemDetailRef}
+            className="item-detail"
+            role={isItemDetailNestedModalOpen ? undefined : itemDetailActsAsModal ? "dialog" : "region"}
+            aria-modal={itemDetailActsAsModal ? true : undefined}
+            aria-hidden={isItemDetailNestedModalOpen || undefined}
+            aria-labelledby={isItemDetailNestedModalOpen ? undefined : itemDetailTitleId}
+            aria-describedby={itemDetailActsAsModal ? itemDetailDescriptionId : undefined}
+            tabIndex={-1}
+            onKeyDown={handleItemDetailKeyDown}
+          >
+            <p id={itemDetailDescriptionId} className="sr-only">
+              {isSelectedItemPendingDelete
+                ? "This item is waiting for delete cleanup. Finish deleting it to remove remaining packing-list references."
+                : editing
+                  ? "Edit this item and update its photo, location, value, tags, and notes."
+                  : "Review this item's details, packing status, metadata, and actions."}
+            </p>
             {/* Hero image area */}
             <div className={`item-detail-hero ${selectedItem.image?.downloadUrl ? "has-image" : "no-image"}`}>
               {selectedItem.image?.downloadUrl ? (
-                <img src={editing ? (editItemForm.imageUrl || selectedItem.image.downloadUrl) : selectedItem.image.downloadUrl} alt="" />
+                <img
+                  src={editing ? (editItemForm.imageUrl || selectedItem.image.downloadUrl) : selectedItem.image.downloadUrl}
+                  alt={`${selectedItem.name} photo`}
+                />
               ) : (
                 <div className="placeholder">
                   {selectedItem.kind === "folder" ? <Folder size={48} color={P.border} strokeWidth={1} /> : <Inbox size={48} color={P.border} strokeWidth={1} />}
@@ -3548,19 +4417,20 @@ export function StowApp({
               )}
               <div className="hero-controls">
                 <button
+                  ref={itemDetailBackButtonRef}
                   type="button"
                   className={`hero-btn ${selectedItem.image?.downloadUrl ? "on-image" : "on-plain"}`}
-                  onClick={() => { setEditing(false); closeItemDetail(); }}
-                  aria-label="Back to list"
+                  onClick={closeItemDetailOverlay}
+                  aria-label="Close item details"
                 >
                   <ChevronLeft size={18} strokeWidth={2.5} />
                 </button>
                 <div style={{ display: "flex", gap: 8 }}>
-                  {!editing ? (
+                  {!editing && !isSelectedItemPendingDelete ? (
                     <button
                       type="button"
                       className={`hero-btn ${selectedItem.image?.downloadUrl ? "on-image" : "on-plain"}`}
-                      onClick={() => setEditing(true)}
+                      onClick={enterItemEditMode}
                       aria-label="Edit item"
                     >
                       <Edit size={16} />
@@ -3570,7 +4440,7 @@ export function StowApp({
                     type="button"
                     className={`hero-btn ${selectedItem.image?.downloadUrl ? "on-image" : "on-plain"}`}
                     onClick={() => setDelConfirm(selectedItem.id)}
-                    aria-label="Delete item"
+                    aria-label={isSelectedItemPendingDelete ? "Finish deleting item" : "Delete item"}
                   >
                     <Trash2 size={16} />
                   </button>
@@ -3584,8 +4454,8 @@ export function StowApp({
                 /* ── EDIT MODE ── */
                 <div className="stack">
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: P.ink }}>Edit Item</h2>
-                    <button onClick={() => setEditing(false)} style={{ fontSize: 14, fontWeight: 700, color: P.warm, background: "none", border: "none", cursor: "pointer" }}>Cancel</button>
+                    <h2 id={itemDetailTitleId} style={{ margin: 0, fontSize: 20, fontWeight: 800, color: P.ink }}>Edit Item</h2>
+                    <button type="button" onClick={() => exitItemEditMode()} style={{ minHeight: 44, padding: "0 10px", borderRadius: 12, display: "inline-flex", alignItems: "center", fontSize: 14, fontWeight: 700, color: P.warm, background: "none", border: "none", cursor: "pointer" }}>Cancel</button>
                   </div>
                   <Field label="Name *">
                     <TextInput value={editItemForm.name} onChange={(e) => setEditItemForm((prev) => prev ? { ...prev, name: e.target.value } : prev)} />
@@ -3642,23 +4512,95 @@ export function StowApp({
                 </div>
               ) : (
                 /* ── VIEW MODE ── */
-                <>
+                isSelectedItemPendingDelete ? (
+                  <>
+                    <div className="banner warning inline-error" role="status">
+                      Delete started earlier but cleanup did not finish. This item stays hidden from inventory until you finish deleting it.
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                      <div style={{ flex: 1, marginRight: 12 }}>
+                        <h1 id={itemDetailTitleId} className="item-detail-title">{selectedItem.name}</h1>
+                        <div className="item-detail-value" style={{ fontSize: 14, color: P.danger }}>Delete pending</div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="location-card"
+                      onClick={() => navigateToSpaces(selectedItem.spaceId, selectedItem.areaId, new URLSearchParams([["spaceView", "items"]]))}
+                      style={{ textAlign: "left", cursor: "pointer", width: "100%", display: "block" }}
+                    >
+                      <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "1.2px", color: P.warm, marginBottom: 6 }}>Last known location</div>
+                      <div className="location-row">
+                        <MapPin size={15} color={P.accent} />
+                        <span>{spaceNameById[selectedItem.spaceId] ?? "Deleted space"}</span>
+                        <ChevronRight size={12} color={P.border} />
+                        <span style={{ color: P.inkMuted }}>{selectedItem.areaNameSnapshot}</span>
+                      </div>
+                    </button>
+
+                    <div className="notes-card">
+                      <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "1.2px", color: P.warm, marginBottom: 6 }}>What happened</div>
+                      <p>
+                        Stow already hid this item so it cannot reappear with missing packing-list membership. Finish the delete to remove the remaining references.
+                      </p>
+                    </div>
+
+                    <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+                      <button
+                        className="btn primary full"
+                        style={{ background: P.danger }}
+                        disabled={isDeletingSelectedItem || !workspace.userId}
+                        onClick={() => void runDeleteItem(selectedItem.id)}
+                      >
+                        <Trash2 size={15} /> {isDeletingSelectedItem ? "Finishing delete…" : "Finish delete"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
                     <div style={{ flex: 1, marginRight: 12 }}>
-                      <h1 className="item-detail-title">{selectedItem.name}</h1>
-                      {(selectedItem.value || selectedItem.isPriceless) ? (
+                      <h1 id={itemDetailTitleId} className="item-detail-title">{selectedItem.name}</h1>
+                      {(selectedItem.value != null || selectedItem.isPriceless) ? (
                         <div className="item-detail-value">{formatCurrency(selectedItem.value, selectedItem.isPriceless)}</div>
                       ) : null}
                     </div>
                     <button
                       type="button"
-                      className={`pack-toggle ${selectedItem.isPacked ? "packed" : "unpacked"}`}
-                      aria-pressed={selectedItem.isPacked}
-                      aria-label={selectedItem.isPacked ? "Remove item from packing list" : "Add item to packing list"}
+                      className={`pack-toggle ${itemDetailPacked ? "packed" : "unpacked"}`}
+                      aria-pressed={itemDetailPacked}
+                      aria-label={itemDetailPacked ? "Remove item from packing list" : "Add item to packing list"}
                       onClick={() => {
                         if (!workspace.userId) return;
-                        void workspace.actions.togglePacked({ householdId, itemId: selectedItem.id, userId: workspace.userId, nextValue: !selectedItem.isPacked })
-                          .then(() => flash(selectedItem.isPacked ? "Removed from bag" : "Added to bag!"))
+                        const togglePromise =
+                          itemDetailUsesPackingListState && activePackingList
+                            ? workspace.actions.togglePackingListItem({
+                                householdId,
+                                listId: activePackingList.id,
+                                userId: workspace.userId,
+                                itemId: selectedItem.id,
+                                packed: !itemDetailPacked
+                              })
+                            : workspace.actions.togglePacked({
+                                householdId,
+                                itemId: selectedItem.id,
+                                userId: workspace.userId,
+                                nextValue: !itemDetailPacked
+                              });
+                        void togglePromise
+                          .then(() =>
+                            flash(
+                              itemDetailPacked
+                                ? itemDetailUsesPackingListState
+                                  ? "Unpacked"
+                                  : "Removed from bag"
+                                : itemDetailUsesPackingListState
+                                  ? "Packed!"
+                                  : "Added to bag!"
+                            )
+                          )
                           .catch((error) => flash(toLoggedUserErrorMessage(error, "Failed to update item")));
                       }}
                     >
@@ -3721,39 +4663,54 @@ export function StowApp({
                   </div>
 
                   <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
-                    <button className="btn full" style={{ background: P.accentSoft, color: P.accent, border: `1px solid rgba(232,101,43,0.15)`, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }} onClick={() => setEditing(true)}>
+                    <button className="btn full" style={{ background: P.accentSoft, color: P.accent, border: `1px solid rgba(232,101,43,0.15)`, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }} onClick={enterItemEditMode}>
                       <Edit size={15} /> Edit Item
                     </button>
                     <button className="btn full" style={{ background: P.canvas, color: P.ink, border: `1px solid ${P.border}`, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }} onClick={() => setShowMoveItem(true)}>
                       <ArrowRight size={15} /> Move Item
                     </button>
                   </div>
-                </>
+                  </>
+                )
               )}
             </div>
           </div>
         ) : null}
 
         {/* ── Delete Confirm ── */}
-        {delConfirm ? (
-          <div className="delete-confirm">
-            <div className="delete-confirm-backdrop" onClick={() => setDelConfirm(null)} />
-            <div className="delete-confirm-card">
-              <div className="delete-confirm-icon"><Trash2 size={22} /></div>
-              <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 800, color: P.ink }}>Delete this item?</h2>
-              <p style={{ margin: "0 0 20px", fontSize: 13, color: P.warm }}>This can&apos;t be undone.</p>
-              <div style={{ display: "flex", gap: 12 }}>
-                <button className="btn" style={{ flex: 1 }} onClick={() => setDelConfirm(null)}>Cancel</button>
-                <button className="btn primary" style={{ flex: 1, background: P.danger }} onClick={() => {
-                  void workspace.actions
-                    .deleteItem({ householdId, itemId: delConfirm })
-                    .then(() => { setDelConfirm(null); setEditing(false); flash("Item deleted"); closeItemDetail(); })
-                    .catch((error) => flash(toLoggedUserErrorMessage(error, "Failed to delete item")));
-                }}>Delete</button>
-              </div>
+        <Modal
+          open={Boolean(delConfirm)}
+          title={isSelectedItemPendingDelete ? "Finish deleting item" : "Delete item"}
+          onClose={() => {
+            if (isDeletingSelectedItem) return;
+            setDelConfirm(null);
+          }}
+          dialogRole="alertdialog"
+          descriptionId="delete-item-description"
+          dismissDisabled={isDeletingSelectedItem}
+        >
+          <div className="stack center">
+            <div className="delete-confirm-icon"><Trash2 size={22} /></div>
+            <p id="delete-item-description" className="muted">
+              {isDeletingSelectedItem
+                ? "Deleting the item and cleaning up any remaining packing-list references. Please wait."
+                : isSelectedItemPendingDelete
+                  ? "Delete cleanup is already in progress. Finish deleting this item to remove the remaining packing-list references."
+                  : "This can&apos;t be undone. The item will be removed from inventory and any packing lists."}
+            </p>
+            <div className="row" style={{ width: "100%" }}>
+              <button className="btn grow" disabled={isDeletingSelectedItem} onClick={() => setDelConfirm(null)}>Cancel</button>
+              <button
+                className="btn primary grow"
+                style={{ background: P.danger }}
+                disabled={isDeletingSelectedItem || !delConfirm}
+                onClick={() => void (delConfirm ? runDeleteItem(delConfirm) : Promise.resolve())}
+              >
+                {isDeletingSelectedItem ? "Deleting…" : isSelectedItemPendingDelete ? "Finish delete" : "Delete"}
+              </button>
             </div>
           </div>
-        ) : null}
+        </Modal>
 
         {toast ? <div className="toast" aria-live="polite"><div className="toast-inner">{toast}</div></div> : null}
       </div>

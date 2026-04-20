@@ -24,9 +24,7 @@ export interface VisionSuggestion {
 
 export interface VisionCategorizeRequest {
   householdId: string;
-  imageRef:
-    | { storagePath: string; downloadUrl?: string }
-    | { imageUrl: string };
+  imageRef: { storagePath: string; downloadUrl?: string };
   context?: {
     spaceId?: string;
     areaId?: string;

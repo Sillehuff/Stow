@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { db } from "@/lib/firebase/client";
-import { householdPaths } from "@/lib/firebase/paths";
+import { bootstrapHousehold } from "@/lib/firebase/functions";
 
 type BootstrapState = {
   householdId: string | null;
@@ -10,52 +10,21 @@ type BootstrapState = {
   error: string | null;
 };
 
+const bootstrapRequestsByUid = new Map<string, Promise<string>>();
+
 async function ensureBootstrap(user: User): Promise<string> {
   if (!db) throw new Error("Firestore is not configured");
+  const existingRequest = bootstrapRequestsByUid.get(user.uid);
+  if (existingRequest) return existingRequest;
 
-  const userRef = doc(db, "users", user.uid);
-  const userSnap = await getDoc(userRef);
-  const existingHouseholdId = userSnap.exists() ? (userSnap.data().currentHouseholdId as string | undefined) : undefined;
-  if (existingHouseholdId) {
-    return existingHouseholdId;
-  }
+  const request = bootstrapHousehold()
+    .then((result) => result.householdId)
+    .finally(() => {
+      bootstrapRequestsByUid.delete(user.uid);
+    });
 
-  const householdId = crypto.randomUUID();
-  const householdRef = doc(db, householdPaths.root(householdId));
-  const memberRef = doc(db, householdPaths.member(householdId, user.uid));
-  const llmRef = doc(db, householdPaths.llmConfig(householdId));
-
-  const batch = writeBatch(db);
-  batch.set(householdRef, {
-    name: `${user.displayName ?? "My"} Household`,
-    createdAt: serverTimestamp(),
-    createdBy: user.uid
-  });
-  batch.set(memberRef, {
-    role: "OWNER",
-    email: user.email ?? null,
-    displayName: user.displayName ?? null,
-    createdAt: serverTimestamp(),
-    createdBy: user.uid
-  });
-  batch.set(userRef, {
-    email: user.email ?? null,
-    displayName: user.displayName ?? null,
-    currentHouseholdId: householdId,
-    updatedAt: serverTimestamp()
-  }, { merge: true });
-  batch.set(llmRef, {
-    enabled: false,
-    providerType: "openai_compatible",
-    model: "gpt-4.1-mini",
-    baseUrl: "https://api.openai.com/v1",
-    promptProfile: "default_inventory",
-    temperature: 0.2,
-    maxTokens: 400
-  });
-  await batch.commit();
-
-  return householdId;
+  bootstrapRequestsByUid.set(user.uid, request);
+  return request;
 }
 
 export function useHouseholdBootstrap(user: User | null) {
@@ -89,6 +58,35 @@ export function useHouseholdBootstrap(user: User | null) {
     return () => {
       cancelled = true;
     };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || !db) return;
+
+    const userRef = doc(db, "users", user.uid);
+    return onSnapshot(userRef, (snap) => {
+      if (!snap.exists()) return;
+
+      const currentHouseholdId = (snap.data().currentHouseholdId as string | null | undefined) ?? null;
+      const removedFromHouseholdAt = snap.data().removedFromHouseholdAt;
+
+      if (!currentHouseholdId && removedFromHouseholdAt) {
+        setState({
+          householdId: null,
+          loading: false,
+          error: "You no longer have access to this household. Ask an owner to invite you again."
+        });
+        return;
+      }
+
+      if (currentHouseholdId) {
+        setState((prev) =>
+          prev.householdId === currentHouseholdId && prev.error === null && !prev.loading
+            ? prev
+            : { householdId: currentHouseholdId, loading: false, error: null }
+        );
+      }
+    });
   }, [user]);
 
   return state;

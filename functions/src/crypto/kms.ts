@@ -2,9 +2,16 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { KeyManagementServiceClient } from "@google-cloud/kms";
 
 const kmsKeyName = process.env.KMS_KEY_NAME;
-const localKeySeed = process.env.LOCAL_SECRET_ENCRYPTION_KEY ?? "stow-local-dev-only-change-me";
-const localKey = createHash("sha256").update(localKeySeed).digest();
+const localKeySeed = process.env.LOCAL_SECRET_ENCRYPTION_KEY;
+const usingFunctionsEmulator = process.env.FUNCTIONS_EMULATOR === "true";
+const localKey = createHash("sha256").update(localKeySeed ?? "stow-local-dev-only-change-me").digest();
 const kmsClient = kmsKeyName ? new KeyManagementServiceClient() : null;
+
+function requireLocalEncryptionKey() {
+  if (localKeySeed) return;
+  if (usingFunctionsEmulator) return;
+  throw new Error("Local secret encryption is not configured. Set KMS_KEY_NAME or LOCAL_SECRET_ENCRYPTION_KEY.");
+}
 
 export async function encryptSecret(plaintext: string): Promise<string> {
   if (kmsClient && kmsKeyName) {
@@ -16,6 +23,7 @@ export async function encryptSecret(plaintext: string): Promise<string> {
     return `kms:${Buffer.from(result.ciphertext).toString("base64")}`;
   }
 
+  requireLocalEncryptionKey();
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", localKey, iv);
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
@@ -36,6 +44,7 @@ export async function decryptSecret(ciphertextEnvelope: string): Promise<string>
   }
 
   if (!ciphertextEnvelope.startsWith("local:")) throw new Error("Unknown secret envelope format");
+  requireLocalEncryptionKey();
   const [, ivB64, tagB64, dataB64] = ciphertextEnvelope.split(":");
   const decipher = createDecipheriv("aes-256-gcm", localKey, Buffer.from(ivB64, "base64"));
   decipher.setAuthTag(Buffer.from(tagB64, "base64"));

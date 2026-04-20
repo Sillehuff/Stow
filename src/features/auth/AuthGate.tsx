@@ -1,7 +1,15 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
+import { useFirebaseEmulators } from "@/config/env";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
-import { sendEmailLink, signInWithGoogle } from "@/lib/firebase/auth";
+import {
+  EMULATOR_QA_PASSWORD,
+  EMULATOR_QA_USERS,
+  sendEmailLink,
+  signInAnonymouslyUser,
+  signInWithEmailPassword,
+  signInWithGoogle
+} from "@/lib/firebase/auth";
 import { toLoggedUserErrorMessage } from "@/lib/firebase/errors";
 import { useAuthContext } from "@/features/auth/AuthProvider";
 
@@ -18,7 +26,7 @@ export function AuthGate({
 }) {
   const { user, loading } = useAuthContext();
   const [email, setEmail] = useState("");
-  const [pending, setPending] = useState<null | "google" | "email">(null);
+  const [pending, setPending] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,32 +84,87 @@ export function AuthGate({
         >
           {pending === "google" ? "Signing in…" : "Continue with Google"}
         </button>
+        {useFirebaseEmulators ? (
+          <div className="emulator-auth stack-sm">
+            <div className="section-title">Emulator test access</div>
+            <p className="muted">
+              Use the seeded QA accounts from `npm run seed:qa` or create a fresh anonymous tester while running local emulators.
+            </p>
+            <div className="emulator-auth-actions">
+              {EMULATOR_QA_USERS.map((qaUser) => (
+                <button
+                  key={qaUser.email}
+                  type="button"
+                  className="btn"
+                  disabled={pending !== null}
+                  onClick={async () => {
+                    setError(null);
+                    setMessage(null);
+                    setPending(qaUser.email);
+                    try {
+                      await signInWithEmailPassword(qaUser.email, EMULATOR_QA_PASSWORD);
+                    } catch (err) {
+                      setError(toLoggedUserErrorMessage(err, `Failed to sign in as ${qaUser.label}`));
+                    } finally {
+                      setPending(null);
+                    }
+                  }}
+                >
+                  {pending === qaUser.email ? `Opening ${qaUser.label}…` : qaUser.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="btn"
+                disabled={pending !== null}
+                onClick={async () => {
+                  setError(null);
+                  setMessage(null);
+                  setPending("anonymous");
+                  try {
+                    await signInAnonymouslyUser();
+                  } catch (err) {
+                    setError(toLoggedUserErrorMessage(err, "Failed to create a fresh emulator tester"));
+                  } finally {
+                    setPending(null);
+                  }
+                }}
+              >
+                {pending === "anonymous" ? "Starting fresh tester…" : "Fresh Tester"}
+              </button>
+            </div>
+          </div>
+        ) : null}
         <div className="divider">or</div>
         <form
           onSubmit={async (event) => {
             event.preventDefault();
-            setError(null);
-            setMessage(null);
-            setPending("email");
-            try {
-              await sendEmailLink(email.trim());
-              setMessage(`Sign-in link sent to ${email.trim()}`);
-            } catch (err) {
-              setError(toLoggedUserErrorMessage(err, "Failed to send email link"));
+              setError(null);
+              setMessage(null);
+              setPending("email");
+              try {
+                const continuePath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+                await sendEmailLink(email.trim(), continuePath);
+                setMessage(`Sign-in link sent to ${email.trim()}`);
+              } catch (err) {
+                setError(toLoggedUserErrorMessage(err, "Failed to send email link"));
             } finally {
               setPending(null);
             }
           }}
           className="stack"
         >
-          <input
-            className="input"
-            type="email"
-            required
-            placeholder="you@example.com"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
+          <label className="field">
+            <span>Email address</span>
+            <input
+              className="input"
+              type="email"
+              required
+              placeholder="you@example.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </label>
           <button className="btn" disabled={pending !== null || !email.trim()}>
             {pending === "email" ? "Sending…" : "Email Me a Sign-In Link"}
           </button>

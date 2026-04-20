@@ -10,6 +10,10 @@ type CollectionState<T> = {
   hasPendingWrites: boolean;
 };
 
+type StoredItem = Item & {
+  deletedAt?: Item["updatedAt"] | null;
+};
+
 function emptyState<T>(): CollectionState<T> {
   return { items: [], fromCache: true, hasPendingWrites: false };
 }
@@ -56,7 +60,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
   const [household, setHousehold] = useState<Household | null>(null);
   const [spacesState, setSpacesState] = useState<CollectionState<Space>>(emptyState());
   const [areasState, setAreasState] = useState<CollectionState<Area>>(emptyState());
-  const [itemsState, setItemsState] = useState<CollectionState<Item>>(emptyState());
+  const [itemsState, setItemsState] = useState<CollectionState<StoredItem>>(emptyState());
   const [membersState, setMembersState] = useState<CollectionState<HouseholdMember>>(emptyState());
   const [invitesState, setInvitesState] = useState<CollectionState<HouseholdInvite>>(emptyState());
   const [packingListsState, setPackingListsState] = useState<CollectionState<PackingList>>(emptyState());
@@ -147,7 +151,14 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
   }, [householdId]);
 
   useEffect(() => {
-    if (!householdId) return;
+    if (!householdId || !user?.uid) return;
+    const currentUserRole = membersState.items.find((member) => member.uid === user.uid)?.role;
+    if (currentUserRole !== "OWNER" && currentUserRole !== "ADMIN") {
+      setInvitesState(emptyState());
+      setSourceError("invites", null);
+      return;
+    }
+
     const unsub = inventoryRepository.subscribeInvites(
       householdId,
       (state) => {
@@ -157,7 +168,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
       (e) => setSourceError("invites", e.message)
     );
     return () => unsub();
-  }, [householdId]);
+  }, [householdId, membersState.items, user?.uid]);
 
   useEffect(() => {
     if (!householdId) return;
@@ -222,6 +233,15 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     [areasState, invitesState, itemsState, llmConfigMeta, membersState, packingListsState, spacesState]
   );
 
+  const activeItems = useMemo(
+    () => itemsState.items.filter((item) => !item.deletedAt) as Item[],
+    [itemsState.items]
+  );
+  const pendingDeletedItems = useMemo(
+    () => itemsState.items.filter((item) => Boolean(item.deletedAt)) as Item[],
+    [itemsState.items]
+  );
+
   const actions: WorkspaceActions = useMemo(
     () => ({
       updateHousehold: inventoryRepository.updateHousehold,
@@ -251,7 +271,8 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     household,
     spaces: spacesWithAreas,
     areas: areasState.items,
-    items: itemsState.items,
+    items: activeItems,
+    pendingDeletedItems,
     members: membersState.items,
     invites: invitesState.items,
     packingLists: packingListsState.items,

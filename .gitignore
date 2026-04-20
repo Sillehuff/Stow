@@ -9,6 +9,7 @@ dist
 /functions/node_modules
 /functions/lib
 /coverage
+/output/playwright
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts

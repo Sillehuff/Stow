@@ -22,12 +22,119 @@ export async function createHouseholdInvite(input: {
   householdId: string;
   role: Role;
   expiresInHours?: number;
+  replaceInviteId?: string;
 }): Promise<{ inviteId: string; inviteUrl: string; expiresAt: string }> {
   return callFunction<typeof input, { inviteId: string; inviteUrl: string; expiresAt: string }>("createHouseholdInvite", input);
 }
 
+export async function bootstrapHousehold(): Promise<{ householdId: string }> {
+  return callFunction<Record<string, never>, { householdId: string }>("bootstrapHousehold", {});
+}
+
 export async function acceptHouseholdInvite(input: { householdId: string; token: string }): Promise<void> {
   await callFunction<typeof input, { ok: true }>("acceptHouseholdInvite", input);
+}
+
+export async function revokeHouseholdInvite(input: {
+  householdId: string;
+  inviteId: string;
+}): Promise<void> {
+  await callFunction<typeof input, { ok: true }>("revokeHouseholdInvite", input);
+}
+
+export async function updateHouseholdMemberRole(input: {
+  householdId: string;
+  uid: string;
+  role: Role;
+}): Promise<void> {
+  await callFunction<typeof input, { ok: true }>("updateHouseholdMemberRole", input);
+}
+
+export async function removeHouseholdMember(input: {
+  householdId: string;
+  uid: string;
+}): Promise<void> {
+  await callFunction<typeof input, { ok: true }>("removeHouseholdMember", input);
+}
+
+export async function deleteHouseholdArea(input: {
+  householdId: string;
+  spaceId: string;
+  areaId: string;
+  reassignTo?: { spaceId: string; areaId: string };
+}): Promise<void> {
+  await callFunction<typeof input, { ok: true }>("deleteHouseholdArea", input);
+}
+
+export async function deleteHouseholdSpace(input: {
+  householdId: string;
+  spaceId: string;
+  reassignTo?: { spaceId: string; areaId: string };
+}): Promise<void> {
+  await callFunction<typeof input, { ok: true }>("deleteHouseholdSpace", input);
+}
+
+export async function deleteHouseholdItem(input: {
+  householdId: string;
+  itemId: string;
+}): Promise<void> {
+  await callFunction<typeof input, { ok: true }>("deleteHouseholdItem", input);
+}
+
+export async function createHouseholdPackingList(input: {
+  householdId: string;
+  name: string;
+  itemIds: string[];
+}): Promise<{ listId: string }> {
+  return callFunction<typeof input, { ok: true; listId: string }>("createHouseholdPackingList", input);
+}
+
+export async function updateHouseholdPackingList(input: {
+  householdId: string;
+  listId: string;
+  patch: {
+    name?: string;
+    itemIds?: string[];
+    packedItemIds?: string[];
+  };
+}): Promise<void> {
+  await callFunction<
+    {
+      householdId: string;
+      listId: string;
+      name?: string;
+      itemIds?: string[];
+      packedItemIds?: string[];
+    },
+    { ok: true }
+  >("updateHouseholdPackingList", {
+    householdId: input.householdId,
+    listId: input.listId,
+    ...input.patch
+  });
+}
+
+export async function deleteHouseholdPackingList(input: {
+  householdId: string;
+  listId: string;
+}): Promise<void> {
+  await callFunction<typeof input, { ok: true }>("deleteHouseholdPackingList", input);
+}
+
+export async function toggleHouseholdPackingListItem(input: {
+  householdId: string;
+  listId: string;
+  itemId: string;
+  packed: boolean;
+}): Promise<void> {
+  await callFunction<typeof input, { ok: true }>("toggleHouseholdPackingListItem", input);
+}
+
+export async function clearHouseholdPackingListPacked(input: {
+  householdId: string;
+  listId: string;
+}): Promise<void> {
+  await callFunction<typeof input, { ok: true }>("clearHouseholdPackingListPacked", input);
 }
 
 export async function saveHouseholdLlmConfig(input: {

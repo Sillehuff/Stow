@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AuthGate } from "@/features/auth/AuthGate";
 import { useAuthContext } from "@/features/auth/AuthProvider";
+import { signOutUser } from "@/lib/firebase/auth";
 import { toLoggedUserErrorMessage } from "@/lib/firebase/errors";
 import { acceptHouseholdInvite } from "@/lib/firebase/functions";
 
@@ -28,6 +29,10 @@ export default function AcceptInvitePage() {
     status: missingParams ? "error" : "idle",
     message: missingParams ? "This invite link is missing information. Ask for a new invite link." : ""
   });
+  const showSwitchAccountAction =
+    Boolean(user) &&
+    state.status === "error" &&
+    /different account|already belongs to another household/i.test(state.message);
 
   return (
     <AuthGate
@@ -76,9 +81,19 @@ export default function AcceptInvitePage() {
             >
               {state.status === "working" ? "Accepting…" : "Accept Invite"}
             </button>
-            <button className="btn" onClick={() => navigate("/", { replace: true })}>
+            <button className="btn" disabled={state.status === "working"} onClick={() => navigate("/", { replace: true })}>
               Cancel
             </button>
+            {showSwitchAccountAction ? (
+              <button
+                className="btn"
+                onClick={() => {
+                  void signOutUser();
+                }}
+              >
+                Sign Out and Use Another Account
+              </button>
+            ) : null}
             {state.status === "success" ? (
               <button className="btn primary" onClick={() => navigate("/", { replace: true })}>
                 Go to Household

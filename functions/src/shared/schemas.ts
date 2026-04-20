@@ -22,12 +22,91 @@ export type HouseholdLlmConfig = z.infer<typeof llmConfigSchema>;
 export const createInviteInputSchema = z.object({
   householdId: z.string().min(1),
   role: roleSchema.refine((r) => r !== "OWNER", "Owner invites are not supported via link"),
-  expiresInHours: z.number().int().min(1).max(24 * 14).optional()
+  expiresInHours: z.number().int().min(1).max(24 * 14).optional(),
+  replaceInviteId: z.string().min(1).optional()
+});
+
+export const revokeInviteInputSchema = z.object({
+  householdId: z.string().min(1),
+  inviteId: z.string().min(1)
 });
 
 export const acceptInviteInputSchema = z.object({
   householdId: z.string().min(1),
   token: z.string().min(20)
+});
+
+export const updateMemberRoleInputSchema = z.object({
+  householdId: z.string().min(1),
+  uid: z.string().min(1),
+  role: roleSchema
+});
+
+export const removeHouseholdMemberInputSchema = z.object({
+  householdId: z.string().min(1),
+  uid: z.string().min(1)
+});
+
+const deleteDestinationSchema = z.object({
+  spaceId: z.string().min(1),
+  areaId: z.string().min(1)
+});
+
+export const deleteAreaInputSchema = z.object({
+  householdId: z.string().min(1),
+  spaceId: z.string().min(1),
+  areaId: z.string().min(1),
+  reassignTo: deleteDestinationSchema.optional()
+});
+
+export const deleteSpaceInputSchema = z.object({
+  householdId: z.string().min(1),
+  spaceId: z.string().min(1),
+  reassignTo: deleteDestinationSchema.optional()
+});
+
+export const deleteItemInputSchema = z.object({
+  householdId: z.string().min(1),
+  itemId: z.string().min(1)
+});
+
+const packingListNameSchema = z.string().trim().min(1);
+const packingListItemIdsSchema = z.array(z.string().min(1));
+
+export const createPackingListInputSchema = z.object({
+  householdId: z.string().min(1),
+  name: packingListNameSchema,
+  itemIds: packingListItemIdsSchema
+});
+
+export const updatePackingListInputSchema = z
+  .object({
+    householdId: z.string().min(1),
+    listId: z.string().min(1),
+    name: packingListNameSchema.optional(),
+    itemIds: packingListItemIdsSchema.optional(),
+    packedItemIds: packingListItemIdsSchema.optional()
+  })
+  .refine(
+    (value) => value.name !== undefined || value.itemIds !== undefined || value.packedItemIds !== undefined,
+    "Provide at least one packing list field to update"
+  );
+
+export const deletePackingListInputSchema = z.object({
+  householdId: z.string().min(1),
+  listId: z.string().min(1)
+});
+
+export const togglePackingListItemInputSchema = z.object({
+  householdId: z.string().min(1),
+  listId: z.string().min(1),
+  itemId: z.string().min(1),
+  packed: z.boolean()
+});
+
+export const clearPackingListPackedInputSchema = z.object({
+  householdId: z.string().min(1),
+  listId: z.string().min(1)
 });
 
 export const saveLlmConfigInputSchema = z.object({
@@ -44,15 +123,10 @@ export const validateLlmConfigInputSchema = z.object({
   householdId: z.string().min(1)
 });
 
-export const visionImageRefSchema = z.union([
-  z.object({
-    storagePath: z.string().min(1),
-    downloadUrl: z.string().url().optional()
-  }),
-  z.object({
-    imageUrl: z.string().url()
-  })
-]);
+export const visionImageRefSchema = z.object({
+  storagePath: z.string().min(1),
+  downloadUrl: z.string().url().optional()
+});
 
 export const visionCategorizeInputSchema = z.object({
   householdId: z.string().min(1),

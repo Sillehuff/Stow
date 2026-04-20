@@ -10,8 +10,15 @@ service firebase.storage {
         firestore.exists(/databases/(default)/documents/households/$(householdId)/members/$(request.auth.uid));
     }
 
+    function isValidImageWrite() {
+      return request.resource != null
+        && request.resource.size <= 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
     match /households/{householdId}/{allPaths=**} {
-      allow read, write: if isMember(householdId);
+      allow read: if isMember(householdId);
+      allow write: if isMember(householdId) && (request.resource == null || isValidImageWrite());
     }
   }
 }

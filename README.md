@@ -27,7 +27,7 @@ Production-oriented rebuild scaffold for the original `stow-v3.jsx` prototype wi
 - Dependency installation and build verification in this environment
 - End-to-end emulator runs
 - Real provider credential testing (LLM validation/categorization)
-- Security-rule emulator tests (scenarios are planned; harness not fully implemented yet)
+- Broader security-rule coverage beyond the first emulator harness
 - UI parity refinements vs the original prototype visuals
 
 ## Quick Start
@@ -45,17 +45,64 @@ npm --prefix functions install
 cp .env.example .env.local
 ```
 
+If you are testing locally against emulators, set:
+
+```bash
+VITE_USE_FIREBASE_EMULATORS=true
+```
+
 3. Start Firebase emulators (from repo root):
 
 ```bash
-firebase emulators:start
+npm run emulators:start
 ```
 
-4. In another terminal, run the frontend:
+4. In another terminal, run the frontend with emulator mode enabled:
 
 ```bash
+VITE_USE_FIREBASE_EMULATORS=true \
 npm run dev
 ```
+
+## Verification
+
+Core verification commands:
+
+```bash
+npm run verify:local
+npm run verify:emulator
+npm run verify
+```
+
+- `verify:local` runs typecheck, frontend tests, functions tests, both builds.
+- `verify:emulator` starts the Firebase emulators with the repo-installed Firebase CLI, runs the rules suite against the shared QA project, seeds repeatable QA data, and exercises an auth-plus-callable invite smoke path. A local JRE/JDK is required for Firestore and Storage emulators.
+- `verify` runs both.
+
+## QA Seeding
+
+To seed the deterministic QA fixture set used by the pre-launch audit:
+
+```bash
+npm run seed:qa
+```
+
+This creates a `qa-household`, seeded spaces/items/packing data, a reusable invite token, and three emulator-only QA accounts:
+
+- `qa-owner@example.com`
+- `qa-admin@example.com`
+- `qa-member@example.com`
+
+The shared password is printed by the seed script and is only meant for local emulator use.
+
+For long-lived manual QA sessions, keep the emulators up in one terminal and the app in another:
+
+```bash
+npm run emulators:start
+VITE_USE_FIREBASE_EMULATORS=true \\
+npm run dev -- --host 127.0.0.1
+```
+
+When `VITE_USE_FIREBASE_EMULATORS=true`, the auth screen also exposes emulator-only quick access buttons for those accounts plus a `Fresh Tester` path for anonymous smoke testing.
 
 ## Demo Seeding
 
@@ -68,6 +115,27 @@ npm run seed:demo -- --uid demo-owner --name "Demo Household"
 Optional:
 
 - `--household <id>` to force a specific household ID
+
+## Playwright Session Entry Point
+
+For repeatable browser audit sessions using the local Playwright CLI wrapper:
+
+```bash
+npm run e2e:open
+npm run e2e:snapshot
+npm run e2e:screenshot
+npm run e2e:console
+npm run e2e:close
+```
+
+These commands expect the local dev server to be running at `http://127.0.0.1:5173` unless `BASE_URL` is overridden.
+
+## Audit Docs
+
+Launch-audit coordination lives in:
+
+- [docs/prelaunch-audit-runbook.md](/Users/ellishuff/.codex/worktrees/9cfc/Stow/docs/prelaunch-audit-runbook.md)
+- [docs/prelaunch-audit-ledger.md](/Users/ellishuff/.codex/worktrees/9cfc/Stow/docs/prelaunch-audit-ledger.md)
 
 ## Functions Secret Encryption
 

@@ -9,8 +9,10 @@ import {
   connectAuthEmulator,
   getAuth,
   GoogleAuthProvider,
+  initializeAuth,
+  inMemoryPersistence,
   browserLocalPersistence,
-  setPersistence
+  type Auth
 } from "firebase/auth";
 import type { Functions } from "firebase/functions";
 import type { FirebaseStorage } from "firebase/storage";
@@ -28,7 +30,18 @@ export const db = app
     })
   : null;
 
-export const auth = app ? getAuth(app) : null;
+function initializeAuthClient(): Auth | null {
+  if (!app) return null;
+  try {
+    return initializeAuth(app, {
+      persistence: [browserLocalPersistence, inMemoryPersistence]
+    });
+  } catch {
+    return getAuth(app);
+  }
+}
+
+export const auth = initializeAuthClient();
 export const googleProvider = new GoogleAuthProvider();
 
 let emulatorsConnected = false;
@@ -37,8 +50,6 @@ let storageClientPromise: Promise<FirebaseStorage | null> | null = null;
 
 export async function initializeFirebaseClient(): Promise<void> {
   if (!app || !auth) return;
-
-  await setPersistence(auth, browserLocalPersistence);
 
   if (useFirebaseEmulators && !emulatorsConnected) {
     if (db) connectFirestoreEmulator(db, "127.0.0.1", 8080);

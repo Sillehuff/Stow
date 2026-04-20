@@ -1,12 +1,8 @@
 import {
   addDoc,
-  arrayRemove,
   arrayUnion,
   collection,
-  collectionGroup,
-  deleteDoc,
   doc,
-  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -21,6 +17,19 @@ import {
 import type { Unsubscribe } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { householdPaths } from "@/lib/firebase/paths";
+import {
+  clearHouseholdPackingListPacked,
+  createHouseholdPackingList,
+  deleteHouseholdArea,
+  deleteHouseholdItem,
+  deleteHouseholdPackingList,
+  deleteHouseholdSpace,
+  removeHouseholdMember,
+  revokeHouseholdInvite,
+  toggleHouseholdPackingListItem,
+  updateHouseholdPackingList,
+  updateHouseholdMemberRole
+} from "@/lib/firebase/functions";
 import type { Area, Household, HouseholdInvite, HouseholdMember, ImageRef, Item, PackingList, Space } from "@/types/domain";
 import type { HouseholdLlmConfig } from "@/types/llm";
 
@@ -28,6 +37,10 @@ export type SnapshotState<T> = {
   data: T[];
   fromCache: boolean;
   hasPendingWrites: boolean;
+};
+
+type StoredItem = Item & {
+  deletedAt?: Item["updatedAt"] | null;
 };
 
 function mapDoc<T>(snap: { id: string; data(): DocumentData }): T & { id: string } {
@@ -45,6 +58,10 @@ function mapSnapshot<T>(snap: QuerySnapshot<DocumentData>): SnapshotState<T> {
 function requireDb() {
   if (!db) throw new Error("Firestore is not configured");
   return db;
+}
+
+function omitUndefinedFields<T extends Record<string, unknown>>(value: T): Partial<T> {
+  return Object.fromEntries(Object.entries(value).filter(([, candidate]) => candidate !== undefined)) as Partial<T>;
 }
 
 export const inventoryRepository = {
@@ -71,17 +88,81 @@ export const inventoryRepository = {
   },
 
   subscribeAreas(householdId: string, onData: (state: SnapshotState<Area>) => void, onError: (e: Error) => void): Unsubscribe {
-    const q = query(
-      collectionGroup(requireDb(), "areas"),
-      where("householdId", "==", householdId),
-      orderBy("name")
+    const database = requireDb();
+    const areaStates = new Map<string, SnapshotState<Area>>();
+    const areaUnsubs = new Map<string, Unsubscribe>();
+    let spacesFromCache = true;
+    let spacesHasPendingWrites = false;
+
+    const emit = () => {
+      const snapshots = Array.from(areaStates.values());
+      onData({
+        data: snapshots.flatMap((state) => state.data).sort((a, b) => a.name.localeCompare(b.name)),
+        fromCache: spacesFromCache || snapshots.some((state) => state.fromCache),
+        hasPendingWrites: spacesHasPendingWrites || snapshots.some((state) => state.hasPendingWrites)
+      });
+    };
+
+    const spacesQuery = query(collection(database, householdPaths.spaces(householdId)), orderBy("name"));
+    const spacesUnsub = onSnapshot(
+      spacesQuery,
+      (spacesSnap) => {
+        spacesFromCache = spacesSnap.metadata.fromCache;
+        spacesHasPendingWrites = spacesSnap.metadata.hasPendingWrites;
+        const nextSpaceIds = new Set(spacesSnap.docs.map((spaceDoc) => spaceDoc.id));
+
+        for (const [spaceId, unsub] of areaUnsubs.entries()) {
+          if (nextSpaceIds.has(spaceId)) continue;
+          unsub();
+          areaUnsubs.delete(spaceId);
+          areaStates.delete(spaceId);
+        }
+
+        for (const spaceDoc of spacesSnap.docs) {
+          const spaceId = spaceDoc.id;
+          if (areaUnsubs.has(spaceId)) continue;
+
+          const areasQuery = query(collection(database, householdPaths.areas(householdId, spaceId)), orderBy("name"));
+          const unsub = onSnapshot(
+            areasQuery,
+            (areasSnap) => {
+              areaStates.set(spaceId, mapSnapshot<Area>(areasSnap));
+              emit();
+            },
+            onError
+          );
+          areaUnsubs.set(spaceId, unsub);
+        }
+
+        emit();
+      },
+      onError
     );
-    return onSnapshot(q, (snap) => onData(mapSnapshot<Area>(snap)), onError);
+
+    return () => {
+      spacesUnsub();
+      for (const unsub of areaUnsubs.values()) {
+        unsub();
+      }
+    };
   },
 
-  subscribeItems(householdId: string, onData: (state: SnapshotState<Item>) => void, onError: (e: Error) => void): Unsubscribe {
+  subscribeItems(
+    householdId: string,
+    onData: (state: SnapshotState<StoredItem>) => void,
+    onError: (e: Error) => void
+  ): Unsubscribe {
     const q = query(collection(requireDb(), householdPaths.items(householdId)), orderBy("updatedAt", "desc"));
-    return onSnapshot(q, (snap) => onData(mapSnapshot<Item>(snap)), onError);
+    return onSnapshot(
+      q,
+      (snap) =>
+        onData({
+          data: snap.docs.map((docSnap) => mapDoc<StoredItem>(docSnap)),
+          fromCache: snap.metadata.fromCache,
+          hasPendingWrites: snap.metadata.hasPendingWrites
+        }),
+      onError
+    );
   },
 
   subscribeMembers(
@@ -90,7 +171,16 @@ export const inventoryRepository = {
     onError: (e: Error) => void
   ): Unsubscribe {
     const q = query(collection(requireDb(), householdPaths.members(householdId)), orderBy("createdAt", "asc"));
-    return onSnapshot(q, (snap) => onData(mapSnapshot<HouseholdMember>(snap)), onError);
+    return onSnapshot(
+      q,
+      (snap) =>
+        onData({
+          data: snap.docs.map((docSnap) => ({ uid: docSnap.id, ...(docSnap.data() as Omit<HouseholdMember, "uid">) })),
+          fromCache: snap.metadata.fromCache,
+          hasPendingWrites: snap.metadata.hasPendingWrites
+        }),
+      onError
+    );
   },
 
   subscribeInvites(
@@ -205,34 +295,14 @@ export const inventoryRepository = {
     reassignTo?: { spaceId: string; areaId: string; areaNameSnapshot: string };
     userId: string;
   }) {
-    const database = requireDb();
-    const itemsSnap = await getDocs(
-      query(
-        collection(database, householdPaths.items(input.householdId)),
-        where("spaceId", "==", input.spaceId),
-        where("areaId", "==", input.areaId)
-      )
-    );
-
-    if (!itemsSnap.empty && !input.reassignTo) {
-      throw new Error("Area contains items. Choose a destination first.");
-    }
-
-    const batch = writeBatch(database);
-    if (input.reassignTo) {
-      for (const itemDoc of itemsSnap.docs) {
-        batch.update(itemDoc.ref, {
-          spaceId: input.reassignTo.spaceId,
-          areaId: input.reassignTo.areaId,
-          areaNameSnapshot: input.reassignTo.areaNameSnapshot,
-          updatedAt: serverTimestamp(),
-          updatedBy: input.userId
-        });
-      }
-    }
-
-    batch.delete(doc(database, householdPaths.area(input.householdId, input.spaceId, input.areaId)));
-    await batch.commit();
+    await deleteHouseholdArea({
+      householdId: input.householdId,
+      spaceId: input.spaceId,
+      areaId: input.areaId,
+      reassignTo: input.reassignTo
+        ? { spaceId: input.reassignTo.spaceId, areaId: input.reassignTo.areaId }
+        : undefined
+    });
   },
 
   async deleteSpace(input: {
@@ -241,34 +311,13 @@ export const inventoryRepository = {
     userId: string;
     reassignTo?: { spaceId: string; areaId: string; areaNameSnapshot: string };
   }) {
-    const database = requireDb();
-    const [itemsSnap, areasSnap] = await Promise.all([
-      getDocs(query(collection(database, householdPaths.items(input.householdId)), where("spaceId", "==", input.spaceId))),
-      getDocs(collection(database, householdPaths.areas(input.householdId, input.spaceId)))
-    ]);
-
-    if (!itemsSnap.empty && !input.reassignTo) {
-      throw new Error("Space contains items. Choose a destination space/area first.");
-    }
-
-    const batch = writeBatch(database);
-    if (input.reassignTo) {
-      for (const itemDoc of itemsSnap.docs) {
-        batch.update(itemDoc.ref, {
-          spaceId: input.reassignTo.spaceId,
-          areaId: input.reassignTo.areaId,
-          areaNameSnapshot: input.reassignTo.areaNameSnapshot,
-          updatedAt: serverTimestamp(),
-          updatedBy: input.userId
-        });
-      }
-    }
-
-    for (const areaDoc of areasSnap.docs) {
-      batch.delete(areaDoc.ref);
-    }
-    batch.delete(doc(database, householdPaths.space(input.householdId, input.spaceId)));
-    await batch.commit();
+    await deleteHouseholdSpace({
+      householdId: input.householdId,
+      spaceId: input.spaceId,
+      reassignTo: input.reassignTo
+        ? { spaceId: input.reassignTo.spaceId, areaId: input.reassignTo.areaId }
+        : undefined
+    });
   },
 
   async createItem(input: {
@@ -313,13 +362,18 @@ export const inventoryRepository = {
     itemId: string;
     userId: string;
     patch: Partial<
-      Pick<Item, "name" | "notes" | "value" | "tags" | "isPacked" | "spaceId" | "areaId" | "areaNameSnapshot" | "kind" | "isPriceless">
+      Omit<
+        Pick<Item, "name" | "notes" | "value" | "tags" | "isPacked" | "spaceId" | "areaId" | "areaNameSnapshot" | "kind" | "isPriceless">,
+        "value"
+      >
     > & {
+      value?: number | null;
       image?: ImageRef | null;
     };
   }) {
+    const patch = omitUndefinedFields(input.patch);
     await updateDoc(doc(requireDb(), householdPaths.item(input.householdId, input.itemId)), {
-      ...input.patch,
+      ...patch,
       updatedAt: serverTimestamp(),
       updatedBy: input.userId
     });
@@ -334,22 +388,23 @@ export const inventoryRepository = {
     });
   },
 
-  async deleteItem(input: { householdId: string; itemId: string }) {
-    await deleteDoc(doc(requireDb(), householdPaths.item(input.householdId, input.itemId)));
-  },
-
-  async updateMemberRole(input: { householdId: string; uid: string; role: HouseholdMember["role"] }) {
-    await updateDoc(doc(requireDb(), householdPaths.member(input.householdId, input.uid)), {
-      role: input.role
+  async deleteItem(input: { householdId: string; itemId: string; userId: string }) {
+    await deleteHouseholdItem({
+      householdId: input.householdId,
+      itemId: input.itemId
     });
   },
 
+  async updateMemberRole(input: { householdId: string; uid: string; role: HouseholdMember["role"] }) {
+    await updateHouseholdMemberRole(input);
+  },
+
   async removeMember(input: { householdId: string; uid: string }) {
-    await deleteDoc(doc(requireDb(), householdPaths.member(input.householdId, input.uid)));
+    await removeHouseholdMember(input);
   },
 
   async revokeInvite(input: { householdId: string; inviteId: string }) {
-    await deleteDoc(doc(requireDb(), `${householdPaths.invites(input.householdId)}/${input.inviteId}`));
+    await revokeHouseholdInvite(input);
   },
 
   async addTagToItem(input: { householdId: string; itemId: string; userId: string; tag: string }) {
@@ -381,17 +436,12 @@ export const inventoryRepository = {
     name: string;
     itemIds: string[];
   }) {
-    const ref = await addDoc(collection(requireDb(), householdPaths.packingLists(input.householdId)), {
+    const result = await createHouseholdPackingList({
       householdId: input.householdId,
       name: input.name,
-      itemIds: input.itemIds,
-      packedItemIds: [],
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      createdBy: input.userId,
-      updatedBy: input.userId
+      itemIds: input.itemIds
     });
-    return ref.id;
+    return result.listId;
   },
 
   async updatePackingList(input: {
@@ -400,15 +450,15 @@ export const inventoryRepository = {
     userId: string;
     patch: Partial<Pick<PackingList, "name" | "itemIds" | "packedItemIds">>;
   }) {
-    await updateDoc(doc(requireDb(), householdPaths.packingList(input.householdId, input.listId)), {
-      ...input.patch,
-      updatedAt: serverTimestamp(),
-      updatedBy: input.userId
+    await updateHouseholdPackingList({
+      householdId: input.householdId,
+      listId: input.listId,
+      patch: input.patch
     });
   },
 
   async deletePackingList(input: { householdId: string; listId: string }) {
-    await deleteDoc(doc(requireDb(), householdPaths.packingList(input.householdId, input.listId)));
+    await deleteHouseholdPackingList(input);
   },
 
   async togglePackingListItem(input: {
@@ -418,18 +468,18 @@ export const inventoryRepository = {
     itemId: string;
     packed: boolean;
   }) {
-    await updateDoc(doc(requireDb(), householdPaths.packingList(input.householdId, input.listId)), {
-      packedItemIds: input.packed ? arrayUnion(input.itemId) : arrayRemove(input.itemId),
-      updatedAt: serverTimestamp(),
-      updatedBy: input.userId
+    await toggleHouseholdPackingListItem({
+      householdId: input.householdId,
+      listId: input.listId,
+      itemId: input.itemId,
+      packed: input.packed
     });
   },
 
   async clearPackingListPacked(input: { householdId: string; listId: string; userId: string }) {
-    await updateDoc(doc(requireDb(), householdPaths.packingList(input.householdId, input.listId)), {
-      packedItemIds: [],
-      updatedAt: serverTimestamp(),
-      updatedBy: input.userId
+    await clearHouseholdPackingListPacked({
+      householdId: input.householdId,
+      listId: input.listId
     });
   }
 };

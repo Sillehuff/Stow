@@ -10,10 +10,10 @@ export default function AuthFinishPage() {
 
   useEffect(() => {
     completeEmailLinkSignIn(window.location.href)
-      .then(() => {
+      .then((result) => {
         setStatus("done");
         setMessage("Sign-in complete. Redirecting…");
-        setTimeout(() => navigate("/", { replace: true }), 700);
+        setTimeout(() => navigate(result?.continuePath || "/", { replace: true }), 700);
       })
       .catch((error) => {
         setStatus("error");
