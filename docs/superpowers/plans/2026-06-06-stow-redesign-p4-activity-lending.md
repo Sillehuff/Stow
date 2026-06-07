@@ -131,11 +131,12 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Files:**
 - Create: `src/features/stow/services/normalizeItemStatus.test.ts`
+- Modify: `src/features/stow/services/itemMetadata.ts`
 - Modify: `src/features/stow/services/repository.ts`
 
 > A pure helper `defaultItemStatus` is added to `itemMetadata.ts` so the default rule (`isPacked ? "packed" : "home"`) is unit-testable without Firestore, mirroring the existing `defaultPhotoStatus`/`defaultEntryMode` pattern. `normalizeItemDoc` calls it.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // src/features/stow/services/normalizeItemStatus.test.ts
@@ -164,12 +165,12 @@ describe("defaultItemStatus", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/services/normalizeItemStatus.test.ts`
 Expected: FAIL — `defaultItemStatus` is not exported from `itemMetadata`.
 
-- [ ] **Step 3: Add `defaultItemStatus` to `itemMetadata.ts`**
+- [x] **Step 3: Add `defaultItemStatus` to `itemMetadata.ts`**
 
 In `src/features/stow/services/itemMetadata.ts`, update the type import line and append the helper:
 
@@ -194,7 +195,7 @@ export function defaultItemStatus(input: { status?: unknown; isPacked?: unknown 
 }
 ```
 
-- [ ] **Step 4: Wire `defaultItemStatus` into `normalizeItemDoc`**
+- [x] **Step 4: Wire `defaultItemStatus` into `normalizeItemDoc`**
 
 In `src/features/stow/services/repository.ts`, update the import from `itemMetadata` and the `normalizeItemDoc` return.
 
@@ -233,12 +234,12 @@ function normalizeItemDoc(snap: { id: string; data(): DocumentData }): Item {
 }
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/services/normalizeItemStatus.test.ts`
 Expected: PASS (3 tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/features/stow/services/itemMetadata.ts src/features/stow/services/normalizeItemStatus.test.ts src/features/stow/services/repository.ts

@@ -21,7 +21,7 @@ import {
 import type { Unsubscribe } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { householdPaths } from "@/lib/firebase/paths";
-import { defaultEntryMode, defaultPhotoStatus } from "@/features/stow/services/itemMetadata";
+import { defaultEntryMode, defaultItemStatus, defaultPhotoStatus } from "@/features/stow/services/itemMetadata";
 import {
   removeHouseholdMember as callRemoveHouseholdMember,
   revokeHouseholdInvite as callRevokeHouseholdInvite,
@@ -75,7 +75,8 @@ function normalizeItemDoc(snap: { id: string; data(): DocumentData }): Item {
   const data = snap.data() as Record<string, unknown>;
   return {
     id: snap.id,
-    ...(data as Omit<Item, "id" | "photoStatus" | "entryMode">),
+    ...(data as Omit<Item, "id" | "photoStatus" | "entryMode" | "status">),
+    status: defaultItemStatus({ status: data.status, isPacked: data.isPacked }),
     photoStatus: defaultPhotoStatus({ photoStatus: data.photoStatus, image: data.image }),
     entryMode: defaultEntryMode({ entryMode: data.entryMode, vision: data.vision })
   } as Item;
