@@ -2570,14 +2570,15 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 Add an e2e spec that exercises the capture path **without** a real camera: the file-input fallback. Mock the vision callable so the AI scan is deterministic. This validates `PhotoField` (file pick → upload → `ImageRef`), the single-scan wiring, and `createItem`.
 
 **Files:**
-- Create: `tests/mobile-capture.spec.ts` (match the repo's existing Playwright spec location/style — see `tests/` and `playwright.config.ts`)
+- Create: `tests/smoke/mobile-capture.spec.ts` (match the repo's existing Playwright spec location/style — see `tests/` and `playwright.config.ts`)
+- Create: `tests/smoke/fixtures/sample-item.png`
 
 > **Context for the engineer:** the repo runs Playwright against the app with Firebase emulators (`npm run test:smoke`, `playwright.config.ts`). Follow the existing authenticated-spec setup (auth/bootstrap helpers used by the current smoke spec). The key capture-specific techniques:
 > - **Force the fallback path:** override `navigator.mediaDevices` to be undefined via `page.addInitScript` so `isCameraSupported()` returns false and `PhotoField`/overlays use `<input capture>`.
 > - **Drive the hidden file input:** `setInputFiles` on the `input[type=file]` rendered by `PhotoField` (it is `display:none` but Playwright can still set files on it).
 > - **Mock the vision callable:** intercept the callable HTTP route (`**/visionCategorizeItemImage`) with `page.route` and fulfill a `{ result: { data: { suggestion: {...}, provider: {...}, jobId } } }` body (Firebase callables wrap the response under `result`/`data`).
 
-- [ ] **Step 1: Write the spec**
+- [x] **Step 1: Write the spec**
 
 ```ts
 // tests/mobile-capture.spec.ts
@@ -2649,16 +2650,16 @@ test("add an item via the file-input fallback and AI scan", async ({ page }) => 
 });
 ```
 
-- [ ] **Step 2: Add the fixture image**
+- [x] **Step 2: Add the fixture image**
 
-Create a tiny valid JPEG at `tests/fixtures/sample-item.jpg` (any small real jpg). If the repo already has an image fixture, reuse it and update the path.
+Create a tiny valid image at `tests/smoke/fixtures/sample-item.png`. If the repo already has an image fixture, reuse it and update the path.
 
-- [ ] **Step 3: Run the spec**
+- [x] **Step 3: Run the spec**
 
-Run: `npm run test:smoke -- tests/mobile-capture.spec.ts` (or the repo's documented single-spec invocation; check `package.json` scripts and `playwright.config.ts`).
+Run: `./scripts/with-java.sh firebase emulators:exec --project demo-stow --only auth,firestore,storage "./node_modules/.bin/playwright test tests/smoke/mobile-capture.spec.ts"` (or the repo's documented single-spec invocation; check `package.json` scripts and `playwright.config.ts`).
 Expected: PASS. Iterate selectors to match the implemented markup (prefer `getByRole`/`getByText` over CSS).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tests/mobile-capture.spec.ts tests/fixtures/sample-item.jpg
