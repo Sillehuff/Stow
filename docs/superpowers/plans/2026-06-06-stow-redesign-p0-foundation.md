@@ -704,7 +704,7 @@ git commit -m "feat(mobile): add bottom nav with scan FAB and packed badge"
 **Files:**
 - Create: `src/features/stow/ui/mobile/StowMobileApp.tsx`
 
-- [ ] **Step 1: Write the shell component**
+- [x] **Step 1: Write the shell component**
 
 ```tsx
 // src/features/stow/ui/mobile/StowMobileApp.tsx
@@ -806,12 +806,12 @@ function PlaceholderScreen({
 }
 ```
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS (no errors). If `useWorkspaceData`'s returned `household` is possibly undefined, the `?.name` already guards it.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/StowMobileApp.tsx
