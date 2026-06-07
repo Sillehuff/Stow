@@ -1049,7 +1049,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 > Contract §3 (P4): add a **pure** helper `isActivityPath(pathname, basePath): boolean` and a `goActivity()` navigator; the bell calls `navigate(\`${basePath}/activity\`)` via `goActivity()`. Keep `MobileRoute` shape stable — do **not** add a route field; `StowMobileApp` (Task 8 wiring) checks `isActivityPath` to render `ActivityScreen` as a full-screen routed view.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `src/features/stow/ui/mobile/hooks/useMobileNavigation.test.ts`, add a new `describe` block at the end of the file:
 ```ts
@@ -1074,12 +1074,12 @@ describe("isActivityPath", () => {
 ```
 (If `useMobileNavigation.test.ts` already imports `parseMobileRoute, buildMobilePath` from the module, extend that import to include `isActivityPath` instead of adding a second import line.)
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/ui/mobile/hooks/useMobileNavigation.test.ts`
 Expected: FAIL — `isActivityPath` is not exported.
 
-- [ ] **Step 3: Add `isActivityPath` (pure) + `goActivity` (hook)**
+- [x] **Step 3: Add `isActivityPath` (pure) + `goActivity` (hook)**
 
 In `src/features/stow/ui/mobile/hooks/useMobileNavigation.ts`:
 
@@ -1106,12 +1106,12 @@ export function isActivityPath(pathname: string, basePath = "/app"): boolean {
     openSpace,
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/ui/mobile/hooks/useMobileNavigation.test.ts`
 Expected: PASS (existing nav tests + 3 new `isActivityPath` cases).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/hooks/useMobileNavigation.ts src/features/stow/ui/mobile/hooks/useMobileNavigation.test.ts

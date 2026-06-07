@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMobileRoute, buildMobilePath } from "@/features/stow/ui/mobile/hooks/useMobileNavigation";
+import { parseMobileRoute, buildMobilePath, isActivityPath } from "@/features/stow/ui/mobile/hooks/useMobileNavigation";
 
 const sp = (s = "") => new URLSearchParams(s);
 
@@ -66,5 +66,24 @@ describe("buildMobilePath", () => {
 
   it("collapses the base for cutover", () => {
     expect(buildMobilePath("", { tab: "settings" })).toBe("/settings");
+  });
+});
+
+describe("isActivityPath", () => {
+  it("matches the activity path under the default base", () => {
+    expect(isActivityPath("/app/activity", "/app")).toBe(true);
+    expect(isActivityPath("/app/activity/", "/app")).toBe(true);
+  });
+
+  it("is false for other paths", () => {
+    expect(isActivityPath("/app", "/app")).toBe(false);
+    expect(isActivityPath("/app/search", "/app")).toBe(false);
+    expect(isActivityPath("/app/spaces/s1", "/app")).toBe(false);
+    expect(isActivityPath("/app/items/i1", "/app")).toBe(false);
+  });
+
+  it("is prefix-aware for cutover with an empty base", () => {
+    expect(isActivityPath("/activity", "")).toBe(true);
+    expect(isActivityPath("/", "")).toBe(false);
   });
 });

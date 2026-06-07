@@ -69,6 +69,11 @@ export function parseMobileRoute(
   return { tab: "spaces", spaceId: null, areaId: null, itemId: null };
 }
 
+export function isActivityPath(pathname: string, basePath = "/app"): boolean {
+  const rel = stripBase(pathname, basePath);
+  return rel === "/activity" || rel === "/activity/";
+}
+
 export function buildMobilePath(
   basePath: string,
   route: {
@@ -97,6 +102,11 @@ export function useMobileNavigation(householdId: string, basePath = "/app") {
 
   function navigateToTab(tab: MobileTab) {
     navigate(buildMobilePath(basePath, { tab }));
+  }
+
+  function goActivity() {
+    const b = basePath === "/" ? "" : basePath;
+    navigate(`${b}/activity`);
   }
 
   function openSpace(spaceId: string, areaId?: string | null) {
@@ -133,6 +143,7 @@ export function useMobileNavigation(householdId: string, basePath = "/app") {
     selectedItemId: route.itemId,
     overlay,
     navigateToTab,
+    goActivity,
     openSpace,
     openItem,
     back,
