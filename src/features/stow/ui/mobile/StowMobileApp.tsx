@@ -237,7 +237,14 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
       />
     );
   } else if (nav.tab === "search") {
-    screen = <SearchScreen items={data.items} spaces={data.spaces} onOpenItem={(itemId) => nav.openItem(itemId)} />;
+    screen = (
+      <SearchScreen
+        householdId={householdId}
+        items={data.items}
+        spaces={data.spaces}
+        onOpenItem={(itemId) => nav.openItem(itemId)}
+      />
+    );
   } else if (nav.tab === "packing") {
     screen = (
       <PackingScreen

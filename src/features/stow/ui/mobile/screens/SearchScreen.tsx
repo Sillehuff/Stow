@@ -3,12 +3,15 @@ import type { ReactNode } from "react";
 import type { Item, SpaceWithAreas } from "@/types/domain";
 import { Folder, Inbox, LayoutGrid, List, Search, X } from "@/features/stow/ui/mobile/theme/icons";
 import { cardStyle } from "@/features/stow/ui/mobile/components/Card";
+import { Chip } from "@/features/stow/ui/mobile/components/Chip";
 import { ItemRow } from "@/features/stow/ui/mobile/components/ItemRow";
+import { pushRecentSearch, readRecentSearches } from "@/features/stow/ui/mobile/screens/recentSearches";
 import { matchesPackingItemPickerQuery } from "@/features/stow/ui/packing/pickerSearch";
 
 const VIEW_KEY = "stow:mobile:search-view";
 
 export interface SearchScreenProps {
+  householdId: string;
   items: Item[];
   spaces: SpaceWithAreas[];
   onOpenItem: (itemId: string) => void;
@@ -84,7 +87,7 @@ function Label({ children }: { children: ReactNode }) {
 }
 
 export function SearchScreen(props: SearchScreenProps) {
-  const { items, spaces, onOpenItem } = props;
+  const { householdId, items, spaces, onOpenItem } = props;
   const [query, setQuery] = useState("");
   const [gridView, setGridView] = useState<boolean>(readSavedGridView);
   const trimmedQuery = query.trim();
@@ -98,6 +101,14 @@ export function SearchScreen(props: SearchScreenProps) {
   }, [gridView]);
 
   const { allTags, matched, listToShow } = useMemo(() => getSearchScreenData({ items, spaces, query }), [items, spaces, query]);
+  const recent = useMemo(() => readRecentSearches(householdId), [householdId, query]);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) return;
+    const timer = window.setTimeout(() => pushRecentSearch(householdId, q), 450);
+    return () => window.clearTimeout(timer);
+  }, [householdId, query]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--stow-canvas)" }}>
@@ -201,31 +212,27 @@ export function SearchScreen(props: SearchScreenProps) {
 
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 150px" }}>
         {!trimmedQuery ? (
-          <div style={{ marginBottom: 22 }}>
-            <Label>Popular Tags</Label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {allTags.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => setQuery(tag)}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: 99,
-                    fontSize: 13,
-                    fontWeight: 700,
-                    background: "var(--stow-surface)",
-                    color: "var(--stow-ink-muted)",
-                    border: "1px solid var(--stow-border)",
-                    cursor: "pointer",
-                    fontFamily: "inherit"
-                  }}
-                >
-                  #{tag}
-                </button>
-              ))}
+          <>
+            {recent.length > 0 ? (
+              <div style={{ marginBottom: 22 }}>
+                <Label>Recent</Label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {recent.map((term) => (
+                    <Chip key={term} label={term} onClick={() => setQuery(term)} />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div style={{ marginBottom: 22 }}>
+              <Label>Popular Tags</Label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {allTags.map((tag) => (
+                  <Chip key={tag} label={`#${tag}`} onClick={() => setQuery(tag)} />
+                ))}
+              </div>
             </div>
-          </div>
+          </>
         ) : null}
 
         {trimmedQuery && matched.length === 0 ? (

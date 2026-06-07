@@ -406,7 +406,7 @@ Port the legacy recent-searches behavior into a pure, tested helper and wire it 
 - Test: `src/features/stow/ui/mobile/screens/recentSearches.test.ts`
 - Modify: `src/features/stow/ui/mobile/screens/SearchScreen.tsx`
 
-- [ ] **Step 1: Write the failing test (pure helpers, in-memory storage stub)**
+- [x] **Step 1: Write the failing test (pure helpers, in-memory storage stub)**
 
 ```ts
 // src/features/stow/ui/mobile/screens/recentSearches.test.ts
@@ -475,12 +475,12 @@ describe("recentSearches", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/ui/mobile/screens/recentSearches.test.ts`
 Expected: FAIL — import cannot be resolved.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // src/features/stow/ui/mobile/screens/recentSearches.ts
@@ -542,19 +542,19 @@ export function pushRecentSearch(householdId: string, query: string, storage?: S
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/ui/mobile/screens/recentSearches.test.ts`
 Expected: PASS (6 assertions/blocks).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/screens/recentSearches.ts src/features/stow/ui/mobile/screens/recentSearches.test.ts
 git commit -m "feat(mobile): add persisted recent-searches helper ported from legacy"
 ```
 
-- [ ] **Step 6: Wire recent searches into `SearchScreen`**
+- [x] **Step 6: Wire recent searches into `SearchScreen`**
 
 In `src/features/stow/ui/mobile/screens/SearchScreen.tsx`:
 
@@ -594,11 +594,11 @@ import { readRecentSearches, pushRecentSearch } from "@/features/stow/ui/mobile/
 ```
 Use the existing `Chip` primitive (contract §7) and the screen's existing `query`/`setQuery` state and `householdId` (already passed into `SearchScreen`). If `SearchScreen` does not yet own `query` state locally (e.g. it lifts it), adapt the handlers to the existing state setter — do not introduce a second source of truth.
 
-- [ ] **Step 7: Typecheck + manual smoke**
+- [x] **Step 7: Typecheck + manual smoke**
 
 Run: `npm run typecheck`. Then `npm run dev`, open `/app/search`, type a few searches (≥2 chars), return to the idle Search screen → the "Recent" chips show your terms newest-first; tapping one refills the query. Confirm history written by legacy `/spaces` (same key) also appears, proving carry-over.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/screens/SearchScreen.tsx
