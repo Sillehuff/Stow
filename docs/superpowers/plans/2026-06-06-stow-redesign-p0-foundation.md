@@ -25,7 +25,7 @@
 - Create: `src/features/stow/ui/mobile/theme/palette.ts`
 - Test: `src/features/stow/ui/mobile/theme/palette.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // src/features/stow/ui/mobile/theme/palette.test.ts
@@ -65,12 +65,12 @@ describe("makePalette", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/ui/mobile/theme/palette.test.ts`
 Expected: FAIL — "Failed to resolve import" / `makePalette is not a function`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // src/features/stow/ui/mobile/theme/palette.ts
@@ -144,12 +144,12 @@ export function applyPalette(el: HTMLElement, palette: Palette): void {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/ui/mobile/theme/palette.test.ts`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/theme/palette.ts src/features/stow/ui/mobile/theme/palette.test.ts
