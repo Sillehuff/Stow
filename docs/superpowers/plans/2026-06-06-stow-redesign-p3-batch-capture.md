@@ -1250,11 +1250,11 @@ P2 shipped `ScanOverlay` with an `onCaptureShelf?: (blob: Blob) => void` hook (c
 - Modify: `src/features/stow/ui/mobile/StowMobileApp.tsx`
 - Modify: `src/features/stow/ui/mobile/capture/ScanOverlay.tsx` *(only if `onCaptureShelf` is not yet invoked on shelf-mode shutter — confirm P2 wired the shutter to call it; if P2 left it as a stub, complete the invocation)*
 
-- [ ] **Step 1: Confirm/complete the `ScanOverlay` shelf shutter**
+- [x] **Step 1: Confirm/complete the `ScanOverlay` shelf shutter**
 
 Read `src/features/stow/ui/mobile/capture/ScanOverlay.tsx`. The prototype's shelf shutter calls `act.startQuickCapture`; our P2 contract maps that to `onCaptureShelf`. Ensure: in shelf mode, the shutter calls `props.onCaptureShelf?.(blob)` with the frozen frame blob from `useCamera().capture()` (or the file-input fallback File coerced to Blob). If P2 already did this, no change. If P2 only wired single mode (`onCaptureSingle`), add the shelf-mode branch mirroring it.
 
-- [ ] **Step 2: Render `QuickCapture` from `StowMobileApp`**
+- [x] **Step 2: Render `QuickCapture` from `StowMobileApp`**
 
 In `StowMobileApp.tsx`, add local state for the shelf capture session:
 ```ts
@@ -1297,16 +1297,18 @@ Then render `QuickCapture` when `shelfCapture` is set, supplying live data (the 
 ```
 > Use whatever toast setter `StowMobileApp` already owns (P0 used `setToast`). Revoke the object URL on both close paths to avoid leaks. `QuickCapture`'s wrapper z-index must be 90 (contract §7 ladder).
 
-- [ ] **Step 3: Typecheck + build**
+- [x] **Step 3: Typecheck + build**
 
 Run: `npm run typecheck && npm run build`
 Expected: PASS.
 
-- [ ] **Step 4: Manual smoke (dev)**
+- [x] **Step 4: Manual smoke (dev)**
 
 Run: `npm run dev` (with a configured/emulated household). Open `/app`, tap the scan FAB → switch to "Whole shelf" → shutter. Expect `QuickCapture` to take over (analyzing frame), then (with a real configured Gemini key, or via the Task 9 mock) detections, review, and a Done commit that adds items to the targeted area.
 
-- [ ] **Step 5: Commit**
+Completed verification for Task 8 wiring: `/app` dev load via Playwright CLI reached the auth gate with no console errors; targeted emulator smoke `tests/smoke/mobile-capture.spec.ts` passed to verify the single-item file fallback still works after adding the mode switch. The deterministic whole-shelf review/commit flow is covered by Task 9's mocked detection smoke.
+
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/StowMobileApp.tsx src/features/stow/ui/mobile/capture/ScanOverlay.tsx

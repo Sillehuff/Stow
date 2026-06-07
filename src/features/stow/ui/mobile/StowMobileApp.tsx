@@ -14,6 +14,7 @@ import type { AddItemInitial } from "@/features/stow/ui/mobile/add/AddItemSheet"
 import { AddSpaceSheet } from "@/features/stow/ui/mobile/add/AddSpaceSheet";
 import { CaptureFirst } from "@/features/stow/ui/mobile/capture/CaptureFirst";
 import { PhotoSource } from "@/features/stow/ui/mobile/capture/PhotoSource";
+import { QuickCapture } from "@/features/stow/ui/mobile/capture/QuickCapture";
 import { ScanOverlay } from "@/features/stow/ui/mobile/capture/ScanOverlay";
 import { HomeScreen } from "@/features/stow/ui/mobile/screens/HomeScreen";
 import { ItemDetail } from "@/features/stow/ui/mobile/screens/ItemDetail";
@@ -41,6 +42,7 @@ interface StowMobileAppProps {
 
 export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobileAppProps) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const shelfPreviewUrlRef = useRef<string | null>(null);
   const nav = useMobileNavigation(householdId);
   const data = useWorkspaceData(householdId, user);
   const [toast, setToast] = useState<string | null>(null);
@@ -48,11 +50,18 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
   const [renamingSpaceId, setRenamingSpaceId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
+  const [shelfCapture, setShelfCapture] = useState<{ blob: Blob; previewUrl: string } | null>(null);
 
   const flash = (message: string) => setToast(message);
 
   useEffect(() => {
     if (rootRef.current) applyPalette(rootRef.current, makePalette());
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (shelfPreviewUrlRef.current) URL.revokeObjectURL(shelfPreviewUrlRef.current);
+    };
   }, []);
 
   const userId = data.userId ?? user.uid;
@@ -166,6 +175,22 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
       spaceId: nav.selectedSpaceId,
       areaId: nav.selectedAreaId
     });
+  }
+
+  function clearShelfCapture() {
+    if (shelfPreviewUrlRef.current) {
+      URL.revokeObjectURL(shelfPreviewUrlRef.current);
+      shelfPreviewUrlRef.current = null;
+    }
+    setShelfCapture(null);
+  }
+
+  function handleScanShelf(blob: Blob) {
+    nav.closeOverlay();
+    clearShelfCapture();
+    const previewUrl = URL.createObjectURL(blob);
+    shelfPreviewUrlRef.current = previewUrl;
+    setShelfCapture({ blob, previewUrl });
   }
 
   let screen: ReactNode = null;
@@ -421,7 +446,29 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
         ) : null}
 
         {nav.overlay.kind === "scan" ? (
-          <ScanOverlay onClose={nav.closeOverlay} onCaptureSingle={(blob) => void handleScanSingle(blob)} />
+          <ScanOverlay
+            onClose={nav.closeOverlay}
+            onCaptureSingle={(blob) => void handleScanSingle(blob)}
+            onCaptureShelf={handleScanShelf}
+          />
+        ) : null}
+
+        {shelfCapture ? (
+          <QuickCapture
+            householdId={householdId}
+            spaceId={nav.selectedSpaceId ?? undefined}
+            areaId={nav.selectedAreaId ?? undefined}
+            spaces={data.spaces}
+            userId={userId}
+            createItemsBatch={data.actions.createItemsBatch}
+            capturedBlob={shelfCapture.blob}
+            capturedPreviewUrl={shelfCapture.previewUrl}
+            onClose={clearShelfCapture}
+            onCommitted={(count) => {
+              clearShelfCapture();
+              flash(`Added ${count} item${count !== 1 ? "s" : ""}`);
+            }}
+          />
         ) : null}
 
         {nav.overlay.kind === "captureFirst" ? (

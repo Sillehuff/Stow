@@ -12,11 +12,12 @@ export interface ScanOverlayProps {
 
 const DARK = "#0A0A12";
 
-export function ScanOverlay({ onClose, onCaptureSingle }: ScanOverlayProps) {
+export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf }: ScanOverlayProps) {
   const { capture, error, start, status, stop, videoRef } = useCamera();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<"single" | "shelf">("single");
 
   useEffect(() => {
     void start();
@@ -29,7 +30,8 @@ export function ScanOverlay({ onClose, onCaptureSingle }: ScanOverlayProps) {
     setBusy(true);
     try {
       const blob = await capture();
-      onCaptureSingle(blob);
+      if (mode === "shelf" && onCaptureShelf) onCaptureShelf(blob);
+      else onCaptureSingle(blob);
     } catch {
       // Leave the overlay open so the user can retry or choose a file.
     } finally {
@@ -45,11 +47,15 @@ export function ScanOverlay({ onClose, onCaptureSingle }: ScanOverlayProps) {
   function onFilePicked(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (file) onCaptureSingle(file);
+    if (!file) return;
+    if (mode === "shelf" && onCaptureShelf) onCaptureShelf(file);
+    else onCaptureSingle(file);
   }
 
   const unavailable = status === "unsupported" || status === "error";
   const live = status === "live" && !busy;
+  const shelfEnabled = Boolean(onCaptureShelf);
+  const shelfMode = mode === "shelf" && shelfEnabled;
 
   return (
     <div
@@ -191,12 +197,14 @@ export function ScanOverlay({ onClose, onCaptureSingle }: ScanOverlayProps) {
 
       <div style={{ padding: "0 24px 60px", textAlign: "center", position: "relative", zIndex: 3 }}>
         <div style={{ color: "#fff", fontSize: 17, fontWeight: 800, marginBottom: 6 }}>
-          {unavailable ? "Camera unavailable" : busy ? "Scanning photo" : "Point at an item"}
+          {unavailable ? "Camera unavailable" : busy ? "Scanning photo" : shelfMode ? "Point at a shelf" : "Point at an item"}
         </div>
         <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 13, marginBottom: 22 }}>
           {unavailable
             ? error ?? "Pick a photo from your library to scan."
-            : "Stow will name and tag it for you"}
+            : shelfMode
+              ? "Stow will find everything in the frame"
+              : "Stow will name and tag it for you"}
         </div>
 
         <div
@@ -210,7 +218,10 @@ export function ScanOverlay({ onClose, onCaptureSingle }: ScanOverlayProps) {
             margin: "0 auto 22px"
           }}
         >
-          <div
+          <button
+            type="button"
+            aria-pressed={mode === "single"}
+            onClick={() => setMode("single")}
             style={{
               display: "flex",
               alignItems: "center",
@@ -219,15 +230,23 @@ export function ScanOverlay({ onClose, onCaptureSingle }: ScanOverlayProps) {
               borderRadius: 99,
               fontSize: 13,
               fontWeight: 800,
-              color: "#fff",
-              background: "var(--stow-accent)"
+              color: mode === "single" ? "#fff" : "rgba(255,255,255,0.72)",
+              background: mode === "single" ? "var(--stow-accent)" : "transparent",
+              border: "none",
+              cursor: "pointer",
+              fontFamily: "inherit"
             }}
           >
-            <ScanLine size={14} color="#fff" /> One item
-          </div>
-          <div
-            aria-disabled="true"
-            title="Coming in P3"
+            <ScanLine size={14} color={mode === "single" ? "#fff" : "rgba(255,255,255,0.72)"} /> One item
+          </button>
+          <button
+            type="button"
+            aria-pressed={shelfMode}
+            disabled={!shelfEnabled}
+            title={shelfEnabled ? undefined : "Coming in P3"}
+            onClick={() => {
+              if (shelfEnabled) setMode("shelf");
+            }}
             style={{
               display: "flex",
               alignItems: "center",
@@ -236,27 +255,16 @@ export function ScanOverlay({ onClose, onCaptureSingle }: ScanOverlayProps) {
               borderRadius: 99,
               fontSize: 13,
               fontWeight: 800,
-              color: "rgba(255,255,255,0.4)",
-              background: "transparent",
-              cursor: "not-allowed"
+              color: shelfMode ? "#fff" : shelfEnabled ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.4)",
+              background: shelfMode ? "var(--stow-accent)" : "transparent",
+              border: "none",
+              cursor: shelfEnabled ? "pointer" : "not-allowed",
+              fontFamily: "inherit"
             }}
           >
-            <Grid size={14} color="rgba(255,255,255,0.4)" /> Whole shelf
-            <span
-              style={{
-                fontSize: 9,
-                fontWeight: 800,
-                letterSpacing: 0.5,
-                textTransform: "uppercase",
-                color: "rgba(255,255,255,0.5)",
-                border: "1px solid rgba(255,255,255,0.25)",
-                borderRadius: 99,
-                padding: "1px 6px"
-              }}
-            >
-              Soon
-            </span>
-          </div>
+            <Grid size={14} color={shelfMode ? "#fff" : shelfEnabled ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.4)"} />
+            Whole shelf
+          </button>
         </div>
 
         {unavailable ? (
