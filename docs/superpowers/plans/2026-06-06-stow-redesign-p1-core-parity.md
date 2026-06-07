@@ -482,7 +482,7 @@ Contract §8 signature. Port the drag math from `prototype/spaces-mgmt.jsx` `Reo
 
 `reorderIndex` contract: given an array of element top offsets (in screen px, one per row, equal heights inferred from consecutive tops), the index `from` being dragged, and the current `pointerY` (screen px relative to the same origin), return the clamped target index `0..n-1`. We model `positions` as the array of row **top** coordinates; step = `positions[1]-positions[0]` (fallback to row height if only one row).
 
-- [ ] **Step 1: Write the failing test** (pure function)
+- [x] **Step 1: Write the failing test** (pure function)
 
 ```ts
 // src/features/stow/ui/mobile/hooks/useHoldToReorder.test.ts
@@ -516,12 +516,12 @@ describe("reorderIndex", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/ui/mobile/hooks/useHoldToReorder.test.ts`
 Expected: FAIL — import cannot be resolved.
 
-- [ ] **Step 3: Write the implementation** (pure helper + hook)
+- [x] **Step 3: Write the implementation** (pure helper + hook)
 
 ```ts
 // src/features/stow/ui/mobile/hooks/useHoldToReorder.ts
@@ -660,12 +660,12 @@ export function useHoldToReorder<T>(opts: HoldToReorderOpts<T>): {
 ```
 > Consumers (SpacesList Task 8, EditSpaceSheet Task 9) render rows in `order` (not the raw `ids`) inside `containerRef`, give each row `data-reorder-row` and `{...bind(id)}`, and gate tap handlers with `if (suppressClick()) return;`. The `data-reorder-row` selector is how `reorderIndex` reads live rects (scale-aware via `getBoundingClientRect`).
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/ui/mobile/hooks/useHoldToReorder.test.ts`
 Expected: PASS (6 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/hooks/useHoldToReorder.ts src/features/stow/ui/mobile/hooks/useHoldToReorder.test.ts
