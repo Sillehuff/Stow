@@ -31,7 +31,7 @@ Add the request/detection/result schemas to the functions shared schema module, 
 - Modify: `functions/src/shared/schemas.ts`
 - Modify (tests): `functions/test/schemas.test.ts`
 
-- [ ] **Step 1: Write the failing tests** — append to the existing `describe("shared schemas", …)` block in `functions/test/schemas.test.ts`.
+- [x] **Step 1: Write the failing tests** — append to the existing `describe("shared schemas", …)` block in `functions/test/schemas.test.ts`.
 
 Add the imports at the top of the file (extend the existing import list):
 ```ts
@@ -109,12 +109,12 @@ Add these tests inside the `describe` block:
   });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `npm run functions:test`
 Expected: FAIL — `visionDetectShelfInputSchema`/`shelfDetectionSchema`/`visionDetectShelfResultSchema` are not exported (import error).
 
-- [ ] **Step 3: Write the implementation** — append to `functions/src/shared/schemas.ts` (after `visionSuggestionSchema`, reusing the existing `visionImageRefSchema`).
+- [x] **Step 3: Write the implementation** — append to `functions/src/shared/schemas.ts` (after `visionSuggestionSchema`, reusing the existing `visionImageRefSchema`).
 
 ```ts
 export const visionDetectShelfInputSchema = z.object({
@@ -143,12 +143,12 @@ export const visionDetectShelfResultSchema = z.object({
 export type VisionDetectShelfResult = z.infer<typeof visionDetectShelfResultSchema>;
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `npm run functions:test`
 Expected: PASS (existing tests + the 3 new shelf-schema tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add functions/src/shared/schemas.ts functions/test/schemas.test.ts

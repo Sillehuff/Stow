@@ -74,3 +74,28 @@ export const visionSuggestionSchema = z.object({
   rationale: z.string().optional()
 });
 export type VisionSuggestion = z.infer<typeof visionSuggestionSchema>;
+
+export const visionDetectShelfInputSchema = z.object({
+  householdId: z.string().min(1),
+  imageRef: visionImageRefSchema,
+  spaceId: z.string().optional(),
+  areaId: z.string().optional(),
+  areaName: z.string().optional()
+});
+export type VisionDetectShelfInput = z.infer<typeof visionDetectShelfInputSchema>;
+
+export const shelfDetectionSchema = z.object({
+  label: z.string().min(1),
+  confidence: z.number().min(0).max(1),
+  bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+  suggestedValue: z.number().nonnegative().optional(),
+  tags: z.array(z.string().min(1)).max(15).optional()
+});
+export type ShelfDetection = z.infer<typeof shelfDetectionSchema>;
+
+export const visionDetectShelfResultSchema = z.object({
+  detections: z.array(shelfDetectionSchema),
+  provider: z.string().min(1),
+  jobId: z.string().min(1)
+});
+export type VisionDetectShelfResult = z.infer<typeof visionDetectShelfResultSchema>;
