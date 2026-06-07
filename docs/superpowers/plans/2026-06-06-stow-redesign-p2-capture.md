@@ -2414,7 +2414,7 @@ Wire the three capture overlays into the shell using the contract's overlay stat
 
 > **Context:** P0's `StowMobileApp` owned `onScan={() => setToast("Capture arrives in P2")}` and rendered placeholder screens. P1 added screens + the add/edit sheets and presumably routes `addItem`/`addSpace`/etc. overlays via `nav.overlay.kind`. This task adds `scan`, `photo` (if any caller opens a bare photo overlay), and `captureFirst`, and makes the FAB and "add item" entry point use them.
 
-- [ ] **Step 1: Import the capture overlays + needed types**
+- [x] **Step 1: Import the capture overlays + needed types**
 
 ```tsx
 import { ScanOverlay } from "@/features/stow/ui/mobile/capture/ScanOverlay";
@@ -2423,7 +2423,7 @@ import type { ImageRef } from "@/types/domain";
 import type { VisionSuggestion } from "@/types/llm";
 ```
 
-- [ ] **Step 2: Make the scan FAB open the scan overlay**
+- [x] **Step 2: Make the scan FAB open the scan overlay**
 
 Replace P0's `onScan` toast:
 ```tsx
@@ -2435,7 +2435,7 @@ Replace P0's `onScan` toast:
 />
 ```
 
-- [ ] **Step 3: Render the scan overlay and route its single capture into Add Item**
+- [x] **Step 3: Render the scan overlay and route its single capture into Add Item**
 
 After the existing overlay/sheet renders, add:
 ```tsx
@@ -2496,7 +2496,7 @@ and render:
 ```
 Add the imports `uploadFileToStorage` (`@/lib/firebase/storage`), `visionCategorizeItemImage` (`@/lib/firebase/functions`), `storagePaths` (`@/lib/firebase/paths`), `inventoryRepository` (`@/features/stow/services/repository`).
 
-- [ ] **Step 4: Render `CaptureFirst` and route its handoff into Add Item**
+- [x] **Step 4: Render `CaptureFirst` and route its handoff into Add Item**
 
 ```tsx
 {nav.overlay.kind === "captureFirst" ? (
@@ -2514,7 +2514,7 @@ Add the imports `uploadFileToStorage` (`@/lib/firebase/storage`), `visionCategor
 ) : null}
 ```
 
-- [ ] **Step 5: Make the "Add Item" entry point open `CaptureFirst` (camera-first)**
+- [x] **Step 5: Make the "Add Item" entry point open `CaptureFirst` (camera-first)**
 
 P1 wired some control (e.g. a "+ Add Item" button in `RoomScreen`/empty states) to `nav.openOverlay("addItem")`. For the camera-first design (spec §6.9, prototype `addFlow: "cameraFirst"`), change those entry points to open `captureFirst` instead, so adding an item starts at the camera. Keep a path to the bare sheet for "Skip". Concretely, the add-item triggers call:
 ```tsx
@@ -2522,7 +2522,7 @@ nav.openOverlay("captureFirst");
 ```
 and `CaptureFirst`'s Skip (`onClose`) returns to the prior screen; the user can also start from the scan FAB. (If P1's empty-state explicitly wants the form, leaving it on `addItem` is acceptable — the key requirement is that `captureFirst` is reachable from at least the primary Add affordance.)
 
-- [ ] **Step 6: Ensure `AddItemSheet` consumes the overlay payload**
+- [x] **Step 6: Ensure `AddItemSheet` consumes the overlay payload**
 
 `AddItemSheet` (Task 6) must seed its initial state from `nav.overlay.payload` when present: `image`, `aiFilled`, and `suggestion` (apply via `applyVisionSuggestion` on open), plus `spaceId`/`areaId` pre-selection. Add to `AddItemSheet` (extends Task 6):
 ```tsx
@@ -2549,12 +2549,12 @@ useEffect(() => {
 > ```
 > and have `StowMobileApp` render `<AddItemSheet initial={nav.overlay.kind === "addItem" ? (nav.overlay.payload as AddItemInitial) : undefined} ... />`.
 
-- [ ] **Step 7: Typecheck + build**
+- [x] **Step 7: Typecheck + build**
 
 Run: `npm run typecheck && npm run build`
 Expected: both PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/StowMobileApp.tsx src/features/stow/ui/mobile/add/AddItemSheet.tsx

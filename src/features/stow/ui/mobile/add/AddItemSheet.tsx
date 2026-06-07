@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { flushSync } from "react-dom";
 import type { ImageRef, ItemEntryMode, SpaceWithAreas } from "@/types/domain";
+import type { VisionSuggestion } from "@/types/llm";
 import { inventoryRepository } from "@/features/stow/services/repository";
 import { applyVisionSuggestion, type ItemDraftFields } from "@/features/stow/ui/mobile/capture/applyVisionSuggestion";
 import { ChevronDown, Plus, Sparkles } from "@/features/stow/ui/mobile/theme/icons";
@@ -17,6 +18,7 @@ export interface AddItemSheetProps {
   open: boolean;
   householdId: string;
   spaces: SpaceWithAreas[];
+  initial?: AddItemInitial;
   defaultSpaceId: string | null;
   defaultAreaId: string | null;
   onClose: () => void;
@@ -31,6 +33,14 @@ export interface AddItemSheetProps {
     image?: ImageRef;
     entryMode: ItemEntryMode;
   }) => Promise<void> | void;
+}
+
+export interface AddItemInitial {
+  image?: ImageRef;
+  aiFilled?: boolean;
+  suggestion?: VisionSuggestion;
+  spaceId?: string | null;
+  areaId?: string | null;
 }
 
 function FieldLabel({ children }: { children: ReactNode }) {
@@ -76,7 +86,7 @@ function isSameImage(left: ImageRef | null, right: ImageRef | null) {
 }
 
 export function AddItemSheet(props: AddItemSheetProps) {
-  const { open, householdId, spaces, defaultSpaceId, defaultAreaId, onClose, onCreate } = props;
+  const { open, householdId, spaces, initial, defaultSpaceId, defaultAreaId, onClose, onCreate } = props;
   const initialLocation = useMemo(() => resolveInitialLocation(spaces, defaultSpaceId, defaultAreaId), [spaces, defaultSpaceId, defaultAreaId]);
 
   const [draftImageId, setDraftImageId] = useState(() => inventoryRepository.createItemDraftId(householdId));
@@ -95,14 +105,63 @@ export function AddItemSheet(props: AddItemSheetProps) {
   const [scanError, setScanError] = useState<string | null>(null);
   const scanRequestIdRef = useRef(0);
   const acceptingImageChangesRef = useRef(false);
+  const consumedOpenRef = useRef(false);
+
+  const seededLocation = useMemo(() => {
+    const requestedSpaceId = initial?.spaceId ?? initialLocation.spaceId;
+    const requestedAreaId = initial?.areaId ?? initialLocation.areaId;
+    const requestedSpace =
+      spaces.find((space) => space.id === requestedSpaceId) ?? spaces.find((space) => space.id === initialLocation.spaceId) ?? null;
+    const requestedArea = requestedSpace?.areas.find((area) => area.id === requestedAreaId) ?? requestedSpace?.areas[0] ?? null;
+
+    return {
+      spaceId: requestedSpace?.id ?? "",
+      areaId: requestedArea?.id ?? ""
+    };
+  }, [initial?.areaId, initial?.spaceId, initialLocation.areaId, initialLocation.spaceId, spaces]);
+
+  useEffect(() => {
+    if (!open) {
+      consumedOpenRef.current = false;
+      return;
+    }
+    if (consumedOpenRef.current) return;
+    consumedOpenRef.current = true;
+
+    setDraftImageId(inventoryRepository.createItemDraftId(householdId));
+    scanRequestIdRef.current += 1;
+    acceptingImageChangesRef.current = true;
+
+    const seededFields = initial?.suggestion
+      ? applyVisionSuggestion({ name: "", tags: [], notes: "", value: "" }, initial.suggestion)
+      : { name: "", tags: [], notes: "", value: "" };
+
+    setName(seededFields.name);
+    setValue(seededFields.value);
+    setTags(seededFields.tags.join(", "));
+    setNotes(seededFields.notes);
+    setMoreOpen(false);
+    setSpaceId(seededLocation.spaceId);
+    setAreaId(seededLocation.areaId);
+    setImage(initial?.image ?? null);
+    setPhotoFieldKey((current) => current + 1);
+    setAiFilled(Boolean(initial?.aiFilled || initial?.suggestion));
+    setScanning(false);
+    setSubmitting(false);
+    setScanError(null);
+  }, [householdId, initial, open, seededLocation.areaId, seededLocation.spaceId]);
 
   useEffect(() => {
     if (!open) return;
-    setDraftImageId(inventoryRepository.createItemDraftId(householdId));
-    acceptingImageChangesRef.current = true;
-    setSpaceId(initialLocation.spaceId);
-    setAreaId(initialLocation.areaId);
-  }, [householdId, open, initialLocation.spaceId, initialLocation.areaId]);
+    if (!spaceId && seededLocation.spaceId) {
+      setSpaceId(seededLocation.spaceId);
+      setAreaId(seededLocation.areaId);
+      return;
+    }
+    if (spaceId === seededLocation.spaceId && !areaId && seededLocation.areaId) {
+      setAreaId(seededLocation.areaId);
+    }
+  }, [areaId, open, seededLocation.areaId, seededLocation.spaceId, spaceId]);
 
   const selectedSpace = useMemo(() => spaces.find((space) => space.id === spaceId) ?? spaces[0] ?? null, [spaces, spaceId]);
   const selectedArea = selectedSpace?.areas.find((area) => area.id === areaId) ?? null;

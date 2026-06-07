@@ -1,13 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { User } from "firebase/auth";
+import type { ImageRef } from "@/types/domain";
+import type { VisionSuggestion } from "@/types/llm";
 import { useWorkspaceData } from "@/features/stow/hooks/useWorkspaceData";
+import { inventoryRepository } from "@/features/stow/services/repository";
 import { useMobileNavigation } from "@/features/stow/ui/mobile/hooks/useMobileNavigation";
 import type { MobileTab } from "@/features/stow/ui/mobile/hooks/useMobileNavigation";
 import { applyPalette, makePalette } from "@/features/stow/ui/mobile/theme/palette";
 import { AddAreaSheet } from "@/features/stow/ui/mobile/add/AddAreaSheet";
 import { AddItemSheet } from "@/features/stow/ui/mobile/add/AddItemSheet";
+import type { AddItemInitial } from "@/features/stow/ui/mobile/add/AddItemSheet";
 import { AddSpaceSheet } from "@/features/stow/ui/mobile/add/AddSpaceSheet";
+import { CaptureFirst } from "@/features/stow/ui/mobile/capture/CaptureFirst";
+import { PhotoSource } from "@/features/stow/ui/mobile/capture/PhotoSource";
+import { ScanOverlay } from "@/features/stow/ui/mobile/capture/ScanOverlay";
 import { HomeScreen } from "@/features/stow/ui/mobile/screens/HomeScreen";
 import { ItemDetail } from "@/features/stow/ui/mobile/screens/ItemDetail";
 import { PackingScreen } from "@/features/stow/ui/mobile/screens/PackingScreen";
@@ -20,7 +27,9 @@ import { SpaceActionSheet } from "@/features/stow/ui/mobile/spaces/SpaceActionSh
 import { BottomNav } from "@/features/stow/ui/mobile/shell/BottomNav";
 import { Confirm } from "@/features/stow/ui/mobile/shell/Confirm";
 import { Toast } from "@/features/stow/ui/mobile/shell/Toast";
-import { bestEffortDeleteImage } from "@/lib/firebase/storage";
+import { visionCategorizeItemImage } from "@/lib/firebase/functions";
+import { storagePaths } from "@/lib/firebase/paths";
+import { bestEffortDeleteImage, uploadFileToStorage } from "@/lib/firebase/storage";
 import "@/features/stow/ui/mobile/theme/tokens.css";
 
 interface StowMobileAppProps {
@@ -64,7 +73,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
 
   const addAreaSpaceId = nav.overlay.kind === "addArea" ? (nav.overlay.payload?.spaceId as string | undefined) : undefined;
   const addAreaSpace = addAreaSpaceId ? data.spaces.find((space) => space.id === addAreaSpaceId) ?? null : null;
-  const addItemPayload = nav.overlay.kind === "addItem" ? nav.overlay.payload : undefined;
+  const addItemInitial = nav.overlay.kind === "addItem" ? (nav.overlay.payload as AddItemInitial | undefined) : undefined;
 
   function itemCountForSpace(spaceId: string) {
     return data.items.filter((item) => item.spaceId === spaceId).length;
@@ -102,6 +111,63 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
     }
   };
 
+  async function uploadDraftCapture(blob: Blob): Promise<ImageRef | null> {
+    const draftId = inventoryRepository.createItemDraftId(householdId);
+    const name = `photo-${Date.now()}.jpg`;
+    const file = new File([blob], name, { type: blob.type || "image/jpeg" });
+    try {
+      return await uploadFileToStorage(storagePaths.draftImage(householdId, draftId, name), file, {
+        contentType: file.type
+      });
+    } catch {
+      flash("Upload failed. Try again.");
+      return null;
+    }
+  }
+
+  async function handlePhotoPicked(blob: Blob) {
+    nav.closeOverlay();
+    const image = await uploadDraftCapture(blob);
+    if (!image) return;
+    nav.openOverlay("addItem", {
+      image,
+      aiFilled: false,
+      spaceId: nav.selectedSpaceId,
+      areaId: nav.selectedAreaId
+    });
+  }
+
+  async function handleScanSingle(blob: Blob) {
+    nav.closeOverlay();
+    const image = await uploadDraftCapture(blob);
+    if (!image) return;
+
+    let suggestion: VisionSuggestion | undefined;
+    if (image.storagePath) {
+      try {
+        const response = await visionCategorizeItemImage({
+          householdId,
+          imageRef: { storagePath: image.storagePath },
+          context: {
+            spaceId: nav.selectedSpaceId ?? undefined,
+            areaId: nav.selectedAreaId ?? undefined
+          }
+        });
+        suggestion = response.suggestion;
+      } catch {
+        flash("Couldn't read the photo — add details yourself.");
+      }
+    }
+
+    nav.openOverlay("addItem", {
+      image,
+      aiFilled: Boolean(suggestion),
+      suggestion,
+      spaceId: nav.selectedSpaceId,
+      areaId: nav.selectedAreaId
+    });
+  }
+
   let screen: ReactNode = null;
 
   if (nav.tab === "spaces") {
@@ -115,7 +181,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
         onOpenArea={(areaId) => nav.openSpace(selectedSpace.id, areaId)}
         onOpenItem={(itemId) => nav.openItem(itemId)}
         onAddArea={() => nav.openOverlay("addArea", { spaceId: selectedSpace.id })}
-        onAddItem={(areaId) => nav.openOverlay("addItem", { spaceId: selectedSpace.id, areaId })}
+        onAddItem={(areaId) => nav.openOverlay("captureFirst", { spaceId: selectedSpace.id, areaId })}
         onComingSoon={flash}
       />
     ) : (
@@ -226,7 +292,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
           <BottomNav
             tab={nav.tab}
             onTab={(tab: MobileTab) => nav.navigateToTab(tab)}
-            onScan={() => flash("Capture arrives in P2")}
+            onScan={() => nav.openOverlay("scan")}
             packedCount={packedCount}
           />
         ) : null}
@@ -324,8 +390,9 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
           open={nav.overlay.kind === "addItem"}
           householdId={householdId}
           spaces={data.spaces}
-          defaultSpaceId={(addItemPayload?.spaceId as string | undefined) ?? nav.selectedSpaceId}
-          defaultAreaId={(addItemPayload?.areaId as string | undefined) ?? nav.selectedAreaId}
+          initial={addItemInitial}
+          defaultSpaceId={addItemInitial?.spaceId ?? nav.selectedSpaceId}
+          defaultAreaId={addItemInitial?.areaId ?? nav.selectedAreaId}
           onClose={() => nav.closeOverlay()}
           onCreate={(input) => {
             return data.actions
@@ -348,6 +415,28 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
               });
           }}
         />
+
+        {nav.overlay.kind === "photo" ? (
+          <PhotoSource onClose={nav.closeOverlay} onPicked={(blob) => void handlePhotoPicked(blob)} />
+        ) : null}
+
+        {nav.overlay.kind === "scan" ? (
+          <ScanOverlay onClose={nav.closeOverlay} onCaptureSingle={(blob) => void handleScanSingle(blob)} />
+        ) : null}
+
+        {nav.overlay.kind === "captureFirst" ? (
+          <CaptureFirst
+            householdId={householdId}
+            spaceId={(nav.overlay.payload?.spaceId as string | undefined) ?? nav.selectedSpaceId}
+            areaId={(nav.overlay.payload?.areaId as string | undefined) ?? nav.selectedAreaId}
+            onClose={nav.closeOverlay}
+            onCreated={(itemId) => {
+              nav.closeOverlay();
+              nav.openItem(itemId);
+            }}
+            onOpenDetails={(payload) => nav.openOverlay("addItem", { ...payload })}
+          />
+        ) : null}
 
         <Confirm
           open={deleteItemId != null}
