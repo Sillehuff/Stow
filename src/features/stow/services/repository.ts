@@ -21,7 +21,13 @@ import {
 import type { Unsubscribe } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { householdPaths } from "@/lib/firebase/paths";
-import type { Area, Household, HouseholdInvite, HouseholdMember, ImageRef, Item, PackingList, Space } from "@/types/domain";
+import { defaultEntryMode, defaultPhotoStatus } from "@/features/stow/services/itemMetadata";
+import {
+  removeHouseholdMember as callRemoveHouseholdMember,
+  revokeHouseholdInvite as callRevokeHouseholdInvite,
+  updateHouseholdMemberRole as callUpdateHouseholdMemberRole
+} from "@/lib/firebase/functions";
+import type { Area, Household, HouseholdInvite, HouseholdMember, ImageRef, Item, ItemDraft, PackingList, Space } from "@/types/domain";
 import type { HouseholdLlmConfig } from "@/types/llm";
 
 export type SnapshotState<T> = {
@@ -42,12 +48,63 @@ function mapSnapshot<T>(snap: QuerySnapshot<DocumentData>): SnapshotState<T> {
   };
 }
 
+function mapMemberSnapshot(snap: QuerySnapshot<DocumentData>): SnapshotState<HouseholdMember> {
+  return {
+    data: snap.docs.map((docSnap) => ({
+      uid: docSnap.id,
+      ...(docSnap.data() as Omit<HouseholdMember, "uid">)
+    })),
+    fromCache: snap.metadata.fromCache,
+    hasPendingWrites: snap.metadata.hasPendingWrites
+  };
+}
+
+function normalizeItemDoc(snap: { id: string; data(): DocumentData }): Item {
+  const data = snap.data() as Record<string, unknown>;
+  return {
+    id: snap.id,
+    ...(data as Omit<Item, "id" | "photoStatus" | "entryMode">),
+    photoStatus: defaultPhotoStatus({ photoStatus: data.photoStatus, image: data.image }),
+    entryMode: defaultEntryMode({ entryMode: data.entryMode, vision: data.vision })
+  } as Item;
+}
+
+function normalizeItemDraftDoc(snap: { id: string; data(): DocumentData }): ItemDraft {
+  const data = snap.data() as Record<string, unknown>;
+  return {
+    id: snap.id,
+    ...(data as Omit<ItemDraft, "id" | "tags">),
+    tags: Array.isArray(data.tags) ? (data.tags as string[]) : []
+  } as ItemDraft;
+}
+
 function requireDb() {
   if (!db) throw new Error("Firestore is not configured");
   return db;
 }
 
+/** Pure: map an ordered id list to {id, position} pairs (position = index). Unit-tested. */
+export function positionUpdatesFor(orderedIds: string[]): Array<{ id: string; position: number }> {
+  return orderedIds.map((id, index) => ({ id, position: index }));
+}
+
 export const inventoryRepository = {
+  createSpaceId(householdId: string) {
+    return doc(collection(requireDb(), householdPaths.spaces(householdId))).id;
+  },
+
+  createAreaId(householdId: string, spaceId: string) {
+    return doc(collection(requireDb(), householdPaths.areas(householdId, spaceId))).id;
+  },
+
+  createItemId(householdId: string) {
+    return doc(collection(requireDb(), householdPaths.items(householdId))).id;
+  },
+
+  createItemDraftId(householdId: string) {
+    return doc(collection(requireDb(), householdPaths.itemDrafts(householdId))).id;
+  },
+
   subscribeHousehold(householdId: string, onData: (household: Household | null) => void, onError: (e: Error) => void) {
     return onSnapshot(
       doc(requireDb(), householdPaths.root(householdId)),
@@ -81,7 +138,34 @@ export const inventoryRepository = {
 
   subscribeItems(householdId: string, onData: (state: SnapshotState<Item>) => void, onError: (e: Error) => void): Unsubscribe {
     const q = query(collection(requireDb(), householdPaths.items(householdId)), orderBy("updatedAt", "desc"));
-    return onSnapshot(q, (snap) => onData(mapSnapshot<Item>(snap)), onError);
+    return onSnapshot(
+      q,
+      (snap) =>
+        onData({
+          data: snap.docs.map((docSnap) => normalizeItemDoc(docSnap)),
+          fromCache: snap.metadata.fromCache,
+          hasPendingWrites: snap.metadata.hasPendingWrites
+        }),
+      onError
+    );
+  },
+
+  subscribeItemDrafts(
+    householdId: string,
+    onData: (state: SnapshotState<ItemDraft>) => void,
+    onError: (e: Error) => void
+  ): Unsubscribe {
+    const q = query(collection(requireDb(), householdPaths.itemDrafts(householdId)), orderBy("updatedAt", "desc"));
+    return onSnapshot(
+      q,
+      (snap) =>
+        onData({
+          data: snap.docs.map((docSnap) => normalizeItemDraftDoc(docSnap)),
+          fromCache: snap.metadata.fromCache,
+          hasPendingWrites: snap.metadata.hasPendingWrites
+        }),
+      onError
+    );
   },
 
   subscribeMembers(
@@ -90,7 +174,7 @@ export const inventoryRepository = {
     onError: (e: Error) => void
   ): Unsubscribe {
     const q = query(collection(requireDb(), householdPaths.members(householdId)), orderBy("createdAt", "asc"));
-    return onSnapshot(q, (snap) => onData(mapSnapshot<HouseholdMember>(snap)), onError);
+    return onSnapshot(q, (snap) => onData(mapMemberSnapshot(snap)), onError);
   },
 
   subscribeInvites(
@@ -122,14 +206,18 @@ export const inventoryRepository = {
   async createSpace(input: {
     householdId: string;
     userId: string;
+    spaceId?: string;
     name: string;
     icon?: Space["icon"];
     color: string;
     image?: ImageRef;
+    position?: number;
     areas: Array<{ name: string; image?: ImageRef }>;
   }) {
     const database = requireDb();
-    const spaceRef = doc(collection(database, householdPaths.spaces(input.householdId)));
+    const spaceRef = input.spaceId
+      ? doc(collection(database, householdPaths.spaces(input.householdId)), input.spaceId)
+      : doc(collection(database, householdPaths.spaces(input.householdId)));
     const batch = writeBatch(database);
 
     batch.set(spaceRef, {
@@ -138,21 +226,23 @@ export const inventoryRepository = {
       icon: input.icon ?? "box",
       color: input.color,
       image: input.image ?? null,
+      position: input.position ?? Date.now(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
 
-    for (const area of input.areas) {
+    input.areas.forEach((area, index) => {
       const areaRef = doc(collection(database, householdPaths.areas(input.householdId, spaceRef.id)));
       batch.set(areaRef, {
         householdId: input.householdId,
         spaceId: spaceRef.id,
         name: area.name,
         image: area.image ?? null,
+        position: index,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-    }
+    });
 
     await batch.commit();
     return spaceRef.id;
@@ -161,14 +251,20 @@ export const inventoryRepository = {
   async createArea(input: {
     householdId: string;
     spaceId: string;
+    areaId?: string;
     name: string;
     image?: ImageRef;
+    position?: number;
   }) {
-    const areaRef = await addDoc(collection(requireDb(), householdPaths.areas(input.householdId, input.spaceId)), {
+    const areaRef = input.areaId
+      ? doc(collection(requireDb(), householdPaths.areas(input.householdId, input.spaceId)), input.areaId)
+      : doc(collection(requireDb(), householdPaths.areas(input.householdId, input.spaceId)));
+    await setDoc(areaRef, {
       householdId: input.householdId,
       spaceId: input.spaceId,
       name: input.name,
       image: input.image ?? null,
+      position: input.position ?? Date.now(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
@@ -196,6 +292,30 @@ export const inventoryRepository = {
       ...input.patch,
       updatedAt: serverTimestamp()
     });
+  },
+
+  async reorderSpaces(input: { householdId: string; orderedIds: string[] }) {
+    const database = requireDb();
+    const batch = writeBatch(database);
+    for (const { id, position } of positionUpdatesFor(input.orderedIds)) {
+      batch.update(doc(database, householdPaths.space(input.householdId, id)), {
+        position,
+        updatedAt: serverTimestamp()
+      });
+    }
+    await batch.commit();
+  },
+
+  async reorderAreas(input: { householdId: string; spaceId: string; orderedIds: string[] }) {
+    const database = requireDb();
+    const batch = writeBatch(database);
+    for (const { id, position } of positionUpdatesFor(input.orderedIds)) {
+      batch.update(doc(database, householdPaths.area(input.householdId, input.spaceId, id)), {
+        position,
+        updatedAt: serverTimestamp()
+      });
+    }
+    await batch.commit();
   },
 
   async deleteArea(input: {
@@ -274,6 +394,7 @@ export const inventoryRepository = {
   async createItem(input: {
     householdId: string;
     userId: string;
+    itemId?: string;
     name: string;
     spaceId: string;
     areaId: string;
@@ -285,8 +406,13 @@ export const inventoryRepository = {
     tags?: string[];
     notes?: string;
     vision?: Item["vision"];
+    photoStatus?: Item["photoStatus"];
+    entryMode?: Item["entryMode"];
   }) {
-    const itemRef = await addDoc(collection(requireDb(), householdPaths.items(input.householdId)), {
+    const itemRef = input.itemId
+      ? doc(collection(requireDb(), householdPaths.items(input.householdId)), input.itemId)
+      : doc(collection(requireDb(), householdPaths.items(input.householdId)));
+    await setDoc(itemRef, {
       householdId: input.householdId,
       spaceId: input.spaceId,
       areaId: input.areaId,
@@ -299,6 +425,8 @@ export const inventoryRepository = {
       tags: input.tags ?? [],
       notes: input.notes ?? "",
       isPacked: false,
+      photoStatus: defaultPhotoStatus({ photoStatus: input.photoStatus, image: input.image }),
+      entryMode: defaultEntryMode({ entryMode: input.entryMode, vision: input.vision }),
       vision: input.vision ?? null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -316,6 +444,9 @@ export const inventoryRepository = {
       Pick<Item, "name" | "notes" | "value" | "tags" | "isPacked" | "spaceId" | "areaId" | "areaNameSnapshot" | "kind" | "isPriceless">
     > & {
       image?: ImageRef | null;
+      photoStatus?: Item["photoStatus"];
+      entryMode?: Item["entryMode"];
+      vision?: Item["vision"] | null;
     };
   }) {
     await updateDoc(doc(requireDb(), householdPaths.item(input.householdId, input.itemId)), {
@@ -334,22 +465,41 @@ export const inventoryRepository = {
     });
   },
 
-  async deleteItem(input: { householdId: string; itemId: string }) {
-    await deleteDoc(doc(requireDb(), householdPaths.item(input.householdId, input.itemId)));
+  async deleteItem(input: { householdId: string; itemId: string; userId: string }) {
+    const database = requireDb();
+    const packingListsRef = collection(database, householdPaths.packingLists(input.householdId));
+    const [itemListsSnap, packedListsSnap] = await Promise.all([
+      getDocs(query(packingListsRef, where("itemIds", "array-contains", input.itemId))),
+      getDocs(query(packingListsRef, where("packedItemIds", "array-contains", input.itemId)))
+    ]);
+
+    const batch = writeBatch(database);
+    const touchedListIds = new Set<string>();
+    for (const listDoc of [...itemListsSnap.docs, ...packedListsSnap.docs]) {
+      if (touchedListIds.has(listDoc.id)) continue;
+      touchedListIds.add(listDoc.id);
+      batch.update(listDoc.ref, {
+        itemIds: arrayRemove(input.itemId),
+        packedItemIds: arrayRemove(input.itemId),
+        updatedAt: serverTimestamp(),
+        updatedBy: input.userId
+      });
+    }
+
+    batch.delete(doc(database, householdPaths.item(input.householdId, input.itemId)));
+    await batch.commit();
   },
 
   async updateMemberRole(input: { householdId: string; uid: string; role: HouseholdMember["role"] }) {
-    await updateDoc(doc(requireDb(), householdPaths.member(input.householdId, input.uid)), {
-      role: input.role
-    });
+    await callUpdateHouseholdMemberRole(input);
   },
 
   async removeMember(input: { householdId: string; uid: string }) {
-    await deleteDoc(doc(requireDb(), householdPaths.member(input.householdId, input.uid)));
+    await callRemoveHouseholdMember(input);
   },
 
   async revokeInvite(input: { householdId: string; inviteId: string }) {
-    await deleteDoc(doc(requireDb(), `${householdPaths.invites(input.householdId)}/${input.inviteId}`));
+    await callRevokeHouseholdInvite(input);
   },
 
   async addTagToItem(input: { householdId: string; itemId: string; userId: string; tag: string }) {
@@ -358,6 +508,109 @@ export const inventoryRepository = {
       updatedAt: serverTimestamp(),
       updatedBy: input.userId
     });
+  },
+
+  async createItemDraft(input: {
+    householdId: string;
+    userId: string;
+    draftId?: string;
+    image: ImageRef;
+    spaceId?: string;
+    areaId?: string;
+    areaNameSnapshot?: string;
+    name?: string;
+    kind?: ItemDraft["kind"];
+    tags?: string[];
+    notes?: string;
+    vision?: ItemDraft["vision"];
+  }) {
+    const draftRef = input.draftId
+      ? doc(collection(requireDb(), householdPaths.itemDrafts(input.householdId)), input.draftId)
+      : doc(collection(requireDb(), householdPaths.itemDrafts(input.householdId)));
+    await setDoc(draftRef, {
+      householdId: input.householdId,
+      image: input.image,
+      spaceId: input.spaceId ?? null,
+      areaId: input.areaId ?? null,
+      areaNameSnapshot: input.areaNameSnapshot ?? null,
+      name: input.name ?? "",
+      kind: input.kind ?? "item",
+      tags: input.tags ?? [],
+      notes: input.notes ?? "",
+      vision: input.vision ?? null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      createdBy: input.userId,
+      updatedBy: input.userId
+    });
+    return draftRef.id;
+  },
+
+  async updateItemDraft(input: {
+    householdId: string;
+    draftId: string;
+    userId: string;
+    patch: Partial<Pick<ItemDraft, "name" | "spaceId" | "areaId" | "areaNameSnapshot" | "kind" | "tags" | "notes" | "vision">> & {
+      image?: ImageRef | null;
+    };
+  }) {
+    await updateDoc(doc(requireDb(), householdPaths.itemDraft(input.householdId, input.draftId)), {
+      ...input.patch,
+      updatedAt: serverTimestamp(),
+      updatedBy: input.userId
+    });
+  },
+
+  async completeItemDraft(input: {
+    householdId: string;
+    userId: string;
+    draftId: string;
+    itemId?: string;
+    name: string;
+    spaceId: string;
+    areaId: string;
+    areaNameSnapshot: string;
+    kind?: Item["kind"];
+    image: ImageRef;
+    value?: number;
+    isPriceless?: boolean;
+    tags?: string[];
+    notes?: string;
+    vision?: Item["vision"];
+  }) {
+    const database = requireDb();
+    const itemRef = input.itemId
+      ? doc(collection(database, householdPaths.items(input.householdId)), input.itemId)
+      : doc(collection(database, householdPaths.items(input.householdId)));
+    const batch = writeBatch(database);
+    batch.set(itemRef, {
+      householdId: input.householdId,
+      spaceId: input.spaceId,
+      areaId: input.areaId,
+      areaNameSnapshot: input.areaNameSnapshot,
+      name: input.name,
+      kind: input.kind ?? "item",
+      image: input.image,
+      value: input.value ?? null,
+      isPriceless: input.isPriceless ?? false,
+      tags: input.tags ?? [],
+      notes: input.notes ?? "",
+      isPacked: false,
+      photoStatus: "attached",
+      entryMode: "photo_draft",
+      vision: input.vision ?? null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      createdBy: input.userId,
+      updatedBy: input.userId
+    });
+    batch.delete(doc(database, householdPaths.itemDraft(input.householdId, input.draftId)));
+    await batch.commit();
+    return itemRef.id;
+  },
+
+  async deleteItemDraft(input: { householdId: string; draftId: string }) {
+    await deleteDoc(doc(requireDb(), householdPaths.itemDraft(input.householdId, input.draftId)));
   },
 
   async saveLlmConfig(householdId: string, config: HouseholdLlmConfig) {

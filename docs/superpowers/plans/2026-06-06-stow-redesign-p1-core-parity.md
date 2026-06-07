@@ -88,7 +88,7 @@ git commit -m "feat(mobile): add position to Space/Area, widen Space.icon to str
 
 The reorder methods write `position = index` for each id in `orderedIds`. The pure index→position mapping is what we unit-test (the Firestore `writeBatch` is exercised by the Playwright e2e). Extract that mapping into a tiny exported pure helper so it is testable without Firestore.
 
-- [ ] **Step 1: Write the failing test** (pure helper only)
+- [x] **Step 1: Write the failing test** (pure helper only)
 
 ```ts
 // src/features/stow/services/repositoryOrdering.test.ts
@@ -115,12 +115,12 @@ describe("positionUpdatesFor", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/services/repositoryOrdering.test.ts`
 Expected: FAIL — `positionUpdatesFor` is not exported.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `src/features/stow/services/repository.ts`, add the pure helper just above `export const inventoryRepository = {` (after `requireDb()`):
 ```ts
@@ -233,17 +233,17 @@ Add the two reorder methods. Insert them immediately after `updateArea` (after i
 
 > Note: the `updateSpace` patch `Pick` already accepts `"icon"` and now `Space.icon` is `string`, so the existing `Partial<Pick<Space, "name" | "icon" | "color">>` type stays valid with no change. Spaces/Areas have **no** `createdBy`/`updatedBy` (contract §5) — do not add them.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/services/repositoryOrdering.test.ts`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Typecheck**
+- [x] **Step 5: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/features/stow/services/repository.ts src/features/stow/services/repositoryOrdering.test.ts
