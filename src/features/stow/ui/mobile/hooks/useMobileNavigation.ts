@@ -17,7 +17,9 @@ export type OverlayKind =
   | "addSpace"
   | "addArea"
   | "editSpace"
-  | "captureFirst";
+  | "captureFirst"
+  | "spaceQr"
+  | "scanQr";
 
 export interface OverlayState {
   kind: OverlayKind | null;
@@ -113,6 +115,12 @@ export function useMobileNavigation(householdId: string, basePath = "/app") {
     navigate(buildMobilePath(basePath, { spaceId, areaId: areaId ?? null }));
   }
 
+  function openPath(path: string) {
+    const normalized = path.startsWith("/") ? path : `/${path}`;
+    const b = basePath === "/" ? "" : basePath;
+    navigate(`${b}${normalized}`);
+  }
+
   function openItem(itemId: string) {
     const next = new URLSearchParams();
     next.set("from", route.tab);
@@ -145,6 +153,7 @@ export function useMobileNavigation(householdId: string, basePath = "/app") {
     navigateToTab,
     goActivity,
     openSpace,
+    openPath,
     openItem,
     back,
     openOverlay,

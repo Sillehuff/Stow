@@ -165,7 +165,7 @@ git add src/features/stow/ui/mobile/capture/qr.ts src/features/stow/ui/mobile/ca
 git commit -m "feat(mobile): add QR url + scan-target helpers ported from legacy"
 ```
 
-- [ ] **Step 6: Extend the overlay union for the QR sheets**
+- [x] **Step 6: Extend the overlay union for the QR sheets**
 
 In `src/features/stow/ui/mobile/hooks/useMobileNavigation.ts`, find the `OverlayKind` union (contract §3 baseline plus P2/P3/P4 additions) and add the two QR overlay kinds:
 
@@ -179,7 +179,7 @@ export type OverlayKind = "scan" | "photo" | "addItem" | "addSpace" | "addArea" 
 ```
 *(If P2–P4 added other members, preserve them; append `"spaceQr"` and `"scanQr"`. The `OverlayState.payload` already carries `Record<string, unknown>`, so `spaceQr` passes `{ spaceId }`.)*
 
-- [ ] **Step 7: Create `SpaceQrSheet` (QR generation UI)**
+- [x] **Step 7: Create `SpaceQrSheet` (QR generation UI)**
 
 ```tsx
 // src/features/stow/ui/mobile/spaces/SpaceQrSheet.tsx
@@ -268,7 +268,7 @@ export function SpaceQrSheet({ open, spaceId, spaceName, onClose, onCopied }: Sp
 }
 ```
 
-- [ ] **Step 8: Create `ScanQrSheet` (paste/scan-to-navigate UI)**
+- [x] **Step 8: Create `ScanQrSheet` (paste/scan-to-navigate UI)**
 
 ```tsx
 // src/features/stow/ui/mobile/capture/ScanQrSheet.tsx
@@ -321,7 +321,7 @@ export function ScanQrSheet({ open, onClose, onError }: ScanQrSheetProps) {
 
 > Note: `Sheet`, `Field`, `Button` are the P1 primitives (contract §7). `Field`'s `onChange` is `(value: string) => void` per contract §7 (`components/Field.tsx`).
 
-- [ ] **Step 9: Wire the RoomScreen QR button → `spaceQr` overlay**
+- [x] **Step 9: Wire the RoomScreen QR button → `spaceQr` overlay**
 
 In `src/features/stow/ui/mobile/screens/RoomScreen.tsx`, the header QR button (placeholder/no-op from P1) calls `openOverlay`. Find the QR button (it sits beside the Camera button in the room header) and set its handler:
 
@@ -339,7 +339,7 @@ After:
 ```
 Ensure `QrCode` is imported from the icon registry (`@/features/stow/ui/mobile/theme/icons` — add `QrCode` to its re-export list if not already present) and `openOverlay`/`spaceId` are in scope (they come from the `useMobileNavigation` value passed into `RoomScreen`).
 
-- [ ] **Step 10: Render the two sheets in `StowMobileApp` overlay router**
+- [x] **Step 10: Render the two sheets in `StowMobileApp` overlay router**
 
 In `src/features/stow/ui/mobile/StowMobileApp.tsx`, in the overlay-rendering block (the `switch`/conditional on `nav.overlay.kind`), add the two cases. Resolve the space name from `data.spaces`:
 
@@ -365,7 +365,7 @@ import { SpaceQrSheet } from "@/features/stow/ui/mobile/spaces/SpaceQrSheet";
 import { ScanQrSheet } from "@/features/stow/ui/mobile/capture/ScanQrSheet";
 ```
 
-- [ ] **Step 11: Add a "Scan QR" affordance to the ScanOverlay mode strip**
+- [x] **Step 11: Add a "Scan QR" affordance to the ScanOverlay mode strip**
 
 The center Scan FAB opens `ScanOverlay` (contract §9). Add a small "Scan QR" text button below the One item / Whole shelf mode strip that closes the camera overlay and opens `scanQr`. In `src/features/stow/ui/mobile/capture/ScanOverlay.tsx`, the overlay receives navigation via props; add an `onScanQr` prop and a button:
 
@@ -379,16 +379,16 @@ The center Scan FAB opens `ScanOverlay` (contract §9). Add a small "Scan QR" te
 ```
 Then in `StowMobileApp.tsx` where `ScanOverlay` is rendered, pass `onScanQr={() => { nav.closeOverlay(); nav.openOverlay("scanQr"); }}`.
 
-- [ ] **Step 12: Typecheck**
+- [x] **Step 12: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 13: Manual smoke (still on `/app`, both apps alive)**
+- [x] **Step 13: Manual smoke (still on `/app`, both apps alive)**
 
 Run: `npm run dev`, open `http://127.0.0.1:5173/app`, open a room, tap the QR button → a 220px QR renders for `${origin}/spaces/<id>`, Copy/Share/PNG work. Open the Scan FAB → "Scan a Stow QR label" → paste `/spaces/<an existing id>` → it navigates to that room. Paste an off-origin URL → "Use a Stow QR link for this app" toast.
 
-- [ ] **Step 14: Commit**
+- [x] **Step 14: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/spaces/SpaceQrSheet.tsx src/features/stow/ui/mobile/capture/ScanQrSheet.tsx src/features/stow/ui/mobile/capture/ScanOverlay.tsx src/features/stow/ui/mobile/screens/RoomScreen.tsx src/features/stow/ui/mobile/StowMobileApp.tsx src/features/stow/ui/mobile/hooks/useMobileNavigation.ts src/features/stow/ui/mobile/theme/icons.tsx

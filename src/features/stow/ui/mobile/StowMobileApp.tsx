@@ -19,6 +19,7 @@ import { CaptureFirst } from "@/features/stow/ui/mobile/capture/CaptureFirst";
 import { PhotoSource } from "@/features/stow/ui/mobile/capture/PhotoSource";
 import { QuickCapture } from "@/features/stow/ui/mobile/capture/QuickCapture";
 import { ScanOverlay } from "@/features/stow/ui/mobile/capture/ScanOverlay";
+import { ScanQrSheet } from "@/features/stow/ui/mobile/capture/ScanQrSheet";
 import { HomeScreen } from "@/features/stow/ui/mobile/screens/HomeScreen";
 import { ItemDetail } from "@/features/stow/ui/mobile/screens/ItemDetail";
 import { PackingScreen } from "@/features/stow/ui/mobile/screens/PackingScreen";
@@ -27,6 +28,7 @@ import { SearchScreen } from "@/features/stow/ui/mobile/screens/SearchScreen";
 import { SettingsScreen } from "@/features/stow/ui/mobile/screens/SettingsScreen";
 import type { SpacesListProps } from "@/features/stow/ui/mobile/screens/SpacesList";
 import { EditSpaceSheet } from "@/features/stow/ui/mobile/spaces/EditSpaceSheet";
+import { SpaceQrSheet } from "@/features/stow/ui/mobile/spaces/SpaceQrSheet";
 import { SpaceActionSheet } from "@/features/stow/ui/mobile/spaces/SpaceActionSheet";
 import { BottomNav } from "@/features/stow/ui/mobile/shell/BottomNav";
 import { Confirm } from "@/features/stow/ui/mobile/shell/Confirm";
@@ -88,6 +90,9 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
 
   const editSpacePayloadId = nav.overlay.kind === "editSpace" ? (nav.overlay.payload?.spaceId as string | undefined) : undefined;
   const editSpace = editSpacePayloadId ? data.spaces.find((space) => space.id === editSpacePayloadId) ?? null : null;
+
+  const spaceQrPayloadId = nav.overlay.kind === "spaceQr" ? (nav.overlay.payload?.spaceId as string | undefined) : undefined;
+  const spaceQrSpace = spaceQrPayloadId ? data.spaces.find((space) => space.id === spaceQrPayloadId) ?? null : null;
 
   const addAreaSpaceId = nav.overlay.kind === "addArea" ? (nav.overlay.payload?.spaceId as string | undefined) : undefined;
   const addAreaSpace = addAreaSpaceId ? data.spaces.find((space) => space.id === addAreaSpaceId) ?? null : null;
@@ -217,6 +222,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
         onOpenItem={(itemId) => nav.openItem(itemId)}
         onAddArea={() => nav.openOverlay("addArea", { spaceId: selectedSpace.id })}
         onAddItem={(areaId) => nav.openOverlay("captureFirst", { spaceId: selectedSpace.id, areaId })}
+        onOpenSpaceQr={() => nav.openOverlay("spaceQr", { spaceId: selectedSpace.id })}
         onComingSoon={flash}
       />
     ) : (
@@ -568,7 +574,19 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
             onClose={nav.closeOverlay}
             onCaptureSingle={(blob) => void handleScanSingle(blob)}
             onCaptureShelf={handleScanShelf}
+            onScanQr={() => {
+              nav.closeOverlay();
+              nav.openOverlay("scanQr");
+            }}
           />
+        ) : null}
+
+        {nav.overlay.kind === "spaceQr" ? (
+          <SpaceQrSheet open space={spaceQrSpace} onClose={nav.closeOverlay} onFlash={flash} />
+        ) : null}
+
+        {nav.overlay.kind === "scanQr" ? (
+          <ScanQrSheet open onClose={nav.closeOverlay} onOpenPath={nav.openPath} onFlash={flash} />
         ) : null}
 
         {shelfCapture ? (

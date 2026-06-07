@@ -14,6 +14,7 @@ export interface RoomScreenProps {
   onOpenItem: (itemId: string) => void;
   onAddArea: () => void;
   onAddItem: (areaId: string | null) => void;
+  onOpenSpaceQr: () => void;
   onComingSoon: (label: string) => void;
 }
 
@@ -61,7 +62,19 @@ function IconButton({ label, onClick, children }: { label: string; onClick: () =
 }
 
 export function RoomScreen(props: RoomScreenProps) {
-  const { space, items, selectedAreaId, onBack, onClearArea, onOpenArea, onOpenItem, onAddArea, onAddItem, onComingSoon } = props;
+  const {
+    space,
+    items,
+    selectedAreaId,
+    onBack,
+    onClearArea,
+    onOpenArea,
+    onOpenItem,
+    onAddArea,
+    onAddItem,
+    onOpenSpaceQr,
+    onComingSoon
+  } = props;
   const selectedArea = selectedAreaId ? space.areas.find((area) => area.id === selectedAreaId) ?? null : null;
   const isInArea = selectedArea != null;
   const spaceItems = items.filter((item) => item.spaceId === space.id);
@@ -129,7 +142,7 @@ export function RoomScreen(props: RoomScreenProps) {
           <IconButton label="Camera" onClick={() => onComingSoon("Camera arrives in P2")}>
             <Camera size={18} color="var(--stow-ink-muted)" />
           </IconButton>
-          <IconButton label="QR labels" onClick={() => onComingSoon("QR labels arrive in a later release")}>
+          <IconButton label="Space QR" onClick={onOpenSpaceQr}>
             <QrCode size={18} color="var(--stow-ink-muted)" />
           </IconButton>
         </div>

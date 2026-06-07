@@ -8,11 +8,12 @@ export interface ScanOverlayProps {
   onClose: () => void;
   onCaptureSingle: (blob: Blob) => void;
   onCaptureShelf?: (blob: Blob) => void;
+  onScanQr?: () => void;
 }
 
 const DARK = "#0A0A12";
 
-export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf }: ScanOverlayProps) {
+export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf, onScanQr }: ScanOverlayProps) {
   const { capture, error, start, status, stop, videoRef } = useCamera();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -215,7 +216,7 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf }: ScanOv
             borderRadius: 99,
             padding: 4,
             width: "fit-content",
-            margin: "0 auto 22px"
+            margin: onScanQr ? "0 auto 10px" : "0 auto 22px"
           }}
         >
           <button
@@ -266,6 +267,26 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf }: ScanOv
             Whole shelf
           </button>
         </div>
+
+        {onScanQr ? (
+          <button
+            type="button"
+            onClick={onScanQr}
+            style={{
+              margin: "0 auto 22px",
+              background: "none",
+              border: "none",
+              color: "#fff",
+              opacity: 0.85,
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+              fontFamily: "inherit"
+            }}
+          >
+            Scan a Stow QR label
+          </button>
+        ) : null}
 
         {unavailable ? (
           <button
