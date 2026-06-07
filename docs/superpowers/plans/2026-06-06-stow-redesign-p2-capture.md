@@ -1728,7 +1728,7 @@ interface ScanOverlayProps {
 **Files:**
 - Create: `src/features/stow/ui/mobile/capture/ScanOverlay.tsx`
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 ```tsx
 // src/features/stow/ui/mobile/capture/ScanOverlay.tsx
@@ -2002,12 +2002,12 @@ export function ScanOverlay({ onClose, onCaptureSingle }: ScanOverlayProps) {
 }
 ```
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/capture/ScanOverlay.tsx
