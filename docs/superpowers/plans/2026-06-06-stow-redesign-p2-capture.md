@@ -763,7 +763,7 @@ interface PhotoFieldProps {
 **Files:**
 - Create: `src/features/stow/ui/mobile/components/PhotoField.tsx`
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 > If `ImageIcon` is not re-exported from `@/features/stow/ui/mobile/theme/icons` (P0 re-exported a shell-glyph subset), import the missing glyphs directly from `lucide-react` in this file: `import { Camera, ImageIcon, Sparkles, ChevronRight, Trash2 } from "lucide-react";` Confirm names with `node -e "console.log(['Camera','ImageIcon','Sparkles','ChevronRight','Trash2'].map(n=>[n, !!require('lucide-react')[n]]))"`. (Verified present at plan time.)
 
@@ -1032,12 +1032,12 @@ function FilledControl({
 }
 ```
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `npm run typecheck`
 Expected: FAIL only if `PhotoSource` is not yet created — proceed to Task 5b, then re-run. (If implementing strictly in order, create the `PhotoSource` stub from Task 5b before typechecking. The two are a unit; build Task 5b immediately after.)
 
-- [ ] **Step 3: Commit** (after Task 5b typechecks clean)
+- [x] **Step 3: Commit** (after Task 5b typechecks clean)
 
 ```bash
 git add src/features/stow/ui/mobile/components/PhotoField.tsx
