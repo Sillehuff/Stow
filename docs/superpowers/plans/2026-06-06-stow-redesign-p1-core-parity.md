@@ -2289,7 +2289,7 @@ export interface SearchScreenProps {
 }
 ```
 
-- [ ] **Step 1: Write the data wiring** (full logic — persisted toggle, match filter, tag union)
+- [x] **Step 1: Write the data wiring** (full logic — persisted toggle, match filter, tag union)
 
 ```tsx
 export function SearchScreen(props: SearchScreenProps) {
@@ -2329,7 +2329,7 @@ export function SearchScreen(props: SearchScreenProps) {
 ```
 > `matchesPackingItemPickerQuery(query, fields)` (from `src/features/stow/ui/packing/pickerSearch.ts`) normalizes (`toLowerCase`, collapse whitespace) and does substring `includes` across `fields` — reuse it so search semantics match the packing picker. The prototype matched name/tags/space; we additionally include `areaNameSnapshot` (harmless superset).
 
-- [ ] **Step 2: Write the markup** — port from `SearchScreen` (translate per §1.3, map per §11)
+- [x] **Step 2: Write the markup** — port from `SearchScreen` (translate per §1.3, map per §11)
 
 Structure:
 - Sticky glass header: `<h1 style={{fontFamily:"var(--stow-display)"}}>Search</h1>`; a row with a flex-1 search input wrapper (`<Search size={16}/>` left, `<input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Items, tags, or spaces...">`, accent border when `query`, a clear `×` when `query`) and a 44×44 toggle button → `onClick={()=>setGridView(v=>!v)}` showing `<List/>` when in grid mode else `<LayoutGrid/>`.
@@ -2340,12 +2340,12 @@ Structure:
     - grid view → a 2-col grid of cards (port `gridCard`, lines 285–295): square image (`item.image?.downloadUrl` → `<img>`; else `item.kind==="folder"?<Folder/>:<Inbox/>`), name, `spaceName(item.spaceId)`; `onClick={()=>onOpenItem(it.id)}`.
     - list view → `listToShow.map(it => <ItemRow key={it.id} item={it} spaceName={spaceName(it.spaceId)} onClick={()=>onOpenItem(it.id)} />)`.
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/screens/SearchScreen.tsx
