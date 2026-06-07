@@ -962,17 +962,17 @@ git commit -m "feat(mobile): mount new app at /app dev route"
 
 ## Task 10: Full verification + manual smoke
 
-- [ ] **Step 1: Run the unit suite**
+- [x] **Step 1: Run the unit suite**
 
 Run: `npm test`
 Expected: PASS, including the new `palette.test.ts`, `icons.test.ts`, `useMobileNavigation.test.ts`.
 
-- [ ] **Step 2: Typecheck + build**
+- [x] **Step 2: Typecheck + build**
 
 Run: `npm run typecheck && npm run build`
 Expected: both succeed (TS build + Vite production build with no errors).
 
-- [ ] **Step 3: Manual smoke in dev**
+- [x] **Step 3: Manual smoke in dev**
 
 Run: `npm run dev` (with `VITE_USE_FIREBASE_EMULATORS=true` if testing against emulators), then open `http://127.0.0.1:5173/app`.
 Expected:
@@ -983,7 +983,7 @@ Expected:
 - The Packing tab shows an orange count badge when unpacked items exist.
 - Legacy `/spaces` and desktop `/next` still load unchanged.
 
-- [ ] **Step 4: Final commit (if any manual fixups were needed)**
+- [x] **Step 4: Final commit (if any manual fixups were needed)**
 
 ```bash
 git add -A
