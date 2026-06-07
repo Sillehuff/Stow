@@ -684,7 +684,7 @@ git commit -m "feat(mobile): add useHoldToReorder with pure reorderIndex math" \
 
 Contract §7 signatures + z-index ladder (sheet 70, actionSheet 75, confirm 80). These are UI (no unit test) but carry real logic: Escape-to-close, scrim click, and focus trap. Write the logic in full; port the visual frame from `prototype/components.jsx` (`Sheet`, `Confirm`) and `prototype/spaces-mgmt.jsx` (`SpaceActionSheet` for the action-sheet look), translating tokens per §1.3.
 
-- [ ] **Step 1: Write a small focus-trap + escape hook used by all three** (inline in Sheet, re-imported by the others)
+- [x] **Step 1: Write a small focus-trap + escape hook used by all three** (inline in Sheet, re-imported by the others)
 
 Create `src/features/stow/ui/mobile/shell/useDismissable.ts`:
 ```ts
@@ -738,7 +738,7 @@ export function useDismissable(open: boolean, onClose: () => void) {
 }
 ```
 
-- [ ] **Step 2: Write `Sheet.tsx`** (contract §7: `{ open, onClose, title, children }`)
+- [x] **Step 2: Write `Sheet.tsx`** (contract §7: `{ open, onClose, title, children }`)
 
 ```tsx
 // src/features/stow/ui/mobile/shell/Sheet.tsx
@@ -795,7 +795,7 @@ export function Sheet({
 ```
 > This is the §1.3 translation of `prototype/components.jsx` `Sheet` (`P.surface`→`var(--stow-surface)`, `P.border`→`var(--stow-border)`, `P.canvas`→`var(--stow-canvas)`, `P.inkMuted`→`var(--stow-ink-muted)`), plus the dialog role + focus trap + Escape from `useDismissable`.
 
-- [ ] **Step 3: Write `Confirm.tsx`** (contract §7: adds `body`, `confirmLabel`, `onConfirm`, `onCancel`, `danger?`)
+- [x] **Step 3: Write `Confirm.tsx`** (contract §7: adds `body`, `confirmLabel`, `onConfirm`, `onCancel`, `danger?`)
 
 ```tsx
 // src/features/stow/ui/mobile/shell/Confirm.tsx
@@ -862,7 +862,7 @@ export function Confirm({
 }
 ```
 
-- [ ] **Step 4: Write `ActionSheet.tsx`** (contract §7: `SheetAction[]` + iOS look)
+- [x] **Step 4: Write `ActionSheet.tsx`** (contract §7: `SheetAction[]` + iOS look)
 
 ```tsx
 // src/features/stow/ui/mobile/shell/ActionSheet.tsx
@@ -936,12 +936,12 @@ export function ActionSheet({
 }
 ```
 
-- [ ] **Step 5: Typecheck**
+- [x] **Step 5: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/shell/Sheet.tsx src/features/stow/ui/mobile/shell/Confirm.tsx src/features/stow/ui/mobile/shell/ActionSheet.tsx src/features/stow/ui/mobile/shell/useDismissable.ts
