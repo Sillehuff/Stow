@@ -1350,7 +1350,7 @@ export function SpacesList(props: SpacesListProps) {
 }
 ```
 
-- [ ] **Step 1: Resolve the rename-trigger ownership** (logic decision, write in full)
+- [x] **Step 1: Resolve the rename-trigger ownership** (logic decision, write in full)
 
 The prototype's `SpaceActionSheet` "Rename" calls `act.startRename(id)` which sets list-level rename state. Since the action sheet is rendered by `StowMobileApp` (Task 15) but rename is list-local, **lift the rename trigger to the parent**: change `SpacesListProps` to accept the rename trigger as controlled state from the parent. Replace the local `renameId`/`renameValue` `useState` with controlled props:
 ```tsx
@@ -1371,7 +1371,7 @@ export interface SpacesListProps {
 ```
 Then the body uses `renamingId`/`renameValue` props (delete the local rename `useState` and the three helper fns above; the parent owns them — see Task 15 where `StowMobileApp` holds `renamingSpaceId`/`renameValue` and the `SpaceActionSheet` "Rename" action sets `renamingSpaceId`).
 
-- [ ] **Step 2: Write the component body** — port markup from `prototype/spaces-mgmt.jsx` `SpacesManagedList` (lines 144–208)
+- [x] **Step 2: Write the component body** — port markup from `prototype/spaces-mgmt.jsx` `SpacesManagedList` (lines 144–208)
 
 Structure (translate per §1.3, map per §11):
 - A `Label`-style header "Your Spaces" (`fontSize:11; fontWeight:800; textTransform:uppercase; letterSpacing:1.5; color:var(--stow-warm); marginBottom:10; marginLeft:2`).
@@ -1385,12 +1385,12 @@ Structure (translate per §1.3, map per §11):
 - Footer inside the card: an "+ Add Space" row (`borderTop:1px solid var(--stow-border-l)`, `color:var(--stow-accent)`, `<Plus size={16}/>`) → `onClick={onAddSpace}`.
 - Below the card: the two helper hints (port lines 203–206): "Tap ··· to edit, rename, or delete a space." and "Touch & hold a row to drag it into order." with `<Grip color="var(--stow-warm)"/>`.
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS (note: `SpacesList` is not yet rendered anywhere; that happens in Task 10/15 — typecheck only confirms it compiles).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/screens/SpacesList.tsx
