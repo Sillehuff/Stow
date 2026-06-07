@@ -1979,7 +1979,7 @@ export interface ItemDetailProps {
 }
 ```
 
-- [ ] **Step 1: Write the state + handlers** (full logic — edit draft, tag union minus assigned, move destination)
+- [x] **Step 1: Write the state + handlers** (full logic — edit draft, tag union minus assigned, move destination)
 
 ```tsx
 export function ItemDetail(props: ItemDetailProps) {
@@ -2039,7 +2039,7 @@ export function ItemDetail(props: ItemDetailProps) {
 ```
 > Mapping (§11): the prototype's `roomName(item.roomId)` → `spaceName`; `item.area` → `item.areaNameSnapshot`; `item.isFolder` → `item.kind==="folder"`; `item.image` url → `item.image?.downloadUrl`. The pack toggle calls `onTogglePacked(!item.isPacked)` (still `isPacked` in P1; `status` arrives P4 — contract §7.7). Value parses to `number | null` (repo stores `value ?? null`).
 
-- [ ] **Step 2: Write the markup** — port from `ItemDetail` location-first branches (translate per §1.3)
+- [x] **Step 2: Write the markup** — port from `ItemDetail` location-first branches (translate per §1.3)
 
 Outer: `position:absolute; inset:0; zIndex:60; background:var(--stow-surface); animation:"stowUp 0.32s ease-out"`.
 - **Hero** (`height: hasImage ? "38%" : "18%"`, `var(--stow-canvas)`): if `hasImage` → `<img src={item.image!.downloadUrl}>`; else centered `item.kind==="folder" ? <Folder/> : <Inbox/>` at `var(--stow-border)`. Floating top bar (`padding:"calc(env(safe-area-inset-top)) 16px 0"` ish — use `52px 16px 0` as the prototype, but prefer safe-area: `"calc(env(safe-area-inset-top) + 8px) 16px 0"`): a back icon-button (`onClick={() => { onBack(); }}`); and when `mode==="view"`, an edit icon-button (`onClick={startEdit}`) + a delete icon-button (`onClick={onDelete}`). Icon-button helper: 40×40 round, `background: hasImage ? "rgba(255,255,255,0.22)" : "var(--stow-canvas)"`, `backdrop-filter: blur(10px)`; glyph color `hasImage ? "#fff" : ...`.
@@ -2055,12 +2055,12 @@ Outer: `position:absolute; inset:0; zIndex:60; background:var(--stow-surface); a
     - **Tags:** a "Tags" `FieldLabel`; assigned tags as static chips (`Tag` + name) + a dashed "+ Add" chip → `onClick={()=>setMode("tag")}`.
     - **Actions** (`marginTop:auto`): an "Edit Item" `Button` (accent-soft, `<Pencil/>`) → `onClick={startEdit}`; a "Move to another space" `Button` (neutral, `<ArrowRight/>`) → `onClick={() => setMode("move")}`.
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/screens/ItemDetail.tsx

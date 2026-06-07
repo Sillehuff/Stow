@@ -1,0 +1,675 @@
+import { useMemo, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import type { Item, SpaceWithAreas } from "@/types/domain";
+import {
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  Folder,
+  Inbox,
+  MapPin,
+  Package,
+  Pencil,
+  Plus,
+  Save,
+  Star,
+  Tag,
+  Trash2,
+  X
+} from "@/features/stow/ui/mobile/theme/icons";
+import { Button } from "@/features/stow/ui/mobile/components/Button";
+import { Field } from "@/features/stow/ui/mobile/components/Field";
+
+type Mode = "view" | "edit" | "tag" | "move";
+
+export interface ItemDetailProps {
+  item: Item;
+  space: SpaceWithAreas | null;
+  spaces: SpaceWithAreas[];
+  allTags: string[];
+  onBack: () => void;
+  onTogglePacked: (next: boolean) => void;
+  onSaveEdit: (patch: { name: string; value: number | null; notes: string }) => void;
+  onToggleTag: (tag: string) => void;
+  onMove: (dest: { spaceId: string; areaId: string; areaNameSnapshot: string }) => void;
+  onDelete: () => void;
+  onFlash: (msg: string) => void;
+}
+
+function FieldLabel({ children, style }: { children: ReactNode; style?: CSSProperties }) {
+  return (
+    <div
+      style={{
+        fontSize: 11,
+        fontWeight: 800,
+        textTransform: "uppercase",
+        letterSpacing: 1.2,
+        color: "var(--stow-warm)",
+        marginBottom: 6,
+        ...style
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function IconButton({
+  label,
+  onClick,
+  hasImage,
+  children
+}: {
+  label: string;
+  onClick: () => void;
+  hasImage: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      style={{
+        width: 40,
+        height: 40,
+        borderRadius: 99,
+        background: hasImage ? "rgba(255,255,255,0.22)" : "var(--stow-canvas)",
+        border: "none",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+        boxShadow: hasImage ? "none" : "var(--stow-shadow-soft)"
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+const chipBase: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 5,
+  padding: "7px 12px",
+  borderRadius: 12,
+  fontSize: 13,
+  fontWeight: 700,
+  cursor: "pointer",
+  fontFamily: "inherit"
+};
+
+function parseValue(value: string) {
+  if (!value.trim()) return null;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function ItemDetail(props: ItemDetailProps) {
+  const { item, space, spaces, allTags, onBack, onTogglePacked, onSaveEdit, onToggleTag, onMove, onDelete, onFlash } = props;
+  const [mode, setMode] = useState<Mode>("view");
+
+  const [draftName, setDraftName] = useState(item.name);
+  const [draftValue, setDraftValue] = useState(item.value != null ? String(item.value) : "");
+  const [draftNotes, setDraftNotes] = useState(item.notes ?? "");
+
+  const [newTag, setNewTag] = useState("");
+  const availableTags = useMemo(() => allTags.filter((tag) => !(item.tags || []).includes(tag)), [allTags, item.tags]);
+
+  const [moveSpaceId, setMoveSpaceId] = useState(space?.id ?? spaces[0]?.id ?? "");
+  const moveSpace = useMemo(() => spaces.find((candidate) => candidate.id === moveSpaceId) ?? null, [spaces, moveSpaceId]);
+  const [moveAreaId, setMoveAreaId] = useState(space?.areas.find((area) => area.id === item.areaId)?.id ?? space?.areas[0]?.id ?? "");
+
+  const spaceName = space?.name ?? "";
+  const locationArea = item.areaNameSnapshot;
+  const hasImage = Boolean(item.image?.downloadUrl);
+  const imageUrl = item.image?.downloadUrl;
+
+  function startEdit() {
+    setDraftName(item.name);
+    setDraftValue(item.value != null ? String(item.value) : "");
+    setDraftNotes(item.notes ?? "");
+    setMode("edit");
+  }
+
+  function saveEdit() {
+    if (!draftName.trim()) return;
+    onSaveEdit({
+      name: draftName.trim(),
+      value: parseValue(draftValue),
+      notes: draftNotes
+    });
+    setMode("view");
+    onFlash("Item updated");
+  }
+
+  function openMove() {
+    const nextSpace = space ?? spaces[0] ?? null;
+    setMoveSpaceId(nextSpace?.id ?? "");
+    setMoveAreaId(nextSpace?.areas.find((area) => area.id === item.areaId)?.id ?? nextSpace?.areas[0]?.id ?? "");
+    setMode("move");
+  }
+
+  function selectMoveSpace(nextSpace: SpaceWithAreas) {
+    setMoveSpaceId(nextSpace.id);
+    setMoveAreaId(nextSpace.areas[0]?.id ?? "");
+  }
+
+  function commitMove() {
+    if (!moveSpace || !moveAreaId) return;
+    onMove({
+      spaceId: moveSpace.id,
+      areaId: moveAreaId,
+      areaNameSnapshot: moveSpace.areas.find((area) => area.id === moveAreaId)?.name ?? ""
+    });
+    setMode("view");
+    onFlash("Item moved");
+  }
+
+  function createTag() {
+    const tag = newTag.trim();
+    if (!tag) return;
+    onToggleTag(tag);
+    setNewTag("");
+  }
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 60,
+        background: "var(--stow-surface)",
+        display: "flex",
+        flexDirection: "column",
+        animation: "stowUp 0.32s ease-out"
+      }}
+    >
+      <div style={{ position: "relative", height: hasImage ? "38%" : "18%", background: "var(--stow-canvas)", flexShrink: 0 }}>
+        {hasImage && imageUrl ? (
+          <img src={imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {item.kind === "folder" ? (
+              <Folder size={48} color="var(--stow-border)" strokeWidth={1} />
+            ) : (
+              <Inbox size={48} color="var(--stow-border)" strokeWidth={1} />
+            )}
+          </div>
+        )}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            padding: "calc(env(safe-area-inset-top) + 8px) 16px 0",
+            boxSizing: "border-box",
+            display: "flex",
+            justifyContent: "space-between",
+            zIndex: 10,
+            background: hasImage ? "linear-gradient(to bottom, rgba(0,0,0,0.45), transparent)" : "transparent"
+          }}
+        >
+          <IconButton label="Back" onClick={onBack} hasImage={hasImage}>
+            <ChevronLeft size={18} strokeWidth={2.5} color={hasImage ? "#fff" : "var(--stow-ink)"} />
+          </IconButton>
+          {mode === "view" ? (
+            <div style={{ display: "flex", gap: 8 }}>
+              <IconButton label="Edit item" onClick={startEdit} hasImage={hasImage}>
+                <Pencil size={16} color={hasImage ? "#fff" : "var(--stow-accent)"} />
+              </IconButton>
+              <IconButton label="Delete item" onClick={onDelete} hasImage={hasImage}>
+                <Trash2 size={16} color={hasImage ? "#fff" : "var(--stow-danger)"} />
+              </IconButton>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div
+        style={{
+          flex: 1,
+          marginTop: -24,
+          borderRadius: "28px 28px 0 0",
+          position: "relative",
+          zIndex: 10,
+          padding: 24,
+          background: "var(--stow-surface)",
+          boxShadow: "0 -8px 30px rgba(0,0,0,0.1)",
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column"
+        }}
+      >
+        {mode === "tag" ? (
+          <div>
+            <h2 style={{ margin: "0 0 16px", fontSize: 20, fontWeight: 800, color: "var(--stow-ink)" }}>Manage Tags</h2>
+            <FieldLabel>Assigned</FieldLabel>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+              {(item.tags || []).map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => onToggleTag(tag)}
+                  style={{ ...chipBase, background: "var(--stow-accent)", color: "#fff", border: "none" }}
+                >
+                  <Tag size={11} color="#fff" />
+                  {tag}
+                  <X size={11} color="#fff" style={{ opacity: 0.8 }} />
+                </button>
+              ))}
+              {(item.tags || []).length === 0 ? <span style={{ fontSize: 13, color: "var(--stow-warm)" }}>None yet</span> : null}
+            </div>
+
+            <FieldLabel>Available</FieldLabel>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+              {availableTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => onToggleTag(tag)}
+                  style={{
+                    ...chipBase,
+                    background: "var(--stow-canvas)",
+                    color: "var(--stow-ink-soft)",
+                    border: "1px solid var(--stow-border-l)"
+                  }}
+                >
+                  <Tag size={11} color="var(--stow-ink-muted)" />
+                  {tag}
+                  <Plus size={11} color="var(--stow-warm)" />
+                </button>
+              ))}
+            </div>
+
+            <FieldLabel>Create New</FieldLabel>
+            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+              <input
+                value={newTag}
+                onChange={(event) => setNewTag(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") createTag();
+                }}
+                placeholder="New tag..."
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  boxSizing: "border-box",
+                  borderRadius: "var(--stow-radius-input)",
+                  padding: "10px 16px",
+                  fontSize: 14,
+                  fontWeight: 500,
+                  outline: "none",
+                  border: "1.5px solid var(--stow-border)",
+                  background: "var(--stow-canvas)",
+                  color: "var(--stow-ink)",
+                  fontFamily: "inherit"
+                }}
+              />
+              <button
+                type="button"
+                onClick={createTag}
+                disabled={!newTag.trim()}
+                style={{
+                  padding: "10px 18px",
+                  borderRadius: "var(--stow-radius-input)",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  border: "none",
+                  background: newTag.trim() ? "var(--stow-accent)" : "var(--stow-border)",
+                  color: newTag.trim() ? "#fff" : "var(--stow-warm)",
+                  cursor: newTag.trim() ? "pointer" : "default",
+                  fontFamily: "inherit",
+                  whiteSpace: "nowrap"
+                }}
+              >
+                + Create
+              </button>
+            </div>
+            <Button variant="primary" style={{ background: "var(--stow-ink)", color: "var(--stow-surface)" }} onClick={() => setMode("view")}>
+              Done
+            </Button>
+          </div>
+        ) : null}
+
+        {mode === "edit" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "var(--stow-ink)" }}>Edit Item</h2>
+              <button
+                type="button"
+                onClick={() => setMode("view")}
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: "var(--stow-warm)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  fontFamily: "inherit"
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+            <Field label="Name" value={draftName} onChange={setDraftName} placeholder="Item name" />
+            <div>
+              <FieldLabel>Photo</FieldLabel>
+              <div
+                style={{
+                  borderRadius: "var(--stow-radius-input)",
+                  padding: 18,
+                  minHeight: 88,
+                  boxSizing: "border-box",
+                  border: "1.5px dashed var(--stow-border)",
+                  background: "var(--stow-canvas)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--stow-warm)",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  textAlign: "center"
+                }}
+              >
+                Photo editing arrives in P2
+              </div>
+            </div>
+            <Field label="Value ($)" type="number" value={draftValue} onChange={setDraftValue} placeholder="0" />
+            <Field label="Notes" multiline value={draftNotes} onChange={setDraftNotes} placeholder="Serial number, purchase info..." />
+            <Button disabled={!draftName.trim()} onClick={saveEdit}>
+              <Save size={16} color="#fff" />
+              Save Changes
+            </Button>
+          </div>
+        ) : null}
+
+        {mode === "move" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "var(--stow-ink)" }}>Move Item</h2>
+            <div>
+              <FieldLabel>Space</FieldLabel>
+              <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
+                {spaces.map((candidate) => {
+                  const selected = candidate.id === moveSpaceId;
+                  return (
+                    <button
+                      key={candidate.id}
+                      type="button"
+                      onClick={() => selectMoveSpace(candidate)}
+                      style={{
+                        padding: "9px 13px",
+                        borderRadius: 99,
+                        border: selected ? "none" : "1px solid var(--stow-border-l)",
+                        background: selected ? candidate.color : "var(--stow-canvas)",
+                        color: selected ? "#fff" : "var(--stow-ink-soft)",
+                        fontSize: 13,
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        fontFamily: "inherit"
+                      }}
+                    >
+                      {candidate.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <FieldLabel>Area in {moveSpace?.name ?? "space"}</FieldLabel>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {(moveSpace?.areas ?? []).map((area) => {
+                  const selected = area.id === moveAreaId;
+                  return (
+                    <button
+                      key={area.id}
+                      type="button"
+                      onClick={() => setMoveAreaId(area.id)}
+                      style={{
+                        padding: "9px 13px",
+                        borderRadius: 99,
+                        border: selected ? "none" : "1px solid var(--stow-border-l)",
+                        background: selected ? "var(--stow-accent)" : "var(--stow-canvas)",
+                        color: selected ? "#fff" : "var(--stow-ink-soft)",
+                        fontSize: 13,
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        fontFamily: "inherit"
+                      }}
+                    >
+                      {area.name}
+                    </button>
+                  );
+                })}
+                {moveSpace && moveSpace.areas.length === 0 ? (
+                  <span style={{ fontSize: 13, color: "var(--stow-warm)" }}>No areas in this space</span>
+                ) : null}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
+              <Button disabled={!moveSpace || !moveAreaId} onClick={commitMove}>
+                <ArrowRight size={16} color="#fff" />
+                Move here
+              </Button>
+              <Button variant="neutral" onClick={() => setMode("view")}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {mode === "view" ? (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+              <div style={{ flex: 1, marginRight: 12, minWidth: 0 }}>
+                <h1
+                  style={{
+                    margin: 0,
+                    fontSize: 22,
+                    fontWeight: 900,
+                    color: "var(--stow-ink)",
+                    letterSpacing: 0,
+                    fontFamily: "var(--stow-display)"
+                  }}
+                >
+                  {item.name}
+                </h1>
+              </div>
+              <button
+                type="button"
+                aria-pressed={item.isPacked}
+                aria-label={item.isPacked ? "Mark item unpacked" : "Mark item packed"}
+                onClick={() => {
+                  onTogglePacked(!item.isPacked);
+                  onFlash(item.isPacked ? "Removed from bag" : "Added to bag");
+                }}
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 16,
+                  border: item.isPacked ? "none" : "1.5px solid var(--stow-border)",
+                  background: item.isPacked ? "var(--stow-success)" : "var(--stow-canvas)",
+                  color: item.isPacked ? "#fff" : "var(--stow-warm)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  flexShrink: 0
+                }}
+              >
+                <Package size={20} strokeWidth={2} color={item.isPacked ? "#fff" : "var(--stow-warm)"} />
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={openMove}
+              style={{
+                width: "100%",
+                textAlign: "left",
+                display: "flex",
+                alignItems: "center",
+                gap: 13,
+                borderRadius: 18,
+                padding: "14px 16px",
+                marginBottom: 12,
+                cursor: "pointer",
+                background: "var(--stow-accent-soft)",
+                border: "1px solid color-mix(in srgb, var(--stow-accent) 15%, transparent)",
+                fontFamily: "inherit"
+              }}
+            >
+              <div
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 13,
+                  background: "var(--stow-accent)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0
+                }}
+              >
+                <MapPin size={21} color="#fff" strokeWidth={2} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    letterSpacing: 1.2,
+                    textTransform: "uppercase",
+                    color: "var(--stow-accent)",
+                    marginBottom: 3
+                  }}
+                >
+                  Location
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 17, fontWeight: 800, color: "var(--stow-ink)" }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{spaceName}</span>
+                  <ChevronRight size={14} color="var(--stow-warm)" strokeWidth={2.4} style={{ flexShrink: 0 }} />
+                  <span style={{ color: "var(--stow-ink-soft)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {locationArea}
+                  </span>
+                </div>
+              </div>
+              <ArrowRight size={16} color="var(--stow-accent)" style={{ flexShrink: 0, opacity: 0.6 }} />
+            </button>
+
+            {item.value != null || item.isPriceless ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  marginBottom: 18,
+                  marginLeft: 2,
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  color: "var(--stow-warm)"
+                }}
+              >
+                {item.isPriceless ? (
+                  <>
+                    <Star size={12} color="var(--stow-warm)" />
+                    Priceless
+                  </>
+                ) : (
+                  <>
+                    <span style={{ textTransform: "uppercase", letterSpacing: 0.8, fontSize: 10.5, fontWeight: 800 }}>Value</span> $
+                    {item.value}
+                  </>
+                )}
+              </div>
+            ) : null}
+
+            {item.notes ? (
+              <div
+                style={{
+                  borderRadius: 16,
+                  padding: 16,
+                  marginBottom: 14,
+                  background: "var(--stow-canvas)",
+                  border: "1px solid var(--stow-border-l)"
+                }}
+              >
+                <FieldLabel>Notes</FieldLabel>
+                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--stow-ink-soft)" }}>{item.notes}</p>
+              </div>
+            ) : null}
+
+            <div style={{ marginBottom: 20 }}>
+              <FieldLabel>Tags</FieldLabel>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {(item.tags || []).map((tag) => (
+                  <span
+                    key={tag}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: "6px 14px",
+                      borderRadius: 14,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      background: "var(--stow-canvas)",
+                      color: "var(--stow-ink-soft)",
+                      border: "1px solid var(--stow-border-l)"
+                    }}
+                  >
+                    <Tag size={11} color="var(--stow-ink-muted)" />
+                    {tag}
+                  </span>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setMode("tag")}
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 14,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "var(--stow-accent)",
+                    border: "1.5px dashed color-mix(in srgb, var(--stow-accent) 33%, transparent)",
+                    background: "var(--stow-accent-soft)",
+                    cursor: "pointer",
+                    fontFamily: "inherit"
+                  }}
+                >
+                  + Add
+                </button>
+              </div>
+            </div>
+
+            <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+              <Button
+                variant="ghost"
+                onClick={startEdit}
+                style={{
+                  background: "var(--stow-accent-soft)",
+                  color: "var(--stow-accent)",
+                  border: "1px solid color-mix(in srgb, var(--stow-accent) 15%, transparent)"
+                }}
+              >
+                <Pencil size={15} color="var(--stow-accent)" />
+                Edit Item
+              </Button>
+              <Button variant="neutral" onClick={openMove}>
+                <ArrowRight size={15} color="var(--stow-ink)" />
+                Move to another space
+              </Button>
+            </div>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
