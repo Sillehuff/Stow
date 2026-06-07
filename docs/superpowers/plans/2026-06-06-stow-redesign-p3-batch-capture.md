@@ -1326,7 +1326,7 @@ Add an e2e spec under `tests/smoke/` that drives `/app`, opens the shelf capture
 
 **Mocking approach:** the Firebase callable hits the Functions emulator over HTTP at a URL containing `visionDetectShelfItems`. Intercept with `page.route("**/visionDetectShelfItems**", …)` and fulfill with the callable envelope `{ data: { detections, provider, jobId } }` (httpsCallable expects a top-level `data` key). Detections use **bbox 0..1**. This avoids needing a real Gemini key and keeps the test deterministic. Image upload to the Storage emulator still happens (the storage emulator is in the `test:smoke` emulator set); if upload flakiness appears, also stub `uploadFrame` is not possible from Playwright — instead rely on the storage emulator (already used by `authenticated-smoke.spec.ts` with PNG bytes) and the small camera fallback (file input). Use the **file-input fallback** path (no real camera in headless Chromium) — the same pattern P2's capture spec uses.
 
-- [ ] **Step 1: Write the spec**
+- [x] **Step 1: Write the spec**
 
 ```ts
 import { expect, test, type Page } from "@playwright/test";
@@ -1409,12 +1409,14 @@ test.describe("whole-shelf batch capture", () => {
 
 > Adjust selectors to the actual rendered labels/placeholders from Task 7. The decisive assertions are: (a) detections render after the mocked callable, (b) the **first** review card is the least-confident (unknown) one, and (c) after Done, **3** items exist in the targeted area. If creating a space/area inline is heavy, seed via the existing demo-seed or the `/app` Add flows from P1.
 
-- [ ] **Step 2: Run the smoke spec**
+- [x] **Step 2: Run the smoke spec**
 
 Run: `npm run test:smoke -- --grep "whole-shelf"` *(uses the auth+firestore+storage emulators; the detection callable is mocked via `page.route`, so the functions emulator is not required)*
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+Completed: targeted `tests/smoke/shelf-capture.spec.ts` passed under auth/firestore/storage emulators. First run exposed a dev StrictMode analysis guard bug in `QuickCapture`, fixed in `fix(mobile): make QuickCapture analysis StrictMode-safe`.
+
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/smoke/shelf-capture.spec.ts
