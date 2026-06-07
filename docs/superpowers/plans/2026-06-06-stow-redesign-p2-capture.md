@@ -670,7 +670,7 @@ Shared by `PhotoSource` (Task 5) and `ScanOverlay` (Task 8). Port `CornerBracket
 **Files:**
 - Create: `src/features/stow/ui/mobile/capture/CornerBrackets.tsx`
 
-- [ ] **Step 1: Write the component** (no unit test — pure presentational SVG-less markup; covered by manual + Playwright)
+- [x] **Step 1: Write the component** (no unit test — pure presentational SVG-less markup; covered by manual + Playwright)
 
 ```tsx
 // src/features/stow/ui/mobile/capture/CornerBrackets.tsx
@@ -710,12 +710,12 @@ export function CornerBrackets({ color }: { color: string }) {
 }
 ```
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/capture/CornerBrackets.tsx
