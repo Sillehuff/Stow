@@ -3183,7 +3183,7 @@ Add a mobile `/app` e2e that exercises the P1 flows: add a space → hold-to-reo
 
 > Selectors: the mobile screens use text labels and `aria-label`s from Tasks 8–16. Prefer role/text selectors (`getByRole("button", { name: ... })`, `getByText(...)`, `getByPlaceholder(...)`). For hold-to-reorder, drive a pointer long-press + drag with `page.mouse` (down → wait > 300ms → move in steps → up) on a space row, since `useHoldToReorder` arms on `pointerdown` after `holdMs`.
 
-- [ ] **Step 1: Write the spec**
+- [x] **Step 1: Write the spec**
 
 ```ts
 // tests/smoke/mobile-app.spec.ts
@@ -3320,12 +3320,14 @@ test.describe("mobile /app core parity", () => {
 ```
 > The spec is intentionally resilient (the `···` button selector has a fallback) because the exact accessible name depends on Task 8's markup. When implementing Task 8, give each space-row `···` button `aria-label={`${space.name} space actions`}` so the primary selector works and the fallback is unnecessary. The reorder assertion is "survives reload" rather than asserting a specific DOM order, since the precise drop index is timing-sensitive across machines.
 
-- [ ] **Step 2: Run the e2e** (requires emulators per `playwright.config.ts`)
+- [x] **Step 2: Run the e2e** (requires emulators per `playwright.config.ts`)
 
 Run: `npm run test:smoke -- mobile-app.spec.ts`
 Expected: PASS. (If the `···` aria-label was added in Task 8, the fallback branch never runs.)
 
-- [ ] **Step 3: Commit**
+Implementation note: `npm run test:smoke -- mobile-app.spec.ts` passes the filename to the Firebase CLI rather than Playwright, so the targeted command used for this task was `./scripts/with-java.sh firebase emulators:exec --project demo-stow --only auth,firestore,storage "npx playwright test tests/smoke/mobile-app.spec.ts"`. The e2e exposed a direct area-list rules denial used by delete-space; `firestore.rules` now allows members to list areas under their household path, verified by the targeted `/app` e2e and `npm run test:rules`.
+
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/smoke/mobile-app.spec.ts

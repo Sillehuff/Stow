@@ -65,7 +65,7 @@ service cloud.firestore {
         allow create, update, delete: if isHouseholdMember(householdId);
 
         match /areas/{areaId} {
-          allow read: if isHouseholdMember(resource.data.householdId);
+          allow read: if isHouseholdMember(householdId);
           allow create: if request.resource.data.householdId == householdId && isHouseholdMember(request.resource.data.householdId);
           allow update: if request.resource.data.householdId == householdId && isHouseholdMember(request.resource.data.householdId);
           allow delete: if resource.data.householdId == householdId && isHouseholdMember(resource.data.householdId);
