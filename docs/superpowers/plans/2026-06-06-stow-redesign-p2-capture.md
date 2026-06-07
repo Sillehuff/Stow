@@ -1080,7 +1080,7 @@ interface PhotoSourceProps {
 **Files:**
 - Create: `src/features/stow/ui/mobile/capture/PhotoSource.tsx`
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 ```tsx
 // src/features/stow/ui/mobile/capture/PhotoSource.tsx
@@ -1382,12 +1382,12 @@ export function PhotoSource({ onClose, onPicked }: PhotoSourceProps) {
 }
 ```
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS (both `PhotoField` and `PhotoSource` now resolve).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/capture/PhotoSource.tsx
