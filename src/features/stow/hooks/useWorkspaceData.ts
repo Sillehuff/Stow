@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
-import type { Area, Household, HouseholdInvite, HouseholdMember, Item, PackingList, Space, SpaceWithAreas } from "@/types/domain";
+import type { ActivityEntry, Area, Household, HouseholdInvite, HouseholdMember, Item, PackingList, Space, SpaceWithAreas } from "@/types/domain";
 import type { HouseholdLlmConfig } from "@/types/llm";
 import { inventoryRepository } from "@/features/stow/services/repository";
 import { byPosition } from "@/features/stow/hooks/positionSort";
@@ -38,9 +38,13 @@ export type WorkspaceActions = {
   deletePackingList: typeof inventoryRepository.deletePackingList;
   togglePackingListItem: typeof inventoryRepository.togglePackingListItem;
   clearPackingListPacked: typeof inventoryRepository.clearPackingListPacked;
+  logActivity: typeof inventoryRepository.logActivity;
+  setItemStatus: typeof inventoryRepository.setItemStatus;
+  setItemLoan: typeof inventoryRepository.setItemLoan;
+  clearItemLoan: typeof inventoryRepository.clearItemLoan;
 };
 
-type WorkspaceErrorSource = "household" | "spaces" | "areas" | "items" | "members" | "invites" | "llmConfig" | "packingLists";
+type WorkspaceErrorSource = "household" | "spaces" | "areas" | "items" | "members" | "invites" | "llmConfig" | "packingLists" | "activity";
 type WorkspaceErrorsBySource = Record<WorkspaceErrorSource, string | null>;
 
 function emptyErrors(): WorkspaceErrorsBySource {
@@ -52,7 +56,8 @@ function emptyErrors(): WorkspaceErrorsBySource {
     members: null,
     invites: null,
     llmConfig: null,
-    packingLists: null
+    packingLists: null,
+    activity: null
   };
 }
 
@@ -64,6 +69,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
   const [membersState, setMembersState] = useState<CollectionState<HouseholdMember>>(emptyState());
   const [invitesState, setInvitesState] = useState<CollectionState<HouseholdInvite>>(emptyState());
   const [packingListsState, setPackingListsState] = useState<CollectionState<PackingList>>(emptyState());
+  const [activityState, setActivityState] = useState<CollectionState<ActivityEntry>>(emptyState());
   const [llmConfig, setLlmConfig] = useState<HouseholdLlmConfig | null>(null);
   const [llmConfigMeta, setLlmConfigMeta] = useState({ fromCache: true, hasPendingWrites: false });
   const [errorsBySource, setErrorsBySource] = useState<WorkspaceErrorsBySource>(emptyErrors());
@@ -80,6 +86,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     setMembersState(emptyState());
     setInvitesState(emptyState());
     setPackingListsState(emptyState());
+    setActivityState(emptyState());
     setLlmConfig(null);
     setLlmConfigMeta({ fromCache: true, hasPendingWrites: false });
     setErrorsBySource(emptyErrors());
@@ -178,6 +185,20 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
 
   useEffect(() => {
     if (!householdId) return;
+    const unsub = inventoryRepository.subscribeActivity(
+      householdId,
+      50,
+      (state) => {
+        setActivityState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
+        setSourceError("activity", null);
+      },
+      (e) => setSourceError("activity", e.message)
+    );
+    return () => unsub();
+  }, [householdId]);
+
+  useEffect(() => {
+    if (!householdId) return;
     const unsub = inventoryRepository.subscribeLlmConfig(
       householdId,
       (config, meta) => {
@@ -191,7 +212,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
   }, [householdId]);
 
   const error = useMemo(() => {
-    const order: WorkspaceErrorSource[] = ["household", "spaces", "areas", "items", "members", "invites", "llmConfig", "packingLists"];
+    const order: WorkspaceErrorSource[] = ["household", "spaces", "areas", "items", "members", "invites", "llmConfig", "packingLists", "activity"];
     return order.map((source) => errorsBySource[source]).find(Boolean) ?? null;
   }, [errorsBySource]);
 
@@ -253,7 +274,11 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
       updatePackingList: inventoryRepository.updatePackingList,
       deletePackingList: inventoryRepository.deletePackingList,
       togglePackingListItem: inventoryRepository.togglePackingListItem,
-      clearPackingListPacked: inventoryRepository.clearPackingListPacked
+      clearPackingListPacked: inventoryRepository.clearPackingListPacked,
+      logActivity: inventoryRepository.logActivity,
+      setItemStatus: inventoryRepository.setItemStatus,
+      setItemLoan: inventoryRepository.setItemLoan,
+      clearItemLoan: inventoryRepository.clearItemLoan
     }),
     []
   );
@@ -266,6 +291,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     members: membersState.items,
     invites: invitesState.items,
     packingLists: packingListsState.items,
+    activity: activityState.items,
     llmConfig,
     sync,
     error,

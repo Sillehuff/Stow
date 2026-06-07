@@ -858,7 +858,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 > No new unit test (this hook has none today and is React-stateful; covered by manual + Playwright). The change mirrors the existing `packingLists` subscription effect exactly, adds the four P4 actions to the `actions` memo + the `WorkspaceActions` type, and threads `"activity"` through `WorkspaceErrorSource`, `emptyErrors()`, and the `error` precedence order (contract §6.3).
 
-- [ ] **Step 1: Add the four P4 actions to the `WorkspaceActions` type**
+- [x] **Step 1: Add the four P4 actions to the `WorkspaceActions` type**
 
 Find (end of the `WorkspaceActions` type, the last few members):
 ```ts
@@ -877,7 +877,7 @@ Replace with:
 };
 ```
 
-- [ ] **Step 2: Add `"activity"` to the error-source type and `emptyErrors()`**
+- [x] **Step 2: Add `"activity"` to the error-source type and `emptyErrors()`**
 
 Find:
 ```ts
@@ -902,7 +902,7 @@ Replace with:
   };
 ```
 
-- [ ] **Step 3: Import `ActivityEntry` and add `activityState`**
+- [x] **Step 3: Import `ActivityEntry` and add `activityState`**
 
 Find:
 ```ts
@@ -922,7 +922,7 @@ Add directly below it:
   const [activityState, setActivityState] = useState<CollectionState<ActivityEntry>>(emptyState());
 ```
 
-- [ ] **Step 4: Reset `activityState` in the household-change effect**
+- [x] **Step 4: Reset `activityState` in the household-change effect**
 
 Find (in the reset `useEffect` keyed on `[householdId]`):
 ```ts
@@ -936,7 +936,7 @@ Replace with:
     setLlmConfig(null);
 ```
 
-- [ ] **Step 5: Add the activity subscription effect** (mirror the `packingLists` effect)
+- [x] **Step 5: Add the activity subscription effect** (mirror the `packingLists` effect)
 
 Find the entire `packingLists` subscription effect:
 ```ts
@@ -970,7 +970,7 @@ Add directly **after** it:
   }, [householdId]);
 ```
 
-- [ ] **Step 6: Add `"activity"` to the `error` precedence order**
+- [x] **Step 6: Add `"activity"` to the `error` precedence order**
 
 Find:
 ```ts
@@ -981,7 +981,7 @@ Replace with:
     const order: WorkspaceErrorSource[] = ["household", "spaces", "areas", "items", "itemDrafts", "members", "invites", "llmConfig", "packingLists", "activity"];
 ```
 
-- [ ] **Step 7: Add the four actions to the `actions` memo**
+- [x] **Step 7: Add the four actions to the `actions` memo**
 
 Find:
 ```ts
@@ -1004,7 +1004,7 @@ Replace with:
   );
 ```
 
-- [ ] **Step 8: Return `activity` from the hook**
+- [x] **Step 8: Return `activity` from the hook**
 
 Find:
 ```ts
@@ -1020,17 +1020,17 @@ Replace with:
 
 > Note: `activityState` is intentionally **not** added to the `sync` memo's `fromCache`/`hasPendingWrites` aggregation — the feed is non-critical and its cache state should not gate the global offline banner. (If a later phase wants it included, add `activityState.fromCache`/`hasPendingWrites` there.)
 
-- [ ] **Step 9: Typecheck**
+- [x] **Step 9: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 10: Run the unit suite** (ensures nothing regressed; new repo tests included)
+- [x] **Step 10: Run the unit suite** (ensures nothing regressed; new repo tests included)
 
 Run: `npm test`
 Expected: PASS, including `activity.test.ts` and `normalizeItemStatus.test.ts`.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add src/features/stow/hooks/useWorkspaceData.ts
