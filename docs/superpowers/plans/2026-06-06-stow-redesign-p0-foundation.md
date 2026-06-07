@@ -354,7 +354,7 @@ git commit -m "feat(mobile): add icon registry with fallback + categories"
 - Create: `src/features/stow/ui/mobile/hooks/useMobileNavigation.ts`
 - Test: `src/features/stow/ui/mobile/hooks/useMobileNavigation.test.ts`
 
-- [ ] **Step 1: Write the failing test** (pure functions only)
+- [x] **Step 1: Write the failing test** (pure functions only)
 
 ```ts
 // src/features/stow/ui/mobile/hooks/useMobileNavigation.test.ts
@@ -400,12 +400,12 @@ describe("buildMobilePath", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/ui/mobile/hooks/useMobileNavigation.test.ts`
 Expected: FAIL — import cannot be resolved.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // src/features/stow/ui/mobile/hooks/useMobileNavigation.ts
@@ -528,12 +528,12 @@ export function useMobileNavigation(householdId: string, basePath = "/app") {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/ui/mobile/hooks/useMobileNavigation.test.ts`
 Expected: PASS (7 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/hooks/useMobileNavigation.ts src/features/stow/ui/mobile/hooks/useMobileNavigation.test.ts
