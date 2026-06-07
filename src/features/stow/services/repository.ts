@@ -5,8 +5,10 @@ import {
   collection,
   collectionGroup,
   deleteDoc,
+  deleteField,
   doc,
   getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -107,6 +109,92 @@ function normalizeItemDraftDoc(snap: { id: string; data(): DocumentData }): Item
 function requireDb() {
   if (!db) throw new Error("Firestore is not configured");
   return db;
+}
+
+const STATUS_LABELS: Record<ItemStatus, string> = {
+  home: "back home",
+  packed: "packed",
+  lent: "lent",
+  repair: "in repair",
+  lost: "missing"
+};
+
+function firstName(actorName: string): string {
+  const trimmed = actorName.trim();
+  if (!trimmed) return "Someone";
+  return trimmed.split(/\s+/)[0];
+}
+
+function locationSuffix(spaceName?: string, areaName?: string): string {
+  if (spaceName && areaName) return `${spaceName} › ${areaName}`;
+  return spaceName ?? "";
+}
+
+export interface BuildActivityEntryInput {
+  type: ActivityEntry["type"];
+  actorUid: string;
+  actorName: string;
+  itemName?: string;
+  spaceName?: string;
+  areaName?: string;
+  status?: ItemStatus;
+  loanTo?: string;
+  count?: number;
+  spaceId?: string;
+  areaId?: string;
+  itemId?: string;
+}
+
+/**
+ * Pure: builds the activity entry payload (everything except id/householdId/createdAt).
+ * Optional id/count keys are only included when defined so Firestore never receives undefined.
+ */
+export function buildActivityEntry(
+  input: BuildActivityEntryInput
+): Omit<ActivityEntry, "id" | "householdId" | "createdAt"> {
+  const who = firstName(input.actorName);
+  const loc = locationSuffix(input.spaceName, input.areaName);
+  let summary = "";
+  switch (input.type) {
+    case "item_added":
+      summary = `${who} added ${input.itemName ?? "an item"}${loc ? ` to ${loc}` : ""}`;
+      break;
+    case "items_added_batch": {
+      const n = input.count ?? 0;
+      summary = `${who} added ${n} item${n === 1 ? "" : "s"}${loc ? ` to ${loc}` : ""}`;
+      break;
+    }
+    case "item_moved":
+      summary = `${who} moved ${input.itemName ?? "an item"}${loc ? ` to ${loc}` : ""}`;
+      break;
+    case "item_deleted":
+      summary = `${who} deleted ${input.itemName ?? "an item"}`;
+      break;
+    case "item_status_changed": {
+      const label = input.status ? STATUS_LABELS[input.status] : "updated";
+      const to = input.status === "lent" && input.loanTo ? ` to ${input.loanTo}` : "";
+      summary = `${who} marked ${input.itemName ?? "an item"} ${label}${to}`;
+      break;
+    }
+    case "space_added":
+      summary = `${who} added the ${input.spaceName ?? "new"} space`;
+      break;
+    case "space_deleted":
+      summary = `${who} deleted the ${input.spaceName ?? ""} space`.replace("  ", " ");
+      break;
+  }
+
+  const entry: Omit<ActivityEntry, "id" | "householdId" | "createdAt"> = {
+    type: input.type,
+    actorUid: input.actorUid,
+    actorName: input.actorName,
+    summary
+  };
+  if (input.spaceId !== undefined) entry.spaceId = input.spaceId;
+  if (input.areaId !== undefined) entry.areaId = input.areaId;
+  if (input.itemId !== undefined) entry.itemId = input.itemId;
+  if (input.count !== undefined) entry.count = input.count;
+  return entry;
 }
 
 /** Pure: map an ordered id list to {id, position} pairs (position = index). Unit-tested. */
@@ -750,6 +838,62 @@ export const inventoryRepository = {
   async clearPackingListPacked(input: { householdId: string; listId: string; userId: string }) {
     await updateDoc(doc(requireDb(), householdPaths.packingList(input.householdId, input.listId)), {
       packedItemIds: [],
+      updatedAt: serverTimestamp(),
+      updatedBy: input.userId
+    });
+  },
+
+  // ── Activity feed ──────────────────────────────────────────────
+
+  async logActivity(input: {
+    householdId: string;
+    entry: Omit<ActivityEntry, "id" | "householdId" | "createdAt">;
+  }) {
+    await addDoc(collection(requireDb(), householdPaths.activity(input.householdId)), {
+      ...input.entry,
+      householdId: input.householdId,
+      createdAt: serverTimestamp()
+    });
+  },
+
+  subscribeActivity(
+    householdId: string,
+    max: number,
+    onData: (state: SnapshotState<ActivityEntry>) => void,
+    onError: (e: Error) => void
+  ): Unsubscribe {
+    const q = query(
+      collection(requireDb(), householdPaths.activity(householdId)),
+      orderBy("createdAt", "desc"),
+      limit(max)
+    );
+    return onSnapshot(q, (snap) => onData(mapSnapshot<ActivityEntry>(snap)), onError);
+  },
+
+  // ── Item status & lending ──────────────────────────────────────
+
+  async setItemStatus(input: { householdId: string; itemId: string; userId: string; status: ItemStatus }) {
+    await inventoryRepository.updateItem({
+      householdId: input.householdId,
+      itemId: input.itemId,
+      userId: input.userId,
+      patch: { status: input.status }
+    });
+  },
+
+  async setItemLoan(input: { householdId: string; itemId: string; userId: string; loan: ItemLoan }) {
+    await inventoryRepository.updateItem({
+      householdId: input.householdId,
+      itemId: input.itemId,
+      userId: input.userId,
+      patch: { status: "lent", loan: input.loan }
+    });
+  },
+
+  async clearItemLoan(input: { householdId: string; itemId: string; userId: string }) {
+    await updateDoc(doc(requireDb(), householdPaths.item(input.householdId, input.itemId)), {
+      status: "home",
+      loan: deleteField(),
       updatedAt: serverTimestamp(),
       updatedBy: input.userId
     });

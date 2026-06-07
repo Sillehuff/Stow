@@ -383,7 +383,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 > The Firestore-touching methods (`logActivity`, `subscribeActivity`) are validated by the rules test (Task 5) + manual/Playwright. The unit test here covers a **pure entry-shaping helper** `buildActivityEntry` that constructs the `Omit<ActivityEntry,"id"|"householdId"|"createdAt">` payload deterministically from inputs — this is the load-bearing logic (summary + type + ids) that the call-site wiring (Task 9) depends on. `setItemStatus`/`setItemLoan`/`clearItemLoan` are thin wrappers over `updateItem` and are checked by typecheck + the loan-helper unit test in Task 8.
 
-- [ ] **Step 1: Write the failing test for `buildActivityEntry`**
+- [x] **Step 1: Write the failing test for `buildActivityEntry`**
 
 ```ts
 // src/features/stow/services/activity.test.ts
@@ -516,12 +516,12 @@ describe("buildActivityEntry", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/services/activity.test.ts`
 Expected: FAIL — `buildActivityEntry` is not exported.
 
-- [ ] **Step 3: Add `buildActivityEntry` + the activity/status/loan repo methods**
+- [x] **Step 3: Add `buildActivityEntry` + the activity/status/loan repo methods**
 
 In `src/features/stow/services/repository.ts`:
 
@@ -727,17 +727,17 @@ export function buildActivityEntry(
 
 > **Why `clearItemLoan` uses `deleteField()` directly instead of `updateItem`:** the contract (§5.3) says "use `loan: null` (normalizeItemDoc treats null/absent as undefined)". Writing `deleteField()` is the cleaner Firestore equivalent and avoids storing an explicit `null`. `normalizeItemDoc` already treats an absent `loan` as `undefined` because it spreads `data` and `loan` simply isn't present. `updateItem`'s patch also accepts `loan?: ItemLoan | null` (Task 3) so a `loan: null` form is type-valid if a future caller prefers it. Both render identically.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/services/activity.test.ts`
 Expected: PASS (10 tests).
 
-- [ ] **Step 5: Typecheck**
+- [x] **Step 5: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS (`ItemStatus`, `ItemLoan`, `ActivityEntry` are now all consumed).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/features/stow/services/activity.test.ts src/features/stow/services/repository.ts
