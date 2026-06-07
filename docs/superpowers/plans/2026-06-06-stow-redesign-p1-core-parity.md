@@ -1806,7 +1806,7 @@ export interface HomeScreenProps {
 }
 ```
 
-- [ ] **Step 1: Write the data wiring** (full logic — search filter, recent rail, space-name lookup)
+- [x] **Step 1: Write the data wiring** (full logic — search filter, recent rail, space-name lookup)
 
 ```tsx
 export function HomeScreen(props: HomeScreenProps) {
@@ -1848,7 +1848,7 @@ export function HomeScreen(props: HomeScreenProps) {
 ```
 > The prototype sorted `createdAt` (a string) lexicographically; live `Item.createdAt` is a Firestore `Timestamp` → sort by `.toMillis()` desc (guard with `?.` for un-synced server timestamps which can be momentarily null). Top 8 per contract §5/roadmap P1.3.
 
-- [ ] **Step 2: Write the markup** — port from `RetrievalHome` (translate per §1.3, map per §11)
+- [x] **Step 2: Write the markup** — port from `RetrievalHome` (translate per §1.3, map per §11)
 
 Structure:
 - Sticky glass header (`padding:"calc(env(safe-area-inset-top) + 24px) 24px 14px"`, `background: color-mix(in srgb, var(--stow-surface) 90%, transparent)`, `backdrop-filter: blur(20px)`, `borderBottom:1px solid var(--stow-border-l)`, `position:"sticky"`, `top:0`, `zIndex:20`):
@@ -1859,12 +1859,12 @@ Structure:
   - If `searching`: if `results.length===0`, an empty state ("No matches", `Nothing matches "{query}"`); else a `Label` "{n} result(s)" then `results.map(it => <ResultRow key={it.id} item={it} spaceName={spaceName(it.spaceId)} onClick={()=>onOpenItem(it.id)} />)`.
   - Else (idle): a "Recently added" rail header (`<Clock size={13}/>` + uppercase label) then a horizontal-scroll row of recent cards (port `recentCard`, lines 57–70): 132-wide `cardStyle` cards — 94px image area (`item.image?.downloadUrl` → `<img>`; else `item.kind==="folder" ? <Folder/> : <Inbox/>` at `var(--stow-border)`) + name + `spaceName(item.spaceId)`; each `onClick={()=>onOpenItem(it.id)}`. Then render the embedded list: `<SpacesList spaces={spaces} itemCountForSpace={itemCountForSpace} {...spacesList} />`.
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/screens/HomeScreen.tsx
