@@ -791,10 +791,11 @@ The heart of P3. A pure reducer drives the QuickCapture review flow (contract §
 - `confirm` sets that index's `keep: true` and advances the cursor. `skip` sets `keep: false` and advances. `rename` updates `name` for an index (does not advance). `confirm`/`skip` accept the **detection index** (the UI passes `order[cursor]`).
 - `cursor` advances by 1; when `cursor` would pass the last review position, the reducer does **not** auto-transition (the UI dispatches `commitReady` when `cursor >= order.length`, or the user taps Done). Keep the reducer free of side effects; phase transitions are explicit actions.
 - Phases: `analyzing` (initial) → `detected` (on `detected` action) → `review` (on `startReview`) → `destination` (optional retarget surface; `setDestination` may fire from any phase and does not change `phase`) → `done` (on `commitReady`). `setDestination` only mutates `destination`. The dedicated `destination` phase value exists for the UI's full-screen picker; transitions into it are the UI's concern (it can render the picker as an overlay without changing `phase`), so the reducer treats `destination` as a settable phase only if a future action needs it — for P3 we drive the picker as an overlay and never set `phase: "destination"`. We keep the phase in the union for contract compliance and forward-compat.
+- `selectCommitItems` returns `[]` when `spaceId` or `areaId` is missing, so a caller cannot silently create invalid batch payloads before the UI destination guard runs.
 
 > The contract's `CaptureAction` union has no explicit "set phase to destination" action; the picker is an inline overlay (as in the prototype). `setDestination` updates the destination and the UI closes the picker. This keeps the reducer minimal and fully tested.
 
-- [ ] **Step 1: Write the failing tests** — `src/features/stow/ui/mobile/capture/captureReducer.test.ts`.
+- [x] **Step 1: Write the failing tests** — `src/features/stow/ui/mobile/capture/captureReducer.test.ts`.
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -974,12 +975,12 @@ describe("selectCommitItems", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `npx vitest run src/features/stow/ui/mobile/capture/captureReducer.test.ts`
 Expected: FAIL — import cannot be resolved.
 
-- [ ] **Step 3: Write the implementation** — `src/features/stow/ui/mobile/capture/captureReducer.ts`.
+- [x] **Step 3: Write the implementation** — `src/features/stow/ui/mobile/capture/captureReducer.ts`.
 
 ```ts
 import type { ShelfDetection } from "@/types/llm";
@@ -1089,6 +1090,9 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
 }
 
 export function selectCommitItems(state: CaptureState): NewBatchItem[] {
+  const { spaceId, areaId, areaNameSnapshot } = state.destination;
+  if (!spaceId || !areaId) return [];
+
   const items: NewBatchItem[] = [];
   state.detections.forEach((_detection, index) => {
     const draft = state.drafts[index];
@@ -1097,9 +1101,9 @@ export function selectCommitItems(state: CaptureState): NewBatchItem[] {
     if (!name) return; // cannot commit an unnamed item
     items.push({
       name,
-      spaceId: state.destination.spaceId ?? "",
-      areaId: state.destination.areaId ?? "",
-      areaNameSnapshot: state.destination.areaNameSnapshot,
+      spaceId,
+      areaId,
+      areaNameSnapshot,
       tags: draft.tags,
       ...(typeof draft.value === "number" ? { value: draft.value } : {})
     });
@@ -1110,17 +1114,17 @@ export function selectCommitItems(state: CaptureState): NewBatchItem[] {
 
 > Iterating `state.detections.forEach` (not `order`) in `selectCommitItems` yields kept items in **original detection order** for a tidy Done summary; the review *order* is least-confident-first but the committed list reads top-to-bottom as photographed.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `npx vitest run src/features/stow/ui/mobile/capture/captureReducer.test.ts`
 Expected: PASS (all groups).
 
-- [ ] **Step 5: Typecheck (cross-module `NewBatchItem` import)**
+- [x] **Step 5: Typecheck (cross-module `NewBatchItem` import)**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/capture/captureReducer.ts src/features/stow/ui/mobile/capture/captureReducer.test.ts
