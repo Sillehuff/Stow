@@ -257,7 +257,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 > No new unit test here: `createItem`/`updateItem` write through the Firestore SDK (covered by manual + Playwright + the rules test in Task 5). This step keeps the field defaults consistent with the contract (§4.1 "New `createItem` writes `status: \"home\"`") and extends the `updateItem` patch `Pick` so `setItemStatus`/`setItemLoan`/`clearItemLoan` (Task 4) can pass `status` and `loan`.
 
-- [ ] **Step 1: `createItem` sets `status: "home"`**
+- [x] **Step 1: `createItem` sets `status: "home"`**
 
 In `inventoryRepository.createItem`, in the `setDoc(itemRef, { … })` payload, add `status: "home",` directly after the existing `isPacked: false,` line:
 
@@ -273,7 +273,23 @@ Replace with:
       photoStatus: defaultPhotoStatus({ photoStatus: input.photoStatus, image: input.image }),
 ```
 
-- [ ] **Step 2: `completeItemDraft` sets `status: "home"`** (drafts complete into items; keep them consistent)
+- [x] **Step 2: `createItemsBatch` sets `status: "home"`** (batch-captured items mirror `createItem` defaults)
+
+In `inventoryRepository.createItemsBatch`, in the `batch.set(itemRef, { … })` payload, add `status: "home",` directly after the `isPacked: false,` line:
+
+Find (inside `createItemsBatch`):
+```ts
+        isPacked: false,
+        photoStatus: defaultPhotoStatus({ image: item.image }),
+```
+Replace with:
+```ts
+        isPacked: false,
+        status: "home",
+        photoStatus: defaultPhotoStatus({ image: item.image }),
+```
+
+- [x] **Step 3: `completeItemDraft` sets `status: "home"`** (drafts complete into items; keep them consistent)
 
 In `inventoryRepository.completeItemDraft`, in the `batch.set(itemRef, { … })` payload, add `status: "home",` directly after the `isPacked: false,` line:
 
@@ -289,7 +305,7 @@ Replace with:
       photoStatus: "attached",
 ```
 
-- [ ] **Step 3: Extend the `updateItem` patch type**
+- [x] **Step 4: Extend the `updateItem` patch type**
 
 In `inventoryRepository.updateItem`, extend the `Pick` to include `status` and add an optional `loan` to the intersection:
 
@@ -317,7 +333,7 @@ Replace with:
     };
 ```
 
-- [ ] **Step 4: Import `ItemLoan` and `ActivityEntry` types in the repository**
+- [x] **Step 5: Import `ItemLoan` and `ActivityEntry` types in the repository**
 
 Update the domain type import to include the new types used by `updateItem` (now) and Task 4 (`logActivity`/`subscribeActivity`):
 
@@ -343,12 +359,12 @@ import type {
 } from "@/types/domain";
 ```
 
-- [ ] **Step 5: Typecheck**
+- [x] **Step 6: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS. (`ItemStatus`/`ActivityEntry` are imported but not yet used until Task 4 — TypeScript does not error on unused *type* imports under the repo's config, but if `noUnusedLocals` flags them, that resolves in Task 4 when they are consumed. If a transient error appears here, proceed to Task 4 in the same working session before committing — or temporarily commit Tasks 3+4 together.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/features/stow/services/repository.ts

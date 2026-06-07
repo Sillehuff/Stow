@@ -27,7 +27,20 @@ import {
   revokeHouseholdInvite as callRevokeHouseholdInvite,
   updateHouseholdMemberRole as callUpdateHouseholdMemberRole
 } from "@/lib/firebase/functions";
-import type { Area, Household, HouseholdInvite, HouseholdMember, ImageRef, Item, ItemDraft, PackingList, Space } from "@/types/domain";
+import type {
+  ActivityEntry,
+  Area,
+  Household,
+  HouseholdInvite,
+  HouseholdMember,
+  ImageRef,
+  Item,
+  ItemDraft,
+  ItemLoan,
+  ItemStatus,
+  PackingList,
+  Space
+} from "@/types/domain";
 import type { HouseholdLlmConfig } from "@/types/llm";
 
 export type SnapshotState<T> = {
@@ -438,6 +451,7 @@ export const inventoryRepository = {
       tags: input.tags ?? [],
       notes: input.notes ?? "",
       isPacked: false,
+      status: "home",
       photoStatus: defaultPhotoStatus({ photoStatus: input.photoStatus, image: input.image }),
       entryMode: defaultEntryMode({ entryMode: input.entryMode, vision: input.vision }),
       vision: input.vision ?? null,
@@ -475,6 +489,7 @@ export const inventoryRepository = {
         tags: item.tags ?? [],
         notes: item.notes ?? "",
         isPacked: false,
+        status: "home",
         photoStatus: defaultPhotoStatus({ image: item.image }),
         entryMode: defaultEntryMode({ vision: item.vision }),
         vision: item.vision ?? null,
@@ -493,9 +508,10 @@ export const inventoryRepository = {
     itemId: string;
     userId: string;
     patch: Partial<
-      Pick<Item, "name" | "notes" | "value" | "tags" | "isPacked" | "spaceId" | "areaId" | "areaNameSnapshot" | "kind" | "isPriceless">
+      Pick<Item, "name" | "notes" | "value" | "tags" | "isPacked" | "status" | "spaceId" | "areaId" | "areaNameSnapshot" | "kind" | "isPriceless">
     > & {
       image?: ImageRef | null;
+      loan?: ItemLoan | null;
       photoStatus?: Item["photoStatus"];
       entryMode?: Item["entryMode"];
       vision?: Item["vision"] | null;
@@ -648,6 +664,7 @@ export const inventoryRepository = {
       tags: input.tags ?? [],
       notes: input.notes ?? "",
       isPacked: false,
+      status: "home",
       photoStatus: "attached",
       entryMode: "photo_draft",
       vision: input.vision ?? null,
