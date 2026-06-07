@@ -1,14 +1,16 @@
 import { useMemo, useState } from "react";
-import type { Item, SpaceWithAreas } from "@/types/domain";
+import type { HouseholdMember, Item, SpaceWithAreas } from "@/types/domain";
 import { Bell, Clock, Folder, Inbox, Search, X } from "@/features/stow/ui/mobile/theme/icons";
 import { cardStyle } from "@/features/stow/ui/mobile/components/Card";
 import { ResultRow } from "@/features/stow/ui/mobile/components/ResultRow";
+import { AwayStrip } from "@/features/stow/ui/mobile/screens/AwayStrip";
 import { SpacesList } from "@/features/stow/ui/mobile/screens/SpacesList";
 import type { SpacesListProps } from "@/features/stow/ui/mobile/screens/SpacesList";
 
 export interface HomeScreenProps {
   spaces: SpaceWithAreas[];
   items: Item[];
+  members: HouseholdMember[];
   householdName: string;
   onOpenItem: (itemId: string) => void;
   onBell: () => void;
@@ -19,7 +21,7 @@ function timestampMillis(createdAt: Item["createdAt"] | null | undefined) {
   return createdAt?.toMillis?.() ?? 0;
 }
 
-export function HomeScreen({ spaces, items, householdName, onOpenItem, onBell, spacesList }: HomeScreenProps) {
+export function HomeScreen({ spaces, items, members, householdName, onOpenItem, onBell, spacesList }: HomeScreenProps) {
   const [query, setQuery] = useState("");
 
   const spaceNameById = useMemo(() => new Map(spaces.map((space) => [space.id, space.name])), [spaces]);
@@ -204,6 +206,8 @@ export function HomeScreen({ spaces, items, householdName, onOpenItem, onBell, s
           )
         ) : (
           <>
+            <AwayStrip items={items} members={members} onOpenItem={onOpenItem} />
+
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, marginLeft: 2 }}>
               <Clock size={13} color="var(--stow-warm)" strokeWidth={2.2} />
               <span

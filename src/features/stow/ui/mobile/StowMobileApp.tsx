@@ -222,6 +222,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
       <HomeScreen
         spaces={data.spaces}
         items={data.items}
+        members={data.members}
         householdName={data.household?.name ?? "Your household"}
         onOpenItem={(itemId) => nav.openItem(itemId)}
         onBell={nav.goActivity}

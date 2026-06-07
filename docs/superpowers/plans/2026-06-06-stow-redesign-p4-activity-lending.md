@@ -1650,7 +1650,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 > Spec §7.3 + contract §10: a glanceable strip on the home screen listing items that are not at home (`selectAwayItems`), each with a `StatusPill`-style badge and (for lent items) borrower + duration; tapping opens the item. Renders in `RetrievalHome`'s idle branch, above `SpacesManagedList`. Port from `enhance/maintain.jsx` `M1_AwayHome` (the "Away from home" `Eyebrow` + `Card` with per-row status pill + meta). Validated by manual + Playwright.
 
-- [ ] **Step 1: Define the prop interface + data wiring**
+- [x] **Step 1: Define the prop interface + data wiring**
 
 ```ts
 interface AwayStripProps {
@@ -1661,7 +1661,7 @@ interface AwayStripProps {
 ```
 Internally: `const away = selectAwayItems(items);` (from `./activitySelectors`). If `away.length === 0`, render `null` (no empty strip). Status visuals come from `STATUS_META` (Task 11). Borrower name on a lent row: `item.loan?.to` (already a display string) with `formatRelativeTime(item.loan?.since)`.
 
-- [ ] **Step 2: Section-by-section structure**
+- [x] **Step 2: Section-by-section structure**
 
 1. **Eyebrow** — "Away from home" with a trailing count chip (count = `away.length`), accent-colored (port `enhance/parts.jsx` `Eyebrow` with `count`/`countColor`).
 2. **Card list** — one row per away item:
@@ -1669,7 +1669,7 @@ Internally: `const away = selectAwayItems(items);` (from `./activitySelectors`).
    - Body: item name (ellipsised) + a second line with the `StatusPill` (status dot + label from `STATUS_META`) and, when lent, the borrower first name + duration ("Marcus · 3w ago"); use `var(--stow-danger)` text when a `due` exists and is in the past (overdue), else `var(--stow-warm)`.
    - Row `onClick` → `onOpenItem(item.id)`; trailing `ChevronRight`.
 
-- [ ] **Step 3: Non-obvious code (overdue + pill)**
+- [x] **Step 3: Non-obvious code (overdue + pill)**
 
 ```tsx
 function isOverdue(item: Item, now = Date.now()): boolean {
@@ -1683,20 +1683,20 @@ function isOverdue(item: Item, now = Date.now()): boolean {
 ```
 Render a small inline `StatusPill` (dot + `STATUS_META[item.status].label`) inline in the row; reuse `formatRelativeTime(item.loan?.since)` for the lent duration. (A standalone `StatusPill` component may be extracted from `enhance/parts.jsx`; inlining is fine since only the strip and `ItemDetail` use it — if both need it, extract `components/StatusPill.tsx`.)
 
-- [ ] **Step 4: Port the markup**
+- [x] **Step 4: Port the markup**
 
 Port the away-list `Card` + rows from `enhance/maintain.jsx` `M1_AwayHome` (the `away.map(...)` block: thumb/glyph, name, `StatusPill small` + meta with optional avatar, optional "Nudge" chip — the Nudge chip is **optional** for v1 and may be omitted), translating tokens per §1.3 and sourcing status colors from `STATUS_META`.
 
-- [ ] **Step 5: Render in `HomeScreen`**
+- [x] **Step 5: Render in `HomeScreen`**
 
 In `RetrievalHome`/`HomeScreen`'s **idle** branch (the `!searching` fragment), render `<AwayStrip items={items} members={members} onOpenItem={openItem} />` directly **above** the "Recently added" rail (so "away" is the first glanceable thing), or above `SpacesManagedList` — match the prototype, which places Away above Your Spaces. Ensure `HomeScreen` receives `members` from `useWorkspaceData` (add to its props/wiring if not already present).
 
-- [ ] **Step 6: Typecheck + build**
+- [x] **Step 6: Typecheck + build**
 
 Run: `npm run typecheck && npm run build`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/screens/AwayStrip.tsx src/features/stow/ui/mobile/screens/HomeScreen.tsx
