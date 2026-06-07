@@ -1427,27 +1427,29 @@ git commit -m "test(mobile): e2e whole-shelf batch capture with mocked detection
 
 ## Task 10: Full verification
 
-- [ ] **Step 1: Functions tests**
+- [x] **Step 1: Functions tests**
 
 Run: `npm run functions:test`
 Expected: PASS (schemas + gemini mapping).
 
-- [ ] **Step 2: Client unit suite**
+- [x] **Step 2: Client unit suite**
 
 Run: `npm test`
 Expected: PASS, including `captureReducer.test.ts` and `repository.test.ts`.
 
-- [ ] **Step 3: Typecheck + build**
+- [x] **Step 3: Typecheck + build**
 
 Run: `npm run typecheck && npm run build`
 Expected: both succeed (TS project build + Vite production build). Confirm `functions` build too: `npm run functions:build`.
 
-- [ ] **Step 4: Smoke (optional pre-merge)**
+- [x] **Step 4: Smoke (optional pre-merge)**
 
 Run: `npm run test:smoke -- --grep "whole-shelf"`
 Expected: PASS.
 
-- [ ] **Step 5: Final commit (only if manual fixups were needed)**
+Completed: `npm run functions:test`, `npm test`, `npm run typecheck`, `npm run build`, `npm run functions:build`, and targeted emulator smoke `tests/smoke/shelf-capture.spec.ts` all passed.
+
+- [x] **Step 5: Final commit (only if manual fixups were needed)**
 
 ```bash
 git add -A
