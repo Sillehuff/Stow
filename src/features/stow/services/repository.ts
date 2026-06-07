@@ -36,6 +36,18 @@ export type SnapshotState<T> = {
   hasPendingWrites: boolean;
 };
 
+export interface NewBatchItem {
+  name: string;
+  spaceId: string;
+  areaId: string;
+  areaNameSnapshot: string;
+  image?: ImageRef;
+  value?: number;
+  tags?: string[];
+  notes?: string;
+  vision?: Item["vision"];
+}
+
 function mapDoc<T>(snap: { id: string; data(): DocumentData }): T & { id: string } {
   return { id: snap.id, ...(snap.data() as Record<string, unknown>) } as T & { id: string };
 }
@@ -434,6 +446,45 @@ export const inventoryRepository = {
       updatedBy: input.userId
     });
     return itemRef.id;
+  },
+
+  async createItemsBatch(input: {
+    householdId: string;
+    userId: string;
+    items: NewBatchItem[];
+  }): Promise<string[]> {
+    if (input.items.length === 0) return [];
+    const database = requireDb();
+    const batch = writeBatch(database);
+    const ids: string[] = [];
+    for (const item of input.items) {
+      const itemRef = doc(collection(database, householdPaths.items(input.householdId)));
+      ids.push(itemRef.id);
+      // Mirrors createItem defaults. P4 will wire items_added_batch activity at the QuickCapture call site.
+      batch.set(itemRef, {
+        householdId: input.householdId,
+        spaceId: item.spaceId,
+        areaId: item.areaId,
+        areaNameSnapshot: item.areaNameSnapshot,
+        name: item.name,
+        kind: "item",
+        image: item.image ?? null,
+        value: item.value ?? null,
+        isPriceless: false,
+        tags: item.tags ?? [],
+        notes: item.notes ?? "",
+        isPacked: false,
+        photoStatus: defaultPhotoStatus({ image: item.image }),
+        entryMode: defaultEntryMode({ vision: item.vision }),
+        vision: item.vision ?? null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: input.userId,
+        updatedBy: input.userId
+      });
+    }
+    await batch.commit();
+    return ids;
   },
 
   async updateItem(input: {

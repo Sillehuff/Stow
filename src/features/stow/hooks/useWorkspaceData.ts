@@ -26,6 +26,7 @@ export type WorkspaceActions = {
   reorderSpaces: typeof inventoryRepository.reorderSpaces;
   reorderAreas: typeof inventoryRepository.reorderAreas;
   createItem: typeof inventoryRepository.createItem;
+  createItemsBatch: typeof inventoryRepository.createItemsBatch;
   updateItem: typeof inventoryRepository.updateItem;
   togglePacked: typeof inventoryRepository.togglePacked;
   deleteItem: typeof inventoryRepository.deleteItem;
@@ -241,6 +242,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
       reorderSpaces: inventoryRepository.reorderSpaces,
       reorderAreas: inventoryRepository.reorderAreas,
       createItem: inventoryRepository.createItem,
+      createItemsBatch: inventoryRepository.createItemsBatch,
       updateItem: inventoryRepository.updateItem,
       togglePacked: inventoryRepository.togglePacked,
       deleteItem: inventoryRepository.deleteItem,

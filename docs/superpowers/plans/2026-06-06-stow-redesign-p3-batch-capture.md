@@ -599,7 +599,7 @@ Add the batch-create repository method (contract §5.2) and expose it through `u
 
 > **Test note:** `createItemsBatch` calls Firestore (`writeBatch`/`setDoc`), which isn't exercised by pure unit tests in this repo. The contract requires the **reducer** to be unit-tested, not the repo write. We add a **lightweight payload-shape unit test** for `createItemsBatch` that mocks the `firebase/firestore` module so we can assert the per-item document body matches `createItem` defaults (kind `item`, `isPacked false`, `photoStatus`/`entryMode` derived, `createdBy`/`updatedBy`). If P1/P2 already established a repo test harness with this mock, append there; otherwise create `repository.test.ts` with the mock below. If mocking the Firestore module proves brittle, downgrade this to manual verification via the Playwright batch-commit assertion in Task 9 and skip Steps 1–2 here (note it in the commit body).
 
-- [ ] **Step 1: Write the failing payload test** — `src/features/stow/services/repository.test.ts`.
+- [x] **Step 1: Write the failing payload test** — `src/features/stow/services/repository.test.ts`.
 
 ```ts
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -681,12 +681,12 @@ describe("createItemsBatch", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/services/repository.test.ts`
 Expected: FAIL — `createItemsBatch` is not a function on `inventoryRepository`.
 
-- [ ] **Step 3: Add `NewBatchItem` + `createItemsBatch`** — `src/features/stow/services/repository.ts`.
+- [x] **Step 3: Add `NewBatchItem` + `createItemsBatch`** — `src/features/stow/services/repository.ts`.
 
 Add the exported interface near the top (after the `SnapshotState` type), contract §5.2 verbatim:
 ```ts
@@ -747,12 +747,12 @@ Add the method to the `inventoryRepository` object (place it right after `create
   },
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/services/repository.test.ts`
 Expected: PASS (2 tests).
 
-- [ ] **Step 5: Expose the action in `useWorkspaceData`** — contract §6.2.
+- [x] **Step 5: Expose the action in `useWorkspaceData`** — contract §6.2.
 
 In `src/features/stow/hooks/useWorkspaceData.ts`, add to the `WorkspaceActions` type (after `createItem`):
 ```ts
@@ -763,12 +763,12 @@ And add to the `actions` memo object (after `createItem: inventoryRepository.cre
       createItemsBatch: inventoryRepository.createItemsBatch,
 ```
 
-- [ ] **Step 6: Typecheck + run the client suite**
+- [x] **Step 6: Typecheck + run the client suite**
 
 Run: `npm run typecheck && npx vitest run src/features/stow/services/repository.test.ts`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/features/stow/services/repository.ts src/features/stow/services/repository.test.ts src/features/stow/hooks/useWorkspaceData.ts
