@@ -161,7 +161,7 @@ Contract §9.2: the single AI scan fills `name`/`tags`/`notes` (value stays manu
 - Create: `src/features/stow/ui/mobile/capture/applyVisionSuggestion.ts`
 - Test: `src/features/stow/ui/mobile/capture/applyVisionSuggestion.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // src/features/stow/ui/mobile/capture/applyVisionSuggestion.test.ts
@@ -233,12 +233,12 @@ describe("applyVisionSuggestion", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/ui/mobile/capture/applyVisionSuggestion.test.ts`
 Expected: FAIL — "Failed to resolve import" / `applyVisionSuggestion is not a function`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // src/features/stow/ui/mobile/capture/applyVisionSuggestion.ts
@@ -286,12 +286,12 @@ export function applyVisionSuggestion(
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/ui/mobile/capture/applyVisionSuggestion.test.ts`
 Expected: PASS (8 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/capture/applyVisionSuggestion.ts src/features/stow/ui/mobile/capture/applyVisionSuggestion.test.ts
