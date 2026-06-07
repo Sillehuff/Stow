@@ -78,7 +78,10 @@ export interface Item {
   isPriceless?: boolean;
   tags: string[];
   notes?: string;
+  /** @deprecated kept until P5 cutover; new packing UI does not write this. Use `status`. */
   isPacked: boolean;
+  status: ItemStatus;
+  loan?: ItemLoan;
   photoStatus: ItemPhotoStatus;
   entryMode: ItemEntryMode;
   vision?: VisionMetadata;
@@ -116,6 +119,39 @@ export interface PackingList {
   updatedAt: Timestamp;
   createdBy: string;
   updatedBy: string;
+}
+
+export type ItemStatus = "home" | "packed" | "lent" | "repair" | "lost";
+
+export interface ItemLoan {
+  to: string;
+  toUid?: string;
+  since: Timestamp;
+  due?: Timestamp;
+  note?: string;
+}
+
+export type ActivityType =
+  | "item_added"
+  | "items_added_batch"
+  | "item_moved"
+  | "item_deleted"
+  | "item_status_changed"
+  | "space_added"
+  | "space_deleted";
+
+export interface ActivityEntry {
+  id: string;
+  householdId: string;
+  type: ActivityType;
+  actorUid: string;
+  actorName: string;
+  summary: string;
+  spaceId?: string;
+  areaId?: string;
+  itemId?: string;
+  count?: number;
+  createdAt: Timestamp;
 }
 
 export interface HouseholdInvite {

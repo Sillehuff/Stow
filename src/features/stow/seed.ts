@@ -212,6 +212,7 @@ export function normalizeSeedForHousehold(householdId: string) {
       tags: item.tags,
       notes: item.notes,
       isPacked: item.isPacked,
+      status: item.isPacked ? "packed" : "home",
       photoStatus: item.image ? "attached" : "later",
       entryMode: "manual"
     })

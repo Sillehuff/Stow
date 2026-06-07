@@ -38,8 +38,9 @@
 **Files:**
 - Modify: `src/types/domain.ts`
 - Modify: `src/lib/firebase/paths.ts`
+- Modify: `src/features/stow/seed.ts`
 
-- [ ] **Step 1: Add the P4 domain types** (no test — type-only; verified by `npm run typecheck` in later steps and consumed by Task 2 tests)
+- [x] **Step 1: Add the P4 domain types** (no test — type-only; verified by `npm run typecheck` in later steps and consumed by Task 2 tests)
 
 In `src/types/domain.ts`, **after** the existing `export interface PackingList { … }` block (keep `SpaceIcon` exported untouched), add:
 
@@ -78,7 +79,7 @@ export interface ActivityEntry {
 }
 ```
 
-- [ ] **Step 2: Extend the `Item` interface with `status` + `loan`**
+- [x] **Step 2: Extend the `Item` interface with `status` + `loan`**
 
 In `src/types/domain.ts`, inside `export interface Item { … }`, the existing `isPacked: boolean;` line becomes annotated as deprecated and two fields are added directly after it:
 
@@ -96,7 +97,7 @@ Replace with:
   photoStatus: ItemPhotoStatus;
 ```
 
-- [ ] **Step 3: Add the activity paths to `paths.ts`**
+- [x] **Step 3: Add the activity paths to `paths.ts`**
 
 In `src/lib/firebase/paths.ts`, inside the `householdPaths` object, add two entries directly after the `packingList` line (before `llmConfig`):
 
@@ -106,15 +107,19 @@ In `src/lib/firebase/paths.ts`, inside the `householdPaths` object, add two entr
     `households/${householdId}/activity/${activityId}`,
 ```
 
-- [ ] **Step 4: Typecheck**
+- [x] **Step 4: Default seeded item status from `isPacked`**
+
+In `src/features/stow/seed.ts`, add `status: item.isPacked ? "packed" : "home"` to the `items` mapper so strongly typed seed data satisfies the required `Item.status` contract before Task 2 introduces normalized read defaults.
+
+- [x] **Step 5: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS. (The new `Item.status` is not yet defaulted in `normalizeItemDoc`; that is Task 2. TypeScript still compiles because the spread cast in `normalizeItemDoc` is `as Item`. The `setItemStatus`/loan repo methods do not exist yet but nothing references them.)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
-git add src/types/domain.ts src/lib/firebase/paths.ts
+git add src/types/domain.ts src/lib/firebase/paths.ts src/features/stow/seed.ts
 git commit -m "feat(mobile): add P4 activity/status/loan domain types and activity paths
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
