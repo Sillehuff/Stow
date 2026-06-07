@@ -56,7 +56,7 @@ Contract §9.1: add to `src/lib/firebase/storage.ts`. Best-effort delete of a pr
 - Modify: `src/lib/firebase/storage.ts`
 - Test: `src/lib/firebase/storage.test.ts` (create if it does not exist)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 > The test mocks `deleteStorageObject` by spying on the module's own export is not possible (same-module call), so `bestEffortDeleteImage` is written to call `deleteStorageObject` indirectly is **not** done — instead it calls the Firebase `deleteObject` path through `deleteStorageObject`. To keep the unit test pure and avoid Firebase, we mock the entire `@/lib/firebase/storage` Firebase dependency surface by mocking `@/lib/firebase/client` (`getStorageClient`) and `firebase/storage`. The test asserts: (a) no-op when there is no `storagePath`; (b) calls delete when a `storagePath` is present; (c) never throws when the underlying delete rejects.
 
@@ -114,12 +114,12 @@ describe("bestEffortDeleteImage", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/lib/firebase/storage.test.ts`
 Expected: FAIL — `bestEffortDeleteImage is not a function` (not yet exported).
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Add to the end of `src/lib/firebase/storage.ts` (the file already imports `ImageRef` and exports `deleteStorageObject`):
 
@@ -137,12 +137,12 @@ export async function bestEffortDeleteImage(image: ImageRef | null | undefined):
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/lib/firebase/storage.test.ts`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/firebase/storage.ts src/lib/firebase/storage.test.ts
