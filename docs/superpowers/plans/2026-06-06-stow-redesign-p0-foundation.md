@@ -547,7 +547,7 @@ git commit -m "feat(mobile): add prefix-aware URL navigation"
 **Files:**
 - Create: `src/features/stow/ui/mobile/shell/Toast.tsx`
 
-- [ ] **Step 1: Write the component** (no unit test — UI; covered by manual + later Playwright)
+- [x] **Step 1: Write the component** (no unit test — UI; covered by manual + later Playwright)
 
 ```tsx
 // src/features/stow/ui/mobile/shell/Toast.tsx
@@ -580,7 +580,7 @@ export function Toast({ message, onDone }: { message: string | null; onDone: () 
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/shell/Toast.tsx
