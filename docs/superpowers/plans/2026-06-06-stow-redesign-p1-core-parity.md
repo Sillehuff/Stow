@@ -2390,7 +2390,7 @@ export interface PackingScreenProps {
 }
 ```
 
-- [ ] **Step 1: Write the screen state + handlers** (full logic — active list, picker, menu)
+- [x] **Step 1: Write the screen state + handlers** (full logic — active list, picker, menu)
 
 ```tsx
 export function PackingScreen(props: PackingScreenProps) {
@@ -2443,7 +2443,7 @@ export function PackingScreen(props: PackingScreenProps) {
 ```
 > The picker is the mobile re-implementation of `PackingItemPickerModal` logic (sectioned by space, `matchesPackingItemPickerQuery` filter, multi-select set committed via `onSetItems`). It deliberately does **not** import `PackingItemPickerModal` (legacy `ui/shared` is off-limits until P5).
 
-- [ ] **Step 2: Write the markup** — port from `PackingScreen` (translate per §1.3, map per §11)
+- [x] **Step 2: Write the markup** — port from `PackingScreen` (translate per §1.3, map per §11)
 
 Two views, switched on `activeList`:
 - **Index** (`!activeList`): header "Packing" + a "New List" pill button → `onClick={()=>setCreating(true)}`. Body: `packingLists.map(l => …)` cards (`cardStyle`, padding 18) showing `l.name`, `${l.packedItemIds.length} of ${l.itemIds.length} packed`, the percent (success at 100%), and `<ProgressBar value={l.packedItemIds.length} total={l.itemIds.length}/>`; card `onClick={()=>setActiveListId(l.id)}`; a `···` button (stopPropagation) → `setMenuListId(l.id)`. A dashed "+ New Packing List" row → `onClick={()=>setCreating(true)}`. When `creating`, render a small inline create row (or reuse `Sheet`): a name `Field` + "Create" `Button` → `onClick={() => { if (newListName.trim()) { onCreateList(newListName.trim()); setNewListName(""); setCreating(false); } }}`.
@@ -2451,12 +2451,12 @@ Two views, switched on `activeList`:
 - **Picker** (`<Sheet open={pickerOpen} onClose={()=>setPickerOpen(false)} title="Select Items">`): a search `<input value={pickerQuery} onChange=…>`; a scroll area rendering `pickerSections` — each section a space-name label then its items as checkbox rows (`pickerSelected.has(i.id)`, `onClick={()=>togglePickerItem(i.id)}`); a footer with "{n} selected" + a "Done" `Button` → `onClick={commitPicker}`.
 - **List menu** (`<ActionSheet open={menuListId!=null} onClose={()=>setMenuListId(null)} title={…} actions={[Rename, Delete]}>`): "Rename" → prompt-less inline rename is overkill; wire "Rename" to set a small rename state (reuse the create row pattern, pre-filled) calling `onRenameList`; "Delete" (destructive) → `onDeleteList(menuListId)` then `setMenuListId(null)` and `setActiveListId(null)` if it was active.
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/screens/PackingScreen.tsx
