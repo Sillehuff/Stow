@@ -54,6 +54,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
   const [renamingSpaceId, setRenamingSpaceId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
+  const [deleteSaving, setDeleteSaving] = useState(false);
   const [shelfCapture, setShelfCapture] = useState<{ blob: Blob; previewUrl: string } | null>(null);
 
   const flash = (message: string) => setToast(message);
@@ -325,7 +326,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
             }}
             onMove={(dest) => {
               const destinationSpace = data.spaces.find((space) => space.id === dest.spaceId) ?? null;
-              void (async () => {
+              return (async () => {
                 await data.actions.updateItem({ householdId, itemId: selectedItem.id, userId, patch: dest });
                 await data.actions.logActivity({
                   householdId,
@@ -610,13 +611,20 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
           body="This removes it from your inventory and any packing lists. This can't be undone."
           confirmLabel="Delete"
           danger
-          onCancel={() => setDeleteItemId(null)}
+          onCancel={() => {
+            if (!deleteSaving) setDeleteItemId(null);
+          }}
           onConfirm={() => {
-            if (deleteItemId) {
-              const itemToDelete = data.items.find((item) => item.id === deleteItemId);
-              const imageToClean = itemToDelete?.image;
-              void (async () => {
-                await data.actions.deleteItem({ householdId, itemId: deleteItemId, userId });
+            if (!deleteItemId || deleteSaving) return;
+            const itemIdToDelete = deleteItemId;
+            const itemToDelete = data.items.find((item) => item.id === itemIdToDelete);
+            const imageToClean = itemToDelete?.image;
+            const shouldReturn = nav.selectedItemId === itemIdToDelete;
+            setDeleteSaving(true);
+            setDeleteItemId(null);
+            void (async () => {
+              try {
+                await data.actions.deleteItem({ householdId, itemId: itemIdToDelete, userId });
                 await data.actions.logActivity({
                   householdId,
                   entry: buildActivityEntry({
@@ -624,15 +632,18 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
                     actorUid: userId,
                     actorName,
                     itemName: itemToDelete?.name,
-                    itemId: deleteItemId
+                    itemId: itemIdToDelete
                   })
                 });
                 if (imageToClean) void bestEffortDeleteImage(imageToClean);
                 flash("Item deleted");
-              })();
-              if (nav.selectedItemId === deleteItemId) nav.back();
-            }
-            setDeleteItemId(null);
+                if (shouldReturn) nav.back();
+              } catch {
+                flash("Couldn't delete item");
+              } finally {
+                setDeleteSaving(false);
+              }
+            })();
           }}
         />
 

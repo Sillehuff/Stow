@@ -39,7 +39,7 @@ export interface ItemDetailProps {
   onBack: () => void;
   onSaveEdit: (patch: { name: string; value: number | null; notes: string; image?: ImageRef | null }) => Promise<void>;
   onToggleTag: (tag: string) => void;
-  onMove: (dest: { spaceId: string; areaId: string; areaNameSnapshot: string }) => void;
+  onMove: (dest: { spaceId: string; areaId: string; areaNameSnapshot: string }) => Promise<void> | void;
   onChangeStatus: (next: ItemStatus) => Promise<void> | void;
   onConfirmLoan: (loan: { to: string; toUid?: string; dueMs?: number; note?: string }) => Promise<void> | void;
   onDelete: () => void;
@@ -149,6 +149,7 @@ export function ItemDetail(props: ItemDetailProps) {
   const [mode, setMode] = useState<Mode>("view");
   const [lendingOpen, setLendingOpen] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
+  const [moveSaving, setMoveSaving] = useState(false);
 
   const [draftName, setDraftName] = useState(item.name);
   const [editOriginalImage, setEditOriginalImage] = useState<ImageRef | null>(item.image ?? null);
@@ -263,15 +264,22 @@ export function ItemDetail(props: ItemDetailProps) {
     setMoveAreaId(nextSpace.areas[0]?.id ?? "");
   }
 
-  function commitMove() {
-    if (!moveSpace || !moveAreaId) return;
-    onMove({
-      spaceId: moveSpace.id,
-      areaId: moveAreaId,
-      areaNameSnapshot: moveSpace.areas.find((area) => area.id === moveAreaId)?.name ?? ""
-    });
-    setMode("view");
-    onFlash("Item moved");
+  async function commitMove() {
+    if (!moveSpace || !moveAreaId || moveSaving) return;
+    setMoveSaving(true);
+    try {
+      await onMove({
+        spaceId: moveSpace.id,
+        areaId: moveAreaId,
+        areaNameSnapshot: moveSpace.areas.find((area) => area.id === moveAreaId)?.name ?? ""
+      });
+      setMode("view");
+      onFlash("Item moved");
+    } catch {
+      onFlash("Couldn't move item");
+    } finally {
+      setMoveSaving(false);
+    }
   }
 
   function createTag() {
@@ -581,9 +589,9 @@ export function ItemDetail(props: ItemDetailProps) {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
-              <Button disabled={!moveSpace || !moveAreaId} onClick={commitMove}>
+              <Button disabled={!moveSpace || !moveAreaId || moveSaving} onClick={() => void commitMove()}>
                 <ArrowRight size={16} color="#fff" />
-                Move here
+                {moveSaving ? "Moving..." : "Move here"}
               </Button>
               <Button variant="neutral" onClick={() => setMode("view")}>
                 Cancel

@@ -1769,27 +1769,27 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ## Task 14: Full verification
 
-- [ ] **Step 1: Unit suite**
+- [x] **Step 1: Unit suite**
 
 Run: `npm test`
 Expected: PASS, including `normalizeItemStatus.test.ts`, `activity.test.ts`, `activitySelectors.test.ts`, and the extended `useMobileNavigation.test.ts`.
 
-- [ ] **Step 2: Rules**
+- [x] **Step 2: Rules**
 
 Run: `npm run test:rules`
 Expected: PASS, including the two new `activity` tests.
 
-- [ ] **Step 3: Typecheck + build**
+- [x] **Step 3: Typecheck + build**
 
 Run: `npm run typecheck && npm run build`
 Expected: both succeed.
 
-- [ ] **Step 4: Smoke (e2e)**
+- [x] **Step 4: Smoke (e2e)**
 
 Run: `npm run test:smoke`
 Expected: PASS, including `app-lending.spec.ts`.
 
-- [ ] **Step 5: Manual smoke checklist** (`npm run dev`, open `/app`)
+- [x] **Step 5: Manual smoke checklist** (`npm run dev`, open `/app`)
   - Bell on Home → `/app/activity`; feed renders (empty state when fresh).
   - Add an item → Activity shows "{you} added {item} to {Space} › {Area}"; tapping the row opens the item.
   - Move the item → Activity shows "{you} moved {item} to {dest}".
@@ -1799,7 +1799,7 @@ Expected: PASS, including `app-lending.spec.ts`.
   - Item detail: set status repair/lost/packed → reflected + `item_status_changed` entry; set lent (pick borrower, optional due/note) → "Lent to {name}", appears in Home Away strip; set back home → loan cleared, leaves Away strip.
   - Legacy `/spaces` and desktop `/next` still load unchanged.
 
-- [ ] **Step 6: Final commit (if any manual fixups were needed)**
+- [x] **Step 6: Final commit (if any manual fixups were needed)**
 
 ```bash
 git add -A
