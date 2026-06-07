@@ -44,15 +44,9 @@ export const validateLlmConfigInputSchema = z.object({
   householdId: z.string().min(1)
 });
 
-export const visionImageRefSchema = z.union([
-  z.object({
-    storagePath: z.string().min(1),
-    downloadUrl: z.string().url().optional()
-  }),
-  z.object({
-    imageUrl: z.string().url()
-  })
-]);
+export const visionImageRefSchema = z.object({
+  storagePath: z.string().min(1)
+});
 
 export const visionCategorizeInputSchema = z.object({
   householdId: z.string().min(1),

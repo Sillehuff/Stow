@@ -8,7 +8,7 @@ import {
   setHouseholdLlmSecretHandler,
   validateHouseholdLlmConfigHandler
 } from "./llmConfig.js";
-import { visionCategorizeItemImageHandler } from "./vision.js";
+import { visionCategorizeItemImageHandler, visionDetectShelfItemsHandler } from "./vision.js";
 
 setGlobalOptions({
   region: process.env.FUNCTIONS_REGION || "us-central1",
@@ -83,6 +83,16 @@ export const visionCategorizeItemImage = onCall(async (request) => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
     return await visionCategorizeItemImageHandler(request.data, uid);
+  } catch (error) {
+    throw mapError(error);
+  }
+});
+
+export const visionDetectShelfItems = onCall(async (request) => {
+  try {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+    return await visionDetectShelfItemsHandler(request.data, uid);
   } catch (error) {
     throw mapError(error);
   }

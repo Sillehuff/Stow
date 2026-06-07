@@ -426,7 +426,7 @@ Add the handler to `functions/src/vision.ts`, mirroring `visionCategorizeItemIma
 - Modify: `functions/src/vision.ts`
 - Modify: `functions/src/index.ts`
 
-- [ ] **Step 1: Add the handler** — `functions/src/vision.ts`.
+- [x] **Step 1: Add the handler** — `functions/src/vision.ts`.
 
 Extend the schema import:
 ```ts
@@ -481,7 +481,7 @@ export async function visionDetectShelfItemsHandler(raw: unknown, uid: string) {
 }
 ```
 
-- [ ] **Step 2: Export the callable** — `functions/src/index.ts`.
+- [x] **Step 2: Export the callable** — `functions/src/index.ts`.
 
 Extend the vision import:
 ```ts
@@ -500,17 +500,17 @@ export const visionDetectShelfItems = onCall(async (request) => {
 });
 ```
 
-- [ ] **Step 3: Typecheck + build functions**
+- [x] **Step 3: Typecheck + build functions**
 
 Run: `npm run functions:build`
 Expected: PASS (TypeScript compiles; `detectShelfItems` optional-method narrowing satisfied by the `if (!adapter.detectShelfItems)` guard).
 
-- [ ] **Step 4: Run functions tests** (no behavior change expected, but confirm the build didn't break imports)
+- [x] **Step 4: Run functions tests** (no behavior change expected, but confirm the build didn't break imports)
 
 Run: `npm run functions:test`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add functions/src/vision.ts functions/src/index.ts

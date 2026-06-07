@@ -35,10 +35,16 @@ describe("shared schemas", () => {
     expect(() =>
       visionCategorizeInputSchema.parse({
         householdId: "h1",
-        imageRef: { imageUrl: "https://example.com/image.jpg" },
+        imageRef: { storagePath: "households/h1/items/item-1/image.jpg" },
         context: { areaName: "Desk" }
       })
     ).not.toThrow();
+    expect(() =>
+      visionCategorizeInputSchema.parse({
+        householdId: "h1",
+        imageRef: { imageUrl: "https://example.com/image.jpg" }
+      })
+    ).toThrow();
   });
 
   it("validates normalized suggestions", () => {
