@@ -4,7 +4,7 @@ import type { User } from "firebase/auth";
 import type { ImageRef } from "@/types/domain";
 import type { VisionSuggestion } from "@/types/llm";
 import { useWorkspaceData } from "@/features/stow/hooks/useWorkspaceData";
-import { inventoryRepository } from "@/features/stow/services/repository";
+import { buildActivityEntry, inventoryRepository } from "@/features/stow/services/repository";
 import { useMobileNavigation } from "@/features/stow/ui/mobile/hooks/useMobileNavigation";
 import type { MobileTab } from "@/features/stow/ui/mobile/hooks/useMobileNavigation";
 import { applyPalette, makePalette } from "@/features/stow/ui/mobile/theme/palette";
@@ -65,6 +65,10 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
   }, []);
 
   const userId = data.userId ?? user.uid;
+  const actorName = useMemo(() => {
+    const member = data.members.find((candidate) => candidate.uid === userId);
+    return member?.displayName ?? member?.email ?? "Someone";
+  }, [data.members, userId]);
   const allTags = useMemo(() => Array.from(new Set(data.items.flatMap((item) => item.tags || []))), [data.items]);
 
   const packedCount = data.packingLists.reduce(
@@ -306,7 +310,24 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
               void data.actions.updateItem({ householdId, itemId: selectedItem.id, userId, patch: { tags: nextTags } });
             }}
             onMove={(dest) => {
-              void data.actions.updateItem({ householdId, itemId: selectedItem.id, userId, patch: dest });
+              const destinationSpace = data.spaces.find((space) => space.id === dest.spaceId) ?? null;
+              void (async () => {
+                await data.actions.updateItem({ householdId, itemId: selectedItem.id, userId, patch: dest });
+                await data.actions.logActivity({
+                  householdId,
+                  entry: buildActivityEntry({
+                    type: "item_moved",
+                    actorUid: userId,
+                    actorName,
+                    itemName: selectedItem.name,
+                    spaceName: destinationSpace?.name,
+                    areaName: dest.areaNameSnapshot,
+                    spaceId: dest.spaceId,
+                    areaId: dest.areaId,
+                    itemId: selectedItem.id
+                  })
+                });
+              })();
             }}
             onDelete={() => setDeleteItemId(selectedItem.id)}
             onFlash={flash}
@@ -365,7 +386,19 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
               updateArea: data.actions.updateArea,
               deleteArea: data.actions.deleteArea,
               reorderAreas: data.actions.reorderAreas,
-              deleteSpace: data.actions.deleteSpace
+              deleteSpace: async (input) => {
+                await data.actions.deleteSpace(input);
+                await data.actions.logActivity({
+                  householdId: input.householdId,
+                  entry: buildActivityEntry({
+                    type: "space_deleted",
+                    actorUid: input.userId,
+                    actorName,
+                    spaceName: editSpace.name,
+                    spaceId: editSpace.id
+                  })
+                });
+              }
             }}
             householdId={householdId}
             userId={userId}
@@ -377,8 +410,8 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
           spaceCount={data.spaces.length}
           onClose={() => nav.closeOverlay()}
           onCreate={(input) => {
-            void data.actions
-              .createSpace({
+            void (async () => {
+              const spaceId = await data.actions.createSpace({
                 householdId,
                 userId,
                 name: input.name,
@@ -386,8 +419,19 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
                 color: input.color,
                 position: input.position,
                 areas: input.areas
-              })
-              .then(() => flash("Space created"));
+              });
+              await data.actions.logActivity({
+                householdId,
+                entry: buildActivityEntry({
+                  type: "space_added",
+                  actorUid: userId,
+                  actorName,
+                  spaceName: input.name,
+                  spaceId
+                })
+              });
+              flash("Space created");
+            })();
             nav.closeOverlay();
           }}
         />
@@ -419,25 +463,37 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
           defaultSpaceId={addItemInitial?.spaceId ?? nav.selectedSpaceId}
           defaultAreaId={addItemInitial?.areaId ?? nav.selectedAreaId}
           onClose={() => nav.closeOverlay()}
-          onCreate={(input) => {
-            return data.actions
-              .createItem({
-                householdId,
-                userId,
-                name: input.name,
+          onCreate={async (input) => {
+            const destinationSpace = data.spaces.find((space) => space.id === input.spaceId) ?? null;
+            const itemId = await data.actions.createItem({
+              householdId,
+              userId,
+              name: input.name,
+              spaceId: input.spaceId,
+              areaId: input.areaId,
+              areaNameSnapshot: input.areaNameSnapshot,
+              value: input.value ?? undefined,
+              tags: input.tags,
+              notes: input.notes,
+              image: input.image ?? undefined,
+              entryMode: input.entryMode
+            });
+            await data.actions.logActivity({
+              householdId,
+              entry: buildActivityEntry({
+                type: "item_added",
+                actorUid: userId,
+                actorName,
+                itemName: input.name,
+                spaceName: destinationSpace?.name,
+                areaName: input.areaNameSnapshot,
                 spaceId: input.spaceId,
                 areaId: input.areaId,
-                areaNameSnapshot: input.areaNameSnapshot,
-                value: input.value ?? undefined,
-                tags: input.tags,
-                notes: input.notes,
-                image: input.image ?? undefined,
-                entryMode: input.entryMode
+                itemId
               })
-              .then(() => {
-                flash("Item added");
-                nav.closeOverlay();
-              });
+            });
+            flash("Item added");
+            nav.closeOverlay();
           }}
         />
 
@@ -460,7 +516,9 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
             areaId={nav.selectedAreaId ?? undefined}
             spaces={data.spaces}
             userId={userId}
+            actorName={actorName}
             createItemsBatch={data.actions.createItemsBatch}
+            logActivity={data.actions.logActivity}
             capturedBlob={shelfCapture.blob}
             capturedPreviewUrl={shelfCapture.previewUrl}
             onClose={clearShelfCapture}
@@ -496,10 +554,21 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
             if (deleteItemId) {
               const itemToDelete = data.items.find((item) => item.id === deleteItemId);
               const imageToClean = itemToDelete?.image;
-              void data.actions.deleteItem({ householdId, itemId: deleteItemId, userId }).then(() => {
+              void (async () => {
+                await data.actions.deleteItem({ householdId, itemId: deleteItemId, userId });
+                await data.actions.logActivity({
+                  householdId,
+                  entry: buildActivityEntry({
+                    type: "item_deleted",
+                    actorUid: userId,
+                    actorName,
+                    itemName: itemToDelete?.name,
+                    itemId: deleteItemId
+                  })
+                });
                 if (imageToClean) void bestEffortDeleteImage(imageToClean);
                 flash("Item deleted");
-              });
+              })();
               if (nav.selectedItemId === deleteItemId) nav.back();
             }
             setDeleteItemId(null);

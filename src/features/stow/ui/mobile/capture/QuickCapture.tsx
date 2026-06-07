@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import type { ImageRef, SpaceWithAreas } from "@/types/domain";
+import type { ActivityEntry, ImageRef, SpaceWithAreas } from "@/types/domain";
 import type { ShelfDetection, VisionDetectShelfResponse } from "@/types/llm";
-import type { NewBatchItem } from "@/features/stow/services/repository";
+import { buildActivityEntry, type NewBatchItem } from "@/features/stow/services/repository";
 import {
   captureReducer,
   initialCaptureState,
@@ -41,7 +41,12 @@ export interface QuickCaptureProps {
 export interface QuickCaptureData {
   spaces: SpaceWithAreas[];
   userId: string;
+  actorName: string;
   createItemsBatch: (input: { householdId: string; userId: string; items: NewBatchItem[] }) => Promise<string[]>;
+  logActivity: (input: {
+    householdId: string;
+    entry: Omit<ActivityEntry, "id" | "householdId" | "createdAt">;
+  }) => Promise<void>;
   detectShelfItems?: typeof visionDetectShelfItems;
   uploadFrame?: (blob: Blob) => Promise<ImageRef>;
   capturedBlob: Blob;
@@ -133,7 +138,9 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
     onCommitted,
     spaces,
     userId,
+    actorName,
     createItemsBatch,
+    logActivity,
     detectShelfItems = visionDetectShelfItems,
     uploadFrame,
     capturedBlob,
@@ -259,10 +266,25 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
     setCommitting(true);
     setCommitError(null);
     try {
+      let committedCount = 0;
       if (commitItems.length > 0) {
-        await createItemsBatch({ householdId, userId, items: commitItems });
+        const itemIds = await createItemsBatch({ householdId, userId, items: commitItems });
+        committedCount = itemIds.length;
+        await logActivity({
+          householdId,
+          entry: buildActivityEntry({
+            type: "items_added_batch",
+            actorUid: userId,
+            actorName,
+            count: committedCount,
+            spaceName: destination.space?.name,
+            areaName: state.destination.areaNameSnapshot,
+            spaceId: state.destination.spaceId ?? undefined,
+            areaId: state.destination.areaId ?? undefined
+          })
+        });
       }
-      onCommitted(commitItems.length);
+      onCommitted(committedCount);
     } catch {
       setCommitError("Couldn't file these items. Try again.");
       setCommitting(false);

@@ -1279,6 +1279,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ## Task 9: Wire `logActivity` at all P1/P2/P3 call sites
 
 **Files:**
+- Modify: `src/features/stow/ui/mobile/StowMobileApp.tsx` (centralized live call sites for item_added, item_moved, item_deleted, space_added, space_deleted)
 - Modify: `src/features/stow/ui/mobile/add/AddItemSheet.tsx` (item_added)
 - Modify: `src/features/stow/ui/mobile/screens/ItemDetail.tsx` (item_moved, item_deleted; status changes handled in Task 11)
 - Modify: `src/features/stow/ui/mobile/spaces/SpaceActionSheet.tsx` and/or `src/features/stow/ui/mobile/spaces/EditSpaceSheet.tsx` (space_deleted; item_moved on delete-with-reassignment is logged by the caller as a single `item_moved` per reassigned item is **not** required — log only `space_deleted`)
@@ -1288,7 +1289,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 > These mobile files were created in P1–P3. Each already calls a `useWorkspaceData()` action (`actions.createItem`, `actions.updateItem` for a move, `actions.deleteItem`, `actions.createSpace`, `actions.deleteSpace`, `actions.createItemsBatch`). For each, after the awaited write resolves, call `actions.logActivity({ householdId, entry: buildActivityEntry({ … }) })`. Import `buildActivityEntry` from the repository: `import { buildActivityEntry } from "@/features/stow/services/repository";`. The actor name comes from the current member: resolve it once via the `members` array — `members.find(m => m.uid === userId)?.displayName ?? members.find(m => m.uid === userId)?.email ?? "Someone"`. (Define a small local `actorName` const where each call site has `userId`/`members` in scope; if a screen lacks `members`, read it from `useWorkspaceData()`.) **There is no unit test for this task** (these are UI call sites); correctness is verified by the Playwright test in Task 12 and manual smoke.
 
-- [ ] **Step 1: `item_added` — in `AddItemSheet` (and `CaptureFirst` if it creates items directly)**
+- [x] **Step 1: `item_added` — in `AddItemSheet` (and `CaptureFirst` if it creates items directly)**
 
 After the `await actions.createItem({...})` resolves (it returns the new `itemId`), and using the space/area chosen in the sheet, add:
 ```ts
@@ -1310,7 +1311,7 @@ await actions.logActivity({
 ```
 where `selectedSpace` is the chosen `SpaceWithAreas` and `areaNameSnapshot` is the snapshot already passed to `createItem`. (`CaptureFirst` in P2 completes a draft via `actions.completeItemDraft` — log the same `item_added` entry there after it resolves, using its returned item id.)
 
-- [ ] **Step 2: `item_moved` — in `ItemDetail` move action**
+- [x] **Step 2: `item_moved` — in `ItemDetail` move action**
 
 The move sub-mode calls `actions.updateItem({ … patch: { spaceId, areaId, areaNameSnapshot } })`. After it resolves:
 ```ts
@@ -1331,7 +1332,7 @@ await actions.logActivity({
 });
 ```
 
-- [ ] **Step 3: `item_deleted` — in `ItemDetail` (or `RoomScreen`) delete action**
+- [x] **Step 3: `item_deleted` — in `ItemDetail` (or `RoomScreen`) delete action**
 
 After `await actions.deleteItem({ householdId, itemId, userId })` resolves (capture `item.name` **before** deletion):
 ```ts
@@ -1343,7 +1344,7 @@ await actions.logActivity({
 });
 ```
 
-- [ ] **Step 4: `space_added` — in `AddSpaceSheet`**
+- [x] **Step 4: `space_added` — in `AddSpaceSheet`**
 
 After `const newSpaceId = await actions.createSpace({...})` resolves:
 ```ts
@@ -1353,7 +1354,7 @@ await actions.logActivity({
 });
 ```
 
-- [ ] **Step 5: `space_deleted` — in `SpaceActionSheet`/`EditSpaceSheet` delete confirm**
+- [x] **Step 5: `space_deleted` — in `SpaceActionSheet`/`EditSpaceSheet` delete confirm**
 
 After `await actions.deleteSpace({ householdId, spaceId, userId, reassignTo? })` resolves (capture `space.name` first):
 ```ts
@@ -1365,7 +1366,7 @@ await actions.logActivity({
 });
 ```
 
-- [ ] **Step 6: `items_added_batch` — in `QuickCapture` commit (P3 call site)**
+- [x] **Step 6: `items_added_batch` — in `QuickCapture` commit (P3 call site)**
 
 `QuickCapture`'s Done step calls `await actions.createItemsBatch({ householdId, userId, items })` and then `onCommitted(count)`. Between the resolve and `onCommitted`, log one batch entry with the **destination** captured in the reducer state and the count of committed items:
 ```ts
@@ -1387,12 +1388,12 @@ onCommitted(ids.length);
 ```
 (`destination` is `captureReducer` state's `destination`; `destSpace` is the `SpaceWithAreas` for `destination.spaceId`.)
 
-- [ ] **Step 7: Typecheck**
+- [x] **Step 7: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS. Resolve any "actorName/members not in scope" by reading `members` from `useWorkspaceData()` in that component and deriving `actorName` as described in the task intro.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/add/AddItemSheet.tsx src/features/stow/ui/mobile/add/AddSpaceSheet.tsx src/features/stow/ui/mobile/screens/ItemDetail.tsx src/features/stow/ui/mobile/screens/RoomScreen.tsx src/features/stow/ui/mobile/spaces/SpaceActionSheet.tsx src/features/stow/ui/mobile/spaces/EditSpaceSheet.tsx src/features/stow/ui/mobile/capture/QuickCapture.tsx
