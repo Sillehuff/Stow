@@ -2477,7 +2477,7 @@ Port `prototype/screens-detail.jsx` `SettingsScreen` (lines 257–331), but wire
 
 **CSV is new code** — the legacy app has no inventory-CSV export (verified; legacy `csvToList` only *parses* tag strings). Build a tiny pure CSV serializer (unit-tested) and a browser download trigger.
 
-- [ ] **Step 1: Write the failing CSV test** (pure serializer)
+- [x] **Step 1: Write the failing CSV test** (pure serializer)
 
 ```ts
 // src/features/stow/ui/mobile/screens/inventoryCsv.test.ts
@@ -2517,12 +2517,12 @@ describe("buildInventoryCsv", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/ui/mobile/screens/inventoryCsv.test.ts`
 Expected: FAIL — import cannot be resolved.
 
-- [ ] **Step 3: Write the CSV serializer + download helper**
+- [x] **Step 3: Write the CSV serializer + download helper**
 
 ```ts
 // src/features/stow/ui/mobile/screens/inventoryCsv.ts
@@ -2573,12 +2573,12 @@ export function downloadInventoryCsv(items: Item[], spaces: SpaceWithAreas[], fi
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/ui/mobile/screens/inventoryCsv.test.ts`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Write `SettingsScreen.tsx`** — full data wiring + handlers (owner guards, invites, LLM config, Test connection)
+- [x] **Step 5: Write `SettingsScreen.tsx`** — full data wiring + handlers (owner guards, invites, LLM config, Test connection)
 
 The screen owns: a `Confirm` for destructive member/invite actions, an LLM form (`providerType`/`model`/`baseUrl`/`temperature`/`maxTokens` + a separate `apiKey` input that is never read back), a "Test connection" result line, and the CSV export. It does NOT manage auth — `onSignOut` comes from the parent and runs through a `Confirm`.
 
@@ -2777,7 +2777,7 @@ export function SettingsScreen(props: SettingsScreenProps) {
 ```
 > The invite **regenerate** flow = revoke the old invite then create a new one of the same role (the callable surface has `createHouseholdInvite`/`revokeHouseholdInvite`; there is no dedicated "regenerate"). Wire a "Regenerate" action per pending invite that runs `revokeHouseholdInvite` then `createHouseholdInvite({ role: invite.role })` inside one `Confirm` action. `inviteUrl` returned by `createHouseholdInvite` may be surfaced via toast/clipboard (`navigator.clipboard?.writeText`) — copying is optional polish, the create itself is the requirement.
 
-- [ ] **Step 6: Write the markup** — port from `SettingsScreen` (translate per §1.3, map per §11)
+- [x] **Step 6: Write the markup** — port from `SettingsScreen` (translate per §1.3, map per §11)
 
 Structure (header "Settings" `<h1>`; scroll body padding `16px 24px 150px`):
 - **Household card** (`cardStyle`): a 48×48 accent-tint tile with `<Home color="var(--stow-accent)"/>`; household name (when `editingName`, a `Field` + Save/Cancel → `onRenameHousehold(nameDraft.trim())`; else the name with an edit affordance gated on `canManage`) + `${members.length} members`. (Drop the prototype's hardcoded "Pro plan".)
@@ -2790,12 +2790,12 @@ Structure (header "Settings" `<h1>`; scroll body padding `16px 24px 150px`):
   - "Sign out" (danger) → row `onClick={requestSignOut}`.
 - Render `<Confirm open={confirm!=null} title=… body=… confirmLabel=… danger=… onConfirm={runConfirm} onCancel={()=>setConfirm(null)} />` at the end.
 
-- [ ] **Step 7: Typecheck**
+- [x] **Step 7: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/screens/SettingsScreen.tsx src/features/stow/ui/mobile/screens/inventoryCsv.ts src/features/stow/ui/mobile/screens/inventoryCsv.test.ts
