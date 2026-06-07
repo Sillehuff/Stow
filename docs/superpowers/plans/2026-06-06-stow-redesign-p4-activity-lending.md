@@ -1130,7 +1130,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 > Two pure helpers used by the P4 screens, tested in node: `formatRelativeTime(ts, now)` (for the feed + away strip + loan duration) and `selectAwayItems(items)` (status `!== "home"`, for the home strip). `formatRelativeTime` accepts a Firestore-`Timestamp`-like value (anything with `.toMillis()`) **or** a millis number **or** a `Date`, so it is callable from both live `ActivityEntry.createdAt`/`ItemLoan.since` (Firestore `Timestamp`) and tests (plain numbers).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // src/features/stow/ui/mobile/screens/activitySelectors.test.ts
@@ -1209,12 +1209,12 @@ describe("selectAwayItems", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/ui/mobile/screens/activitySelectors.test.ts`
 Expected: FAIL — module cannot be resolved.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // src/features/stow/ui/mobile/screens/activitySelectors.ts
@@ -1260,12 +1260,12 @@ export function selectAwayItems(items: Item[]): Item[] {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/ui/mobile/screens/activitySelectors.test.ts`
 Expected: PASS (formatRelativeTime: 5 cases; selectAwayItems: 3 cases).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/screens/activitySelectors.ts src/features/stow/ui/mobile/screens/activitySelectors.test.ts
