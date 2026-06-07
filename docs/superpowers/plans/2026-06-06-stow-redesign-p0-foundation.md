@@ -233,7 +233,7 @@ git commit -m "feat(mobile): add token CSS scaffolding and keyframes"
 **Files:**
 - Modify: `index.html` (head, after the `<title>` on line 11)
 
-- [ ] **Step 1: Add the font `<link>`s**
+- [x] **Step 1: Add the font `<link>`s**
 
 Find in `index.html`:
 ```html
@@ -250,7 +250,7 @@ Replace with:
   </head>
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add index.html
