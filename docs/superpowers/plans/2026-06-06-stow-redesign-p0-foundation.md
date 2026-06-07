@@ -163,7 +163,7 @@ git commit -m "feat(mobile): add makePalette design tokens"
 **Files:**
 - Create: `src/features/stow/ui/mobile/theme/tokens.css`
 
-- [ ] **Step 1: Create the stylesheet** (no test — CSS; verified by build + manual load)
+- [x] **Step 1: Create the stylesheet** (no test — CSS; verified by build + manual load)
 
 ```css
 /* src/features/stow/ui/mobile/theme/tokens.css */
@@ -219,7 +219,7 @@ git commit -m "feat(mobile): add makePalette design tokens"
 @media (prefers-reduced-motion: reduce) { .stow-mobile * { animation: none !important; } }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/theme/tokens.css
