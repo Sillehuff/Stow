@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { User } from "firebase/auth";
+import { serverTimestamp, Timestamp } from "firebase/firestore";
 import { useLocation } from "react-router-dom";
-import type { ImageRef } from "@/types/domain";
+import type { ImageRef, ItemStatus } from "@/types/domain";
 import type { VisionSuggestion } from "@/types/llm";
 import { useWorkspaceData } from "@/features/stow/hooks/useWorkspaceData";
 import { buildActivityEntry, inventoryRepository } from "@/features/stow/services/repository";
@@ -300,10 +301,8 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
             space={selectedItemSpace}
             spaces={data.spaces}
             allTags={allTags}
+            members={data.members}
             onBack={() => nav.back()}
-            onTogglePacked={(next) => {
-              void data.actions.togglePacked({ householdId, itemId: selectedItem.id, userId, nextValue: next });
-            }}
             onSaveEdit={(patch) => {
               const updatePatch = {
                 name: patch.name,
@@ -342,6 +341,53 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
                   })
                 });
               })();
+            }}
+            onChangeStatus={async (next: ItemStatus) => {
+              if (selectedItem.status === "lent") {
+                await data.actions.clearItemLoan({ householdId, itemId: selectedItem.id, userId });
+                if (next !== "home") {
+                  await data.actions.setItemStatus({ householdId, itemId: selectedItem.id, userId, status: next });
+                }
+              } else {
+                await data.actions.setItemStatus({ householdId, itemId: selectedItem.id, userId, status: next });
+              }
+              await data.actions.logActivity({
+                householdId,
+                entry: buildActivityEntry({
+                  type: "item_status_changed",
+                  actorUid: userId,
+                  actorName,
+                  itemName: selectedItem.name,
+                  status: next,
+                  itemId: selectedItem.id
+                })
+              });
+            }}
+            onConfirmLoan={async (loan) => {
+              await data.actions.setItemLoan({
+                householdId,
+                itemId: selectedItem.id,
+                userId,
+                loan: {
+                  to: loan.to,
+                  ...(loan.toUid ? { toUid: loan.toUid } : {}),
+                  since: serverTimestamp() as unknown as Timestamp,
+                  ...(loan.dueMs ? { due: Timestamp.fromMillis(loan.dueMs) } : {}),
+                  ...(loan.note ? { note: loan.note } : {})
+                }
+              });
+              await data.actions.logActivity({
+                householdId,
+                entry: buildActivityEntry({
+                  type: "item_status_changed",
+                  actorUid: userId,
+                  actorName,
+                  itemName: selectedItem.name,
+                  status: "lent",
+                  loanTo: loan.to,
+                  itemId: selectedItem.id
+                })
+              });
             }}
             onDelete={() => setDeleteItemId(selectedItem.id)}
             onFlash={flash}

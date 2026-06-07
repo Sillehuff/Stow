@@ -169,5 +169,6 @@ export {
   Tv,
   Users,
   WashingMachine,
+  Wrench,
   X
 };

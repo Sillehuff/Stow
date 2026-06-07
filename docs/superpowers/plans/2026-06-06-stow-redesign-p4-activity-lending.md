@@ -1523,7 +1523,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 > Spec §7.2/§7.3 + contract §10: `ItemDetail` gains a **status control** (the five `ItemStatus` values) and, when status becomes `lent`, a **lending sheet** to capture borrower (a household member or free-text name) + `since`/`due`/`note`. Wiring: choosing a non-lent status → `actions.setItemStatus`; choosing `lent` (and confirming the sheet) → `actions.setItemLoan`; clearing back to home from a lent item → `actions.clearItemLoan`. Each status change also logs `item_status_changed` activity. Port the status list + loan-details treatment from `enhance/maintain.jsx` `M2_StatusSheet`; the status vocabulary (label/color/soft/icon) comes from `enhance/parts.jsx` `STATUS`. Validated by manual + the Playwright test in Task 12 (no unit DOM test).
 
-- [ ] **Step 1: Add the shared status vocabulary**
+- [x] **Step 1: Add the shared status vocabulary**
 
 ```ts
 // src/features/stow/ui/mobile/screens/StatusVocab.ts
@@ -1546,7 +1546,7 @@ export const STATUS_ORDER: ItemStatus[] = ["home", "packed", "lent", "repair", "
 ```
 (If `Users` is not yet re-exported from `theme/icons`, add it to the `lucide-react` import + the shell/UI glyph re-export in `theme/icons.tsx` — it is a real lucide export. Same for `Wrench`/`Search`/`Package`/`Home` if any are missing.)
 
-- [ ] **Step 2: Build the `LendingSheet` component**
+- [x] **Step 2: Build the `LendingSheet` component**
 
 Props:
 ```ts
@@ -1565,13 +1565,13 @@ Structure (port from `M2_StatusSheet`'s "Loan details" block, wrapped in the sha
 - **Note (optional)** — a multiline `Field`.
 - **Confirm button** — disabled until a borrower is chosen; label "Save · Lent to {firstName}" (mirrors the prototype). Calls `onConfirm({ to, toUid, dueMs, note })`.
 
-- [ ] **Step 3: Add the status control to `ItemDetail` view mode**
+- [x] **Step 3: Add the status control to `ItemDetail` view mode**
 
 In `ItemDetail` (the location-first view sub-mode, **after** the Location hero card and the demoted value line, before Notes), add a **Status** control:
 - A row of the five statuses rendered from `STATUS_ORDER`/`STATUS_META` (compact pill buttons or a single tappable "Status" card that opens an `ActionSheet` listing the five — either is acceptable; the prototype uses a full sheet). The current `item.status` is highlighted (selected = filled `meta.color` tile + check, mirroring `M2_StatusSheet`).
 - When the item is currently `lent` and `item.loan` exists, show a small loan summary line under the control: borrower + `formatRelativeTime(item.loan.since)` ("Lent to Marcus · 3w ago"), reusing `formatRelativeTime` from `./activitySelectors`.
 
-- [ ] **Step 4: Wire the status/loan handlers**
+- [x] **Step 4: Wire the status/loan handlers**
 
 In `ItemDetail`, with `householdId`, `item`, `userId`, `members`, and `actions` (+ `actorName` derived as in Task 9) in scope:
 
@@ -1616,20 +1616,22 @@ Imports in `ItemDetail`: `import { serverTimestamp, Timestamp } from "firebase/f
 
 > **`serverTimestamp()` in a nested map:** Firestore accepts a sentinel `serverTimestamp()` as a field value inside the object passed to `updateDoc`/`setDoc` (the `loan.since` slot). The `as unknown as Timestamp` cast satisfies the `ItemLoan` type at the call boundary; the actual stored value resolves server-side. `due` uses a concrete `Timestamp.fromMillis` (sentinels are not allowed for non-top-level future-due values, and `due` is user-chosen, not "now").
 
-- [ ] **Step 5: Port the markup**
+- [x] **Step 5: Port the markup**
 
 Port the status list + selected treatment from `enhance/maintain.jsx` `M2_StatusSheet` (the `order.map(...)` status rows with the filled tile + check) and the loan-details block into `LendingSheet`, translating tokens per §1.3 and reading colors from `STATUS_META`. The status control inside `ItemDetail` follows the same card/row idiom already used by the Location hero card.
 
-- [ ] **Step 6: Typecheck + build**
+- [x] **Step 6: Typecheck + build**
 
 Run: `npm run typecheck && npm run build`
 Expected: PASS.
 
-- [ ] **Step 7: Manual smoke**
+- [x] **Step 7: Manual smoke**
 
 Run `npm run dev`, open an item, change status to "In repair" → status reflects + an `item_status_changed` entry shows in Activity. Change status to "Lent out" → lending sheet opens; pick a member, optionally set due/note, Save → item shows "Lent to {name}", appears in the Home Away strip (Task 12 verifies), and Activity shows "… marked {item} lent to {name}". Set it back to "At home" → loan clears, item leaves the Away strip.
 
-- [ ] **Step 8: Commit**
+Implementation smoke note: this local browser session is auth-gated before the mobile shell, so the interactive authenticated status/lending flow is deferred to the P4 Playwright smoke task. Typecheck/build and GPT-5.5 spec review passed for the wired flow.
+
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/screens/StatusVocab.ts src/features/stow/ui/mobile/screens/LendingSheet.tsx src/features/stow/ui/mobile/screens/ItemDetail.tsx src/features/stow/ui/mobile/theme/icons.tsx

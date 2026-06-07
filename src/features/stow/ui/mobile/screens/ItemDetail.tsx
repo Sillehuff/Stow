@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import type { ImageRef, Item, SpaceWithAreas } from "@/types/domain";
+import type { HouseholdMember, ImageRef, Item, ItemStatus, SpaceWithAreas } from "@/types/domain";
 import {
   ArrowRight,
+  Check,
   ChevronLeft,
   ChevronRight,
   Folder,
@@ -20,6 +21,9 @@ import {
 import { Button } from "@/features/stow/ui/mobile/components/Button";
 import { Field } from "@/features/stow/ui/mobile/components/Field";
 import { PhotoField } from "@/features/stow/ui/mobile/components/PhotoField";
+import { LendingSheet } from "@/features/stow/ui/mobile/screens/LendingSheet";
+import { STATUS_META, STATUS_ORDER } from "@/features/stow/ui/mobile/screens/StatusVocab";
+import { formatRelativeTime } from "@/features/stow/ui/mobile/screens/activitySelectors";
 import { storagePaths } from "@/lib/firebase/paths";
 import { bestEffortDeleteImage } from "@/lib/firebase/storage";
 
@@ -31,11 +35,13 @@ export interface ItemDetailProps {
   space: SpaceWithAreas | null;
   spaces: SpaceWithAreas[];
   allTags: string[];
+  members: HouseholdMember[];
   onBack: () => void;
-  onTogglePacked: (next: boolean) => void;
   onSaveEdit: (patch: { name: string; value: number | null; notes: string; image?: ImageRef | null }) => Promise<void>;
   onToggleTag: (tag: string) => void;
   onMove: (dest: { spaceId: string; areaId: string; areaNameSnapshot: string }) => void;
+  onChangeStatus: (next: ItemStatus) => Promise<void> | void;
+  onConfirmLoan: (loan: { to: string; toUid?: string; dueMs?: number; note?: string }) => Promise<void> | void;
   onDelete: () => void;
   onFlash: (msg: string) => void;
 }
@@ -112,9 +118,37 @@ function parseValue(value: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function toDateInputValue(value: unknown): string | undefined {
+  if (!value || typeof (value as { toMillis?: unknown }).toMillis !== "function") return undefined;
+  const ms = (value as { toMillis: () => number }).toMillis();
+  if (!Number.isFinite(ms)) return undefined;
+  const date = new Date(ms);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function ItemDetail(props: ItemDetailProps) {
-  const { householdId, item, space, spaces, allTags, onBack, onTogglePacked, onSaveEdit, onToggleTag, onMove, onDelete, onFlash } = props;
+  const {
+    householdId,
+    item,
+    space,
+    spaces,
+    allTags,
+    members,
+    onBack,
+    onSaveEdit,
+    onToggleTag,
+    onMove,
+    onChangeStatus,
+    onConfirmLoan,
+    onDelete,
+    onFlash
+  } = props;
   const [mode, setMode] = useState<Mode>("view");
+  const [lendingOpen, setLendingOpen] = useState(false);
+  const [statusSaving, setStatusSaving] = useState(false);
 
   const [draftName, setDraftName] = useState(item.name);
   const [editOriginalImage, setEditOriginalImage] = useState<ImageRef | null>(item.image ?? null);
@@ -136,6 +170,14 @@ export function ItemDetail(props: ItemDetailProps) {
   const locationArea = item.areaNameSnapshot;
   const hasImage = Boolean(item.image?.downloadUrl);
   const imageUrl = item.image?.downloadUrl;
+  const currentStatus = item.status ?? "home";
+  const loanSince = item.loan?.since ? formatRelativeTime(item.loan.since) : "";
+  const loanDue = toDateInputValue(item.loan?.due);
+  const loanInitial = {
+    ...(item.loan?.to ? { to: item.loan.to } : {}),
+    ...(loanDue ? { due: loanDue } : {}),
+    ...(item.loan?.note ? { note: item.loan.note } : {})
+  };
   const originalEditPath = editOriginalImage?.storagePath;
   const draftPhotoFieldValue =
     draftImage && originalEditPath && draftImage.storagePath === originalEditPath
@@ -237,6 +279,37 @@ export function ItemDetail(props: ItemDetailProps) {
     if (!tag) return;
     onToggleTag(tag);
     setNewTag("");
+  }
+
+  async function selectStatus(next: ItemStatus) {
+    if (next === "lent") {
+      setLendingOpen(true);
+      return;
+    }
+    if (next === currentStatus || statusSaving) return;
+    setStatusSaving(true);
+    try {
+      await onChangeStatus(next);
+      onFlash(`Marked ${STATUS_META[next].label.toLowerCase()}`);
+    } catch {
+      onFlash("Couldn't update status");
+    } finally {
+      setStatusSaving(false);
+    }
+  }
+
+  async function confirmLoan(loan: { to: string; toUid?: string; dueMs?: number; note?: string }) {
+    setStatusSaving(true);
+    try {
+      await onConfirmLoan(loan);
+      setLendingOpen(false);
+      onFlash(`Lent to ${loan.to}`);
+    } catch (error) {
+      onFlash("Couldn't save loan");
+      throw error;
+    } finally {
+      setStatusSaving(false);
+    }
   }
 
   return (
@@ -538,27 +611,25 @@ export function ItemDetail(props: ItemDetailProps) {
               </div>
               <button
                 type="button"
-                aria-pressed={item.isPacked}
-                aria-label={item.isPacked ? "Mark item unpacked" : "Mark item packed"}
-                onClick={() => {
-                  onTogglePacked(!item.isPacked);
-                  onFlash(item.isPacked ? "Removed from bag" : "Added to bag");
-                }}
+                aria-pressed={currentStatus === "packed"}
+                aria-label={currentStatus === "packed" ? "Mark item at home" : "Mark item packed"}
+                disabled={statusSaving}
+                onClick={() => void selectStatus(currentStatus === "packed" ? "home" : "packed")}
                 style={{
                   width: 48,
                   height: 48,
                   borderRadius: 16,
-                  border: item.isPacked ? "none" : "1.5px solid var(--stow-border)",
-                  background: item.isPacked ? "var(--stow-success)" : "var(--stow-canvas)",
-                  color: item.isPacked ? "#fff" : "var(--stow-warm)",
+                  border: currentStatus === "packed" ? "none" : "1.5px solid var(--stow-border)",
+                  background: currentStatus === "packed" ? STATUS_META.packed.color : "var(--stow-canvas)",
+                  color: currentStatus === "packed" ? "#fff" : "var(--stow-warm)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  cursor: "pointer",
+                  cursor: statusSaving ? "default" : "pointer",
                   flexShrink: 0
                 }}
               >
-                <Package size={20} strokeWidth={2} color={item.isPacked ? "#fff" : "var(--stow-warm)"} />
+                <Package size={20} strokeWidth={2} color={currentStatus === "packed" ? "#fff" : "var(--stow-warm)"} />
               </button>
             </div>
 
@@ -645,6 +716,76 @@ export function ItemDetail(props: ItemDetailProps) {
               </div>
             ) : null}
 
+            <div style={{ marginBottom: 18 }}>
+              <FieldLabel>Status</FieldLabel>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+                {STATUS_ORDER.map((status) => {
+                  const meta = STATUS_META[status];
+                  const selected = currentStatus === status;
+                  const Icon = meta.Icon;
+                  return (
+                    <button
+                      key={status}
+                      type="button"
+                      data-testid={`status-${status}`}
+                      aria-pressed={selected}
+                      disabled={statusSaving}
+                      onClick={() => void selectStatus(status)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 9,
+                        minWidth: 0,
+                        borderRadius: 15,
+                        padding: "10px 11px",
+                        border: selected ? `1.5px solid ${meta.color}` : "1px solid var(--stow-border-l)",
+                        background: selected ? meta.soft : "var(--stow-canvas)",
+                        color: "var(--stow-ink)",
+                        cursor: statusSaving ? "default" : "pointer",
+                        fontFamily: "inherit",
+                        textAlign: "left"
+                      }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 10,
+                          display: "grid",
+                          placeItems: "center",
+                          background: selected ? meta.color : "var(--stow-surface)",
+                          border: selected ? "none" : "1px solid var(--stow-border-l)",
+                          flexShrink: 0
+                        }}
+                      >
+                        {selected ? <Check size={14} color="#fff" strokeWidth={3} /> : <Icon size={14} color={meta.color} />}
+                      </span>
+                      <span
+                        style={{
+                          minWidth: 0,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          fontSize: 13,
+                          fontWeight: 800,
+                          color: selected ? meta.color : "var(--stow-ink-soft)"
+                        }}
+                      >
+                        {meta.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {currentStatus === "lent" && item.loan ? (
+                <div style={{ marginTop: 10, fontSize: 12.5, fontWeight: 700, color: "var(--stow-warm)" }}>
+                  Lent to <span style={{ color: "var(--stow-ink-soft)" }}>{item.loan.to}</span>
+                  {loanSince ? ` · ${loanSince}` : ""}
+                </div>
+              ) : null}
+            </div>
+
             {item.notes ? (
               <div
                 style={{
@@ -724,6 +865,13 @@ export function ItemDetail(props: ItemDetailProps) {
           </>
         ) : null}
       </div>
+      <LendingSheet
+        open={lendingOpen}
+        members={members}
+        initial={loanInitial}
+        onCancel={() => setLendingOpen(false)}
+        onConfirm={confirmLoan}
+      />
     </div>
   );
 }
