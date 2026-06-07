@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { User } from "firebase/auth";
+import { useLocation } from "react-router-dom";
 import type { ImageRef } from "@/types/domain";
 import type { VisionSuggestion } from "@/types/llm";
 import { useWorkspaceData } from "@/features/stow/hooks/useWorkspaceData";
 import { buildActivityEntry, inventoryRepository } from "@/features/stow/services/repository";
-import { useMobileNavigation } from "@/features/stow/ui/mobile/hooks/useMobileNavigation";
+import { isActivityPath, useMobileNavigation } from "@/features/stow/ui/mobile/hooks/useMobileNavigation";
 import type { MobileTab } from "@/features/stow/ui/mobile/hooks/useMobileNavigation";
 import { applyPalette, makePalette } from "@/features/stow/ui/mobile/theme/palette";
 import { AddAreaSheet } from "@/features/stow/ui/mobile/add/AddAreaSheet";
 import { AddItemSheet } from "@/features/stow/ui/mobile/add/AddItemSheet";
 import type { AddItemInitial } from "@/features/stow/ui/mobile/add/AddItemSheet";
 import { AddSpaceSheet } from "@/features/stow/ui/mobile/add/AddSpaceSheet";
+import { ActivityScreen } from "@/features/stow/ui/mobile/screens/ActivityScreen";
 import { CaptureFirst } from "@/features/stow/ui/mobile/capture/CaptureFirst";
 import { PhotoSource } from "@/features/stow/ui/mobile/capture/PhotoSource";
 import { QuickCapture } from "@/features/stow/ui/mobile/capture/QuickCapture";
@@ -43,6 +45,7 @@ interface StowMobileAppProps {
 export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobileAppProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const shelfPreviewUrlRef = useRef<string | null>(null);
+  const location = useLocation();
   const nav = useMobileNavigation(householdId);
   const data = useWorkspaceData(householdId, user);
   const [toast, setToast] = useState<string | null>(null);
@@ -87,6 +90,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
   const addAreaSpaceId = nav.overlay.kind === "addArea" ? (nav.overlay.payload?.spaceId as string | undefined) : undefined;
   const addAreaSpace = addAreaSpaceId ? data.spaces.find((space) => space.id === addAreaSpaceId) ?? null : null;
   const addItemInitial = nav.overlay.kind === "addItem" ? (nav.overlay.payload as AddItemInitial | undefined) : undefined;
+  const activityOpen = isActivityPath(location.pathname, nav.basePath);
 
   function itemCountForSpace(spaceId: string) {
     return data.items.filter((item) => item.spaceId === spaceId).length;
@@ -219,7 +223,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
         items={data.items}
         householdName={data.household?.name ?? "Your household"}
         onOpenItem={(itemId) => nav.openItem(itemId)}
-        onBell={() => window.history.pushState(null, "", `${nav.basePath}/activity`)}
+        onBell={nav.goActivity}
         spacesList={spacesListProps}
       />
     );
@@ -278,6 +282,16 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
     <div className="stow-mobile" ref={rootRef}>
       <div className="stow-mobile__viewport">
         <div className="stow-mobile__screen">{screen}</div>
+
+        {activityOpen ? (
+          <ActivityScreen
+            activity={data.activity}
+            members={data.members}
+            onBack={nav.back}
+            onOpenItem={nav.openItem}
+            onOpenSpace={(spaceId) => nav.openSpace(spaceId)}
+          />
+        ) : null}
 
         {selectedItem ? (
           <ItemDetail

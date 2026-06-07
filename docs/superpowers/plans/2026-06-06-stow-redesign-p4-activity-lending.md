@@ -1412,7 +1412,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 > Full-screen routed view at `${basePath}/activity` (bell target, contract §3 + §10). Reads `activity` from `useWorkspaceData`. Each row: actor `Avatar`-style initials circle, `summary`, relative time (`formatRelativeTime`), and a deep-link via `openItem(itemId)` (or `openSpace(spaceId)` when no `itemId`). No dedicated prototype frame exists; derive the row treatment from `enhance/maintain.jsx` `M3_Loans` grouped rows + `enhance/parts.jsx` `Avatar`/`Eyebrow`/`Card`, translating tokens per §1.3.
 
-- [ ] **Step 1: Define the prop interface + data wiring**
+- [x] **Step 1: Define the prop interface + data wiring**
 
 `ActivityScreen` props:
 ```ts
@@ -1426,7 +1426,7 @@ interface ActivityScreenProps {
 ```
 Consumes from `useWorkspaceData`: `activity`, `members`. Consumes from `useMobileNavigation`: `back`, `openItem`, `openSpace`. (`StowMobileApp` passes these down — see Step 4.)
 
-- [ ] **Step 2: Section-by-section structure**
+- [x] **Step 2: Section-by-section structure**
 
 1. **Sticky glass header** — back chevron button (calls `onBack`), title "Activity" in `var(--stow-display)`, top-padded for safe area (`calc(env(safe-area-inset-top) + …)`). Same glass treatment as other screens: `background: color-mix(in srgb, var(--stow-surface) 90%, transparent)`, `backdrop-filter: blur(20px)`, bottom border `var(--stow-border-l)`.
 2. **Empty state** — when `activity.length === 0`: centered muted icon (`Clock`/`Bell` from `theme/icons`), "No activity yet", subtext "Adds, moves, and status changes will show up here."
@@ -1437,7 +1437,7 @@ Consumes from `useWorkspaceData`: `activity`, `members`. Consumes from `useMobil
    - Row `onClick`: if `entry.itemId` → `onOpenItem(entry.itemId)`; else if `entry.spaceId` → `onOpenSpace(entry.spaceId)`; else no-op (not clickable; omit chevron, `cursor: default`).
 4. Content area pads bottom ~150px to clear the floating nav (matches `RetrievalHome`).
 
-- [ ] **Step 3: Non-obvious code (initials + accent + deep-link guard)**
+- [x] **Step 3: Non-obvious code (initials + accent + deep-link guard)**
 
 ```tsx
 const SWATCHES = ["#E8652B", "#2D9F6F", "#5B6ABF", "#C4883A", "#B0479A", "#2A6FDB", "#D6336C"];
@@ -1457,11 +1457,11 @@ function deepLink(entry: ActivityEntry, onOpenItem: (id: string) => void, onOpen
 ```
 Render each row with `const onRow = deepLink(entry, onOpenItem, onOpenSpace);` and only attach `onClick={onRow}` + show the chevron when `onRow` is defined. Use `formatRelativeTime(entry.createdAt)` for the timestamp (already imported from `./activitySelectors`).
 
-- [ ] **Step 4: Port the markup**
+- [x] **Step 4: Port the markup**
 
 Port the row/card/empty-state markup by adapting `enhance/maintain.jsx` `M3_Loans` (the grouped `Card` + per-row `display:flex` with leading tile, flex body of two stacked lines, trailing action) into a flat chronological list, and the `Avatar` initials chip from `enhance/parts.jsx`. Translate tokens per §1.3 (`P.surface` → `var(--stow-surface)`, `P.borderL` → `var(--stow-border-l)`, `P.ink`/`P.warm` → `var(--stow-ink)`/`var(--stow-warm)`, `P.radius + 8` → `var(--stow-radius-card)`). The header mirrors `screens-core.jsx` `RetrievalHome`'s sticky glass header structure (back button replaces the wordmark).
 
-- [ ] **Step 5: Wire into `StowMobileApp`**
+- [x] **Step 5: Wire into `StowMobileApp`**
 
 In `src/features/stow/ui/mobile/StowMobileApp.tsx`:
 
@@ -1492,16 +1492,18 @@ Render `ActivityScreen` with `position: absolute; inset: 0; z-index: 25` (below 
 
 **(c)** Wire the **bell** to `nav.goActivity`. The bell lives in `HomeScreen`'s header (P1). Pass an `onBell` prop down to `HomeScreen` from `StowMobileApp` (`onBell={nav.goActivity}`) and bind it to the existing bell button's `onClick`. (If `HomeScreen` already accepts a nav object, call `nav.goActivity` directly on the bell.)
 
-- [ ] **Step 6: Typecheck + build**
+- [x] **Step 6: Typecheck + build**
 
 Run: `npm run typecheck && npm run build`
 Expected: PASS.
 
-- [ ] **Step 7: Manual smoke**
+- [x] **Step 7: Manual smoke**
 
 Run: `npm run dev`, open `/app`, tap the bell on the Home header → URL becomes `/app/activity` and the feed renders (empty state if no activity yet). Add an item (P1 flow) → return to Home → tap bell → the "added" entry appears with relative time; tapping it deep-links to the item.
 
-- [ ] **Step 8: Commit**
+Implementation smoke note: `/app/activity` loaded in Playwright against the Vite dev server with no console errors/warnings, but the unauthenticated browser session correctly stopped at `AuthGate` before the mobile shell. The authenticated bell/add-item/deep-link flow remains covered by the later P4 smoke task.
+
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/screens/ActivityScreen.tsx src/features/stow/ui/mobile/StowMobileApp.tsx
