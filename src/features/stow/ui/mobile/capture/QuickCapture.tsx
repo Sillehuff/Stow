@@ -141,7 +141,7 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
     onRescan
   } = props;
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const analyzedRef = useRef(false);
+  const analyzedAttemptRef = useRef<number | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -184,8 +184,8 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
   }, [areaId, spaceId, spaces, state.destination.areaId, state.destination.spaceId]);
 
   useEffect(() => {
-    if (state.phase !== "analyzing" || analyzedRef.current) return;
-    analyzedRef.current = true;
+    if (state.phase !== "analyzing" || analyzedAttemptRef.current === retryKey) return;
+    analyzedAttemptRef.current = retryKey;
     let cancelled = false;
 
     async function analyze() {
@@ -209,6 +209,7 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
     void analyze();
     return () => {
       cancelled = true;
+      if (analyzedAttemptRef.current === retryKey) analyzedAttemptRef.current = null;
     };
   }, [capturedBlob, detectShelfItems, householdId, retryKey, state.destination, state.phase, upload]);
 
@@ -219,7 +220,7 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
   }, [state.cursor, state.order.length, state.phase]);
 
   function retryAnalyze() {
-    analyzedRef.current = false;
+    analyzedAttemptRef.current = null;
     setRetryKey((key) => key + 1);
   }
 
