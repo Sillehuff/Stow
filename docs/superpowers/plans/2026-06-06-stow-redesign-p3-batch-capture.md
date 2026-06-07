@@ -1201,11 +1201,11 @@ export function QuickCapture(props: QuickCaptureProps & QuickCaptureData): JSX.E
 
 **Prototype → domain mapping (contract §11):** prototype `DETECTED[].box{top,left,w,h}` → live `bbox:[x,y,w,h]`; prototype `d.img` (per-detection thumbnail) does not exist in live detection — render a crop of the frozen frame positioned by `bbox`, or the frozen frame thumbnail, as the review-card image; prototype `dest.roomId/area` → `destination.spaceId` + `areaNameSnapshot` (resolve room color/name from `spaces`); prototype `act.commitCapture(newItems)` → `createItemsBatch` + `onCommitted`.
 
-- [ ] **Step 1: Extend icon re-exports if needed** — `src/features/stow/ui/mobile/theme/icons.tsx`.
+- [x] **Step 1: Extend icon re-exports if needed** — `src/features/stow/ui/mobile/theme/icons.tsx`.
 
 Add any missing glyphs to the import + re-export block (only those not already exported by P0/P1): `HelpCircle`, `AlertTriangle`, `RotateCcw`, `ArrowRight`, `Sparkles`, `Grid3x3` (export as `Grid`), `ChevronDown`, `Pencil` (already present), `DollarSign`, `Tag` (present), `Camera` (present). Run `npm run typecheck` after; if any lucide name errors, swap per the P0 note (`node -e "console.log(Object.keys(require('lucide-react')))"`).
 
-- [ ] **Step 2: Write the component** — port the prototype function into `QuickCapture.tsx`.
+- [x] **Step 2: Write the component** — port the prototype function into `QuickCapture.tsx`.
 
 Implement the structure above:
 - `useReducer(captureReducer, undefined, () => initialCaptureState(resolveInitialDest(spaces, spaceId, areaId)))` where `resolveInitialDest` finds the space by `spaceId` (fallback first space), and the area by `areaId` (fallback first area of that space), returning `{ spaceId, areaId, areaNameSnapshot }`.
@@ -1228,12 +1228,12 @@ Implement the structure above:
 Then add the closing instruction in the code comment:
 > Port markup section-by-section from `prototype/quick-capture.jsx` `QuickCapture` (analyzing/detected frozen-frame block, review card + triage row, done summary), translating per contract §1.3 and swapping mock data per contract §11. Do not ship any Unsplash URLs (`FEED`, `DETECTED[].img`) — use the live frozen frame.
 
-- [ ] **Step 3: Typecheck + build**
+- [x] **Step 3: Typecheck + build**
 
 Run: `npm run typecheck && npm run build`
 Expected: PASS. (No unit test — UI is validated by Playwright in Task 9 and manual load.)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/capture/QuickCapture.tsx src/features/stow/ui/mobile/theme/icons.tsx
