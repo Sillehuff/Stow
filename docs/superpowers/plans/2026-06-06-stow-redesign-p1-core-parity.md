@@ -1412,7 +1412,7 @@ Port `prototype/spaces-mgmt.jsx` `SpaceActionSheet` + `EditSpaceSheet` (and the 
 
 `SpaceActionSheet` is a thin config over the Task 6 `ActionSheet`. `EditSpaceSheet` is a full bottom-sheet editor (its own surface, like the prototype, because it needs a Save/Cancel header and is taller than a normal `Sheet`).
 
-- [ ] **Step 1: Write `SpaceActionSheet.tsx`** (Edit / Rename / Delete → `ActionSheet`)
+- [x] **Step 1: Write `SpaceActionSheet.tsx`** (Edit / Rename / Delete → `ActionSheet`)
 
 ```tsx
 // src/features/stow/ui/mobile/spaces/SpaceActionSheet.tsx
@@ -1453,7 +1453,7 @@ export function SpaceActionSheet({
 }
 ```
 
-- [ ] **Step 2: Write `ColorPicker.tsx`** (contract §8 swatches + expanded grid behind "more")
+- [x] **Step 2: Write `ColorPicker.tsx`** (contract §8 swatches + expanded grid behind "more")
 
 ```tsx
 // src/features/stow/ui/mobile/spaces/ColorPicker.tsx
@@ -1505,7 +1505,7 @@ export function ColorPicker({ value, onChange }: { value: string; onChange: (col
 }
 ```
 
-- [ ] **Step 3: Write `IconPicker.tsx`** (12 inline defaults + "All" → searchable categorized library via `ICON_CATEGORIES`)
+- [x] **Step 3: Write `IconPicker.tsx`** (12 inline defaults + "All" → searchable categorized library via `ICON_CATEGORIES`)
 
 Logic (write in full — the search filter + category chips are real logic):
 ```tsx
@@ -1602,7 +1602,7 @@ export function IconPicker({
 ```
 > `ICONS` is imported only to keep the registry the single source if a future highlight needs it; the picker addresses everything through `iconForKey`. (If lint flags `ICONS` unused, drop it from the import.)
 
-- [ ] **Step 4: Write `EditSpaceSheet.tsx`** — full editor with preview tile, name, ColorPicker, IconPicker, Areas reorder/add/delete, bounded Delete-with-reassignment
+- [x] **Step 4: Write `EditSpaceSheet.tsx`** — full editor with preview tile, name, ColorPicker, IconPicker, Areas reorder/add/delete, bounded Delete-with-reassignment
 
 This sheet manages a **local draft** (name/color/icon/areas where each area carries a stable `key`, its `id` if existing, and `name`), mirroring the prototype's `editSpace` object. On Save it diffs the draft against the live space and calls the repo: `updateSpace` for name/color/icon; `createArea`/`updateArea`/`deleteArea` for area adds/renames/removes; `reorderAreas` for order. Delete-with-reassignment opens a destination picker when the space has items.
 
@@ -1747,7 +1747,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
 }
 ```
 
-- [ ] **Step 5: Write the sheet markup** — port from `prototype/spaces-mgmt.jsx` `EditSpaceSheet` (lines 249–338)
+- [x] **Step 5: Write the sheet markup** — port from `prototype/spaces-mgmt.jsx` `EditSpaceSheet` (lines 249–338)
 
 Structure (own bottom-sheet surface, `zIndex:78` per the §7 ladder note that EditSpace sits above ActionSheet but the prototype uses 78; use **78**; translate per §1.3):
 - Scrim (`onClick={onClose}`) + a `borderRadius:"28px 28px 0 0"` surface (`maxHeight:"92%"`, `animation:"stowUp 0.3s ease-out"`); wrap the surface in the focus trap by giving it `role="dialog" aria-modal aria-label="Edit Space"` and reuse `useDismissable(true, onClose)` for Escape/focus (import it).
@@ -1762,12 +1762,12 @@ Structure (own bottom-sheet surface, `zIndex:78` per the §7 ladder note that Ed
 
 > Port note on `holdMs:0`: the prototype's `ReorderList` supports `mode="handle"` (grip-initiated, no long-press) for areas and `mode="longpress"` for spaces. Our `useHoldToReorder` arms on `onPointerDown` after `holdMs`; passing `holdMs:0` makes the grip's `onPointerDown` start the drag on the next tick (effectively immediate), matching handle mode. Spreading `bind(key)` **only on the grip span** (not the whole row) ensures dragging starts from the handle, as in the prototype's `areaRow`.
 
-- [ ] **Step 6: Typecheck**
+- [x] **Step 6: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/spaces/
