@@ -1,57 +1,95 @@
 import {
   Archive,
+  ArrowRight,
   Bath,
   Bed,
   Bell,
+  Book,
   Box,
   Briefcase,
   Camera,
   Car,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Coffee,
+  DoorOpen,
   Folder,
+  Gift,
+  GripVertical,
+  Heart,
   Home,
+  Image as ImageIcon,
+  Inbox,
+  Key,
+  LayoutGrid,
   Leaf,
+  List,
+  MapPin,
   MoreHorizontal,
+  Music,
   Package,
   Pencil,
+  Plug,
   Plus,
+  QrCode,
   Refrigerator,
   ScanLine,
   Search,
   Settings,
+  Shirt,
   Sofa,
+  Sparkles,
+  Star,
   Sun,
   Tag,
   Trash2,
+  Tv,
   Utensils,
   Wine,
+  WashingMachine,
   Wrench,
+  Users,
   X
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /** Space/area icons addressable by a free-form string key (validated here). */
 export const ICONS: Record<string, LucideIcon> = {
+  // Rooms
   home: Home,
-  coffee: Coffee,
-  briefcase: Briefcase,
-  box: Box,
-  folder: Folder,
   bed: Bed,
   sofa: Sofa,
   bath: Bath,
-  car: Car,
-  wrench: Wrench,
-  leaf: Leaf,
-  sun: Sun,
+  tv: Tv,
+  door: DoorOpen,
+  // Storage
+  box: Box,
+  package: Package,
+  folder: Folder,
+  archive: Archive,
+  briefcase: Briefcase,
+  // Kitchen
+  coffee: Coffee,
   utensils: Utensils,
   wine: Wine,
   fridge: Refrigerator,
-  archive: Archive,
-  package: Package
+  // Outdoor / Misc
+  leaf: Leaf,
+  car: Car,
+  sun: Sun,
+  wrench: Wrench,
+  wash: WashingMachine,
+  shirt: Shirt,
+  book: Book,
+  music: Music,
+  heart: Heart,
+  gift: Gift,
+  key: Key,
+  plug: Plug,
+  clock: Clock
 };
 
 export const FALLBACK_ICON: LucideIcon = Box;
@@ -63,10 +101,14 @@ export interface IconCategory {
 }
 
 export const ICON_CATEGORIES: IconCategory[] = [
-  { key: "rooms", label: "Rooms", icons: ["home", "bed", "sofa", "bath"] },
-  { key: "storage", label: "Storage", icons: ["box", "package", "folder", "archive"] },
+  { key: "rooms", label: "Rooms", icons: ["home", "bed", "sofa", "bath", "tv", "door"] },
+  { key: "storage", label: "Storage", icons: ["box", "package", "folder", "archive", "briefcase"] },
   { key: "kitchen", label: "Kitchen", icons: ["coffee", "utensils", "wine", "fridge"] },
-  { key: "outdoor", label: "Outdoor", icons: ["leaf", "car", "sun", "wrench"] }
+  {
+    key: "outdoor",
+    label: "Outdoor",
+    icons: ["leaf", "car", "sun", "wrench", "wash", "shirt", "book", "music", "heart", "gift", "key", "plug", "clock"]
+  }
 ];
 
 export function iconForKey(key: string | undefined | null): LucideIcon {
@@ -75,21 +117,43 @@ export function iconForKey(key: string | undefined | null): LucideIcon {
 }
 
 export {
+  ArrowRight,
   Bell,
+  Book,
   Camera,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Clock,
+  DoorOpen,
+  Gift,
+  GripVertical,
+  Heart,
   Home,
+  ImageIcon,
+  Inbox,
+  Key,
+  LayoutGrid,
+  List,
   MapPin,
   MoreHorizontal,
+  Music,
   Package,
   Pencil,
+  Plug,
   Plus,
+  QrCode,
   ScanLine,
   Search,
   Settings,
+  Shirt,
+  Sparkles,
+  Star,
   Tag,
   Trash2,
+  Tv,
+  Users,
+  WashingMachine,
   X
-} from "lucide-react";
+};

@@ -372,7 +372,7 @@ git commit -m "feat(mobile): order spaces/areas by position, expose reorder acti
 
 Contract §2 mandates the **full** categorized glyph set in P1. Expand the P0 stub (16 `ICONS` keys, 4-icon categories) to the complete §2 lists. No signature changes — only add map entries, category icons, and lucide imports/re-exports. The IconPicker (Task 9) renders `ICON_CATEGORIES`, so the categories must hold every key the spec lists.
 
-- [ ] **Step 1: Extend the test first** (add cases for the new keys + that every category key resolves)
+- [x] **Step 1: Extend the test first** (add cases for the new keys + that every category key resolves)
 
 Append inside the existing `describe("iconForKey", …)` block in `icons.test.ts`, then add a second describe:
 ```ts
@@ -400,12 +400,12 @@ describe("ICON_CATEGORIES", () => {
 ```
 > The existing test file already closes the first `describe` with `});` — replace that closing brace with the new `it(...)` + `});` shown above so the new case lands inside the original block.
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/ui/mobile/theme/icons.test.ts`
 Expected: FAIL — `iconForKey("tv")` falls back (not yet mapped) / `wash` undefined.
 
-- [ ] **Step 3: Expand the implementation**
+- [x] **Step 3: Expand the implementation**
 
 Rewrite `src/features/stow/ui/mobile/theme/icons.tsx` to the full set (contract §2). Add the missing lucide imports, extend `ICONS`, fill `ICON_CATEGORIES`, and re-export the new glyphs:
 ```tsx
@@ -457,12 +457,12 @@ export {
 ```
 > Note (carried from P0): every name above is a real lucide-react export, but versions drift. After writing, run `npm run typecheck`; if any import errors, swap that name for an existing one — discover with `node -e "console.log(Object.keys(require('lucide-react')))"`. The 12 inline picker defaults (Task 9) = the `rooms` (6) + `storage` first 6: `["home","bed","sofa","bath","tv","door","box","package","folder","archive","briefcase","coffee"]`.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/ui/mobile/theme/icons.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/theme/icons.tsx src/features/stow/ui/mobile/theme/icons.test.ts
