@@ -92,7 +92,7 @@ Picker shows 12 inline defaults + "All" → searchable library with category chi
 ```ts
 export type MobileTab = "spaces" | "search" | "packing" | "settings";
 export interface MobileRoute { tab: MobileTab; spaceId: string|null; areaId: string|null; itemId: string|null; }
-export type OverlayKind = "scan" | "photo" | "addItem" | "addSpace" | "addArea" | "editSpace";
+export type OverlayKind = "scan" | "photo" | "addItem" | "addSpace" | "addArea" | "editSpace" | "captureFirst";
 export interface OverlayState { kind: OverlayKind | null; payload?: Record<string, unknown>; }
 export function parseMobileRoute(pathname: string, params: URLSearchParams, basePath?: string): MobileRoute;
 export function buildMobilePath(basePath: string, route: {tab?;spaceId?;areaId?;itemId?}): string;

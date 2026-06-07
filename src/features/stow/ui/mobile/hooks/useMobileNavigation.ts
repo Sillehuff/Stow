@@ -10,7 +10,14 @@ export interface MobileRoute {
   itemId: string | null;
 }
 
-export type OverlayKind = "scan" | "photo" | "addItem" | "addSpace" | "addArea" | "editSpace";
+export type OverlayKind =
+  | "scan"
+  | "photo"
+  | "addItem"
+  | "addSpace"
+  | "addArea"
+  | "editSpace"
+  | "captureFirst";
 
 export interface OverlayState {
   kind: OverlayKind | null;

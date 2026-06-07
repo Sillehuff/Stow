@@ -1669,7 +1669,7 @@ This task wires the scan FAB to `ScanOverlay`, builds the camera-first add entry
 **Files:**
 - Modify: `src/features/stow/ui/mobile/hooks/useMobileNavigation.ts`
 
-- [ ] **Step 1: Add `"captureFirst"` to the union**
+- [x] **Step 1: Add `"captureFirst"` to the union**
 
 Find (P0):
 ```ts
@@ -1680,12 +1680,12 @@ Replace with:
 export type OverlayKind = "scan" | "photo" | "addItem" | "addSpace" | "addArea" | "editSpace" | "captureFirst";
 ```
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS (no exhaustive switch should break; if one does, handle `"captureFirst"` there).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/hooks/useMobileNavigation.ts
