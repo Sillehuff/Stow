@@ -34,7 +34,7 @@
 **Files:**
 - Modify: `src/types/domain.ts`
 
-- [ ] **Step 1: Change `SpaceIcon` usage and add `position`** (no unit test — pure type change; verified by `npm run typecheck` in later tasks. Per contract §4: `Space.icon` becomes `string`, `SpaceIcon` stays exported, both gain `position: number`.)
+- [x] **Step 1: Change `SpaceIcon` usage and add `position`** (no unit test — pure type change; verified by `npm run typecheck` in later tasks. Per contract §4: `Space.icon` becomes `string`, `SpaceIcon` stays exported, both gain `position: number`.)
 
 In `src/types/domain.ts`, the `SpaceIcon` type stays as-is (line 5):
 ```ts
@@ -68,7 +68,9 @@ export interface Area {
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
+
+Deviation note (implementation): `SpaceIcon` was widened to a deprecated `string` alias rather than left as the old five-value union. This keeps the locked free-form `Space.icon: string` contract while avoiding edits to legacy/shared UI files that still import `SpaceIcon` and are off-limits until P5.
 
 ```bash
 git add src/types/domain.ts
@@ -3363,4 +3365,3 @@ git commit -m "test(mobile): add /app e2e — add/reorder/rename/delete space, a
 3. **CSV export is net-new code** — the live app has no inventory-CSV helper (legacy `csvToList` only parses tag strings), so Task 16 adds a unit-tested `buildInventoryCsv` + a DOM download trigger.
 4. **`AreaCard.onMenu` (contract §7) is not wired in P1** — RoomScreen's area grid has no per-card menu; areas are managed through EditSpaceSheet. Flagged in Task 7; the prop can be added in a later phase if a per-area menu is introduced.
 5. **Delete-space funnels through EditSpaceSheet** (the only reassignment-aware path) from both the action sheet and the editor — avoids a second reassignment-blind delete; matches contract §8.
-

@@ -176,22 +176,24 @@ export function stripUndefined<T extends Record<string, any>>(obj: T): T {
 
 export function normalizeSeedForHousehold(householdId: string) {
   const now = new Date();
-  const spaces: Omit<Space, "createdAt" | "updatedAt">[] = seedSpaceTemplates.map((space) => ({
+  const spaces: Omit<Space, "createdAt" | "updatedAt">[] = seedSpaceTemplates.map((space, index) => ({
     id: space.id,
     householdId,
     name: space.name,
     icon: space.icon,
     color: space.color,
-    image: toImageRef(space.image)
+    image: toImageRef(space.image),
+    position: index
   }));
 
   const areas: Omit<Area, "createdAt" | "updatedAt">[] = seedSpaceTemplates.flatMap((space) =>
-    space.areas.map((area) => ({
+    space.areas.map((area, index) => ({
       id: area.id,
       householdId,
       spaceId: space.id,
       name: area.name,
-      image: toImageRef(area.image)
+      image: toImageRef(area.image),
+      position: index
     }))
   );
 
@@ -209,7 +211,9 @@ export function normalizeSeedForHousehold(householdId: string) {
       isPriceless: item.isPriceless,
       tags: item.tags,
       notes: item.notes,
-      isPacked: item.isPacked
+      isPacked: item.isPacked,
+      photoStatus: item.image ? "attached" : "later",
+      entryMode: "manual"
     })
   );
 
