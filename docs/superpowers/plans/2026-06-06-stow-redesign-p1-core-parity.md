@@ -2814,7 +2814,7 @@ Replace the P0 `PlaceholderScreen` with the real screens, render the item-detail
 
 `useMobileNavigation` already provides `overlay` / `openOverlay(kind, payload)` / `closeOverlay()` with `OverlayKind = "scan" | "photo" | "addItem" | "addSpace" | "addArea" | "editSpace"` (contract §3). P1 uses `addItem`/`addSpace`/`addArea`/`editSpace`; `scan`/`photo` stay no-op-toast until P2. The `SpaceActionSheet` is **not** an `OverlayKind` (it is a transient menu) — hold it in local `StowMobileApp` state alongside the rename + delete-confirm state, because those are tightly coupled to the SpacesList.
 
-- [ ] **Step 1: Rewrite `StowMobileApp.tsx`** (full integration)
+- [x] **Step 1: Rewrite `StowMobileApp.tsx`** (full integration)
 
 ```tsx
 // src/features/stow/ui/mobile/StowMobileApp.tsx
@@ -3135,21 +3135,21 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
 }
 ```
 
-- [ ] **Step 2: Reconcile the "Delete space" affordance** (logic note — no separate code)
+- [x] **Step 2: Reconcile the "Delete space" affordance** (logic note — no separate code)
 
 The `SpaceActionSheet` "Delete space" action and the EditSpace "Delete Space" button both funnel into **EditSpaceSheet's** bounded delete-with-reassignment (the only place that collects a destination). The action sheet's `onDelete` therefore opens EditSpace (where the user taps "Delete Space" → reassignment panel). This avoids a second, reassignment-blind delete path and satisfies contract §8. (If a future phase wants a one-tap delete for empty spaces, add it to the action sheet then — out of scope for P1.)
 
-- [ ] **Step 3: Typecheck + build**
+- [x] **Step 3: Typecheck + build**
 
 Run: `npm run typecheck && npm run build`
 Expected: both PASS. (Build confirms the `tokens.css` import + lazy route still bundle.)
 
-- [ ] **Step 4: Run the full unit suite**
+- [x] **Step 4: Run the full unit suite**
 
 Run: `npm test`
 Expected: PASS — includes `repositoryOrdering.test.ts`, `positionSort.test.ts`, `useHoldToReorder.test.ts`, `icons.test.ts`, `inventoryCsv.test.ts`, plus the P0 tests.
 
-- [ ] **Step 5: Manual smoke in dev**
+- [x] **Step 5: Manual smoke in dev**
 
 Run: `npm run dev` (with `VITE_USE_FIREBASE_EMULATORS=true`), open `http://127.0.0.1:5173/app`. Verify:
 - Home shows the wordmark + `{n} items · {m} spaces`, the recently-added rail, and the "Your Spaces" list.
@@ -3162,7 +3162,9 @@ Run: `npm run dev` (with `VITE_USE_FIREBASE_EMULATORS=true`), open `http://127.0
 - Settings: rename household, change a member role (guarded), create an invite, save AI config + Test connection, Export CSV downloads a file, Sign out confirms.
 - Legacy `/spaces` and desktop `/next` still load unchanged.
 
-- [ ] **Step 6: Commit**
+Smoke note: `/app` was loaded in a mobile browser viewport from `npm run dev` with `VITE_USE_FIREBASE_EMULATORS=true`; the unauthenticated route rendered the Stow AuthGate cleanly with no console errors. The authenticated workflow bullets above are covered by Task 18's emulator-backed Playwright `/app` e2e because that task owns the email-link auth helper and durable P1 flow assertions.
+
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/StowMobileApp.tsx
