@@ -1,5 +1,11 @@
 import { getFunctionsClient } from "@/lib/firebase/client";
-import type { HouseholdLlmConfig, VisionCategorizeRequest, VisionCategorizeResponse } from "@/types/llm";
+import type {
+  HouseholdLlmConfig,
+  VisionCategorizeRequest,
+  VisionCategorizeResponse,
+  VisionDetectShelfRequest,
+  VisionDetectShelfResponse
+} from "@/types/llm";
 import type { Role } from "@/types/domain";
 
 async function requireFunctions() {
@@ -54,4 +60,10 @@ export async function visionCategorizeItemImage(
   input: VisionCategorizeRequest
 ): Promise<VisionCategorizeResponse> {
   return callFunction<VisionCategorizeRequest, VisionCategorizeResponse>("visionCategorizeItemImage", input);
+}
+
+export async function visionDetectShelfItems(
+  input: VisionDetectShelfRequest
+): Promise<VisionDetectShelfResponse> {
+  return callFunction<VisionDetectShelfRequest, VisionDetectShelfResponse>("visionDetectShelfItems", input);
 }

@@ -41,3 +41,25 @@ export interface VisionCategorizeResponse {
     model: string;
   };
 }
+
+export interface ShelfDetection {
+  label: string;
+  confidence: number;
+  bbox: [number, number, number, number];
+  suggestedValue?: number;
+  tags?: string[];
+}
+
+export interface VisionDetectShelfRequest {
+  householdId: string;
+  imageRef: { storagePath: string };
+  spaceId?: string;
+  areaId?: string;
+  areaName?: string;
+}
+
+export interface VisionDetectShelfResponse {
+  detections: ShelfDetection[];
+  provider: string;
+  jobId: string;
+}

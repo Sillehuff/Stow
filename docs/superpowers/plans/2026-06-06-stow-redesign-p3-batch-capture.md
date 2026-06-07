@@ -527,7 +527,7 @@ Add the P3 shelf types to `src/types/llm.ts` (contract §4) and the `visionDetec
 - Modify: `src/types/llm.ts`
 - Modify: `src/lib/firebase/functions.ts`
 
-- [ ] **Step 1: Add the types** — append to `src/types/llm.ts` (exact shape per contract §4):
+- [x] **Step 1: Add the types** — append to `src/types/llm.ts` (exact shape per contract §4):
 
 ```ts
 export interface ShelfDetection {
@@ -553,7 +553,7 @@ export interface VisionDetectShelfResponse {
 }
 ```
 
-- [ ] **Step 2: Add the wrapper** — `src/lib/firebase/functions.ts`.
+- [x] **Step 2: Add the wrapper** — `src/lib/firebase/functions.ts`.
 
 Extend the type import:
 ```ts
@@ -574,12 +574,12 @@ export async function visionDetectShelfItems(
 }
 ```
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/types/llm.ts src/lib/firebase/functions.ts
