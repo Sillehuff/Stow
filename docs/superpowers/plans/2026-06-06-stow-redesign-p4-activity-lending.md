@@ -756,7 +756,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 > No new composite index is required: `subscribeActivity` queries the `activity` collection with `orderBy("createdAt","desc")` only, which Firestore serves from the **automatic single-field index**. Do **not** edit `firestore.indexes.json`.
 
-- [ ] **Step 1: Write the failing rules test**
+- [x] **Step 1: Write the failing rules test**
 
 In `tests/firestore.rules.test.ts`:
 
@@ -819,12 +819,12 @@ In `tests/firestore.rules.test.ts`:
   });
 ```
 
-- [ ] **Step 2: Run the rules test to verify it fails**
+- [x] **Step 2: Run the rules test to verify it fails**
 
 Run: `npm run test:rules`
 Expected: FAIL — the `activity` create/read currently falls through to default-deny (no `match /activity` block yet), so `assertSucceeds(getDoc(...))` and `assertSucceeds(setDoc(...))` fail.
 
-- [ ] **Step 3: Add the `activity` rules block**
+- [x] **Step 3: Add the `activity` rules block**
 
 In `firestore.rules`, inside `match /households/{householdId} { … }`, add directly after the `match /packingLists/{listId} { … }` block:
 ```
@@ -835,12 +835,12 @@ In `firestore.rules`, inside `match /households/{householdId} { … }`, add dire
       }
 ```
 
-- [ ] **Step 4: Run the rules test to verify it passes**
+- [x] **Step 4: Run the rules test to verify it passes**
 
 Run: `npm run test:rules`
 Expected: PASS — all existing rules tests plus the two new activity tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add firestore.rules tests/firestore.rules.test.ts

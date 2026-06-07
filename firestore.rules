@@ -82,6 +82,12 @@ service cloud.firestore {
         allow create, update, delete: if isHouseholdMember(householdId);
       }
 
+      match /activity/{activityId} {
+        allow read: if isHouseholdMember(householdId);
+        allow create: if isHouseholdMember(householdId);
+        allow update, delete: if false;
+      }
+
       match /settings/{docId} {
         allow read: if isHouseholdMember(householdId);
         allow write: if isHouseholdAdmin(householdId) || (docId == 'llm' && isHouseholdBeingCreatedBySelf(householdId));
