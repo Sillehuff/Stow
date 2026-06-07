@@ -4,6 +4,8 @@ import { Navigate, Route, Routes } from "react-router-dom";
 const AuthFinishPage = lazy(() => import("@/routes/AuthFinishPage"));
 const AcceptInvitePage = lazy(() => import("@/routes/AcceptInvitePage"));
 const SpacesRoutePage = lazy(() => import("@/routes/SpacesRoutePage"));
+const StowNextRoutePage = lazy(() => import("@/routes/StowNextRoutePage"));
+const StowMobileRoutePage = lazy(() => import("@/routes/StowMobileRoutePage"));
 
 function RouteLoading({ message }: { message: string }) {
   return (
@@ -88,6 +90,22 @@ export default function App() {
         element={
           <Suspense fallback={<RouteLoading message="Loading app…" />}>
             <SpacesRoutePage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/next/*"
+        element={
+          <Suspense fallback={<RouteLoading message="Loading next app…" />}>
+            <StowNextRoutePage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/app/*"
+        element={
+          <Suspense fallback={<RouteLoading message="Loading app…" />}>
+            <StowMobileRoutePage />
           </Suspense>
         }
       />

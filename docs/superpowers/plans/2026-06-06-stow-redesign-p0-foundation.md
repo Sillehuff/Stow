@@ -826,7 +826,7 @@ git commit -m "feat(mobile): add app shell with themed frame, nav, and data wiri
 - Create: `src/routes/StowMobileRoutePage.tsx`
 - Modify: `src/App.tsx`
 
-- [ ] **Step 1: Create the route page** (cloned from `StowNextRoutePage.tsx`, Stow naming)
+- [x] **Step 1: Create the route page** (cloned from `StowNextRoutePage.tsx`, Stow naming)
 
 ```tsx
 // src/routes/StowMobileRoutePage.tsx
@@ -921,7 +921,7 @@ export default function StowMobileRoutePage() {
 }
 ```
 
-- [ ] **Step 2: Register the lazy import in `src/App.tsx`**
+- [x] **Step 2: Register the lazy import in `src/App.tsx`**
 
 Find (line 7):
 ```tsx
@@ -932,7 +932,7 @@ Add directly below it:
 const StowMobileRoutePage = lazy(() => import("@/routes/StowMobileRoutePage"));
 ```
 
-- [ ] **Step 3: Add the `/app/*` route in `src/App.tsx`**
+- [x] **Step 3: Add the `/app/*` route in `src/App.tsx`**
 
 Find the `/next/*` route block and add the new block directly after it (before the `<Route path="/" ...>` line):
 ```tsx
@@ -946,12 +946,12 @@ Find the `/next/*` route block and add the new block directly after it (before t
       />
 ```
 
-- [ ] **Step 4: Typecheck**
+- [x] **Step 4: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/App.tsx src/routes/StowMobileRoutePage.tsx
