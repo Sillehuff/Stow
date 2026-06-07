@@ -175,7 +175,7 @@ Values are clamped to `[0, 1]` and `w`/`h` floored at 0 (defensive against a pro
 - Modify: `functions/src/providers/gemini.ts`
 - Create (tests): `functions/test/gemini.test.ts` *(if it already exists from P2, append a new `describe` block instead)*
 
-- [ ] **Step 1: Extend the adapter interface** — `functions/src/providers/types.ts`.
+- [x] **Step 1: Extend the adapter interface** — `functions/src/providers/types.ts`.
 
 Add the import and the optional method (the result type is the Zod-inferred `ShelfDetection` from Task 1):
 ```ts
@@ -197,7 +197,7 @@ export interface VisionProviderAdapter {
 }
 ```
 
-- [ ] **Step 2: Write the failing provider-mapping test** — `functions/test/gemini.test.ts`.
+- [x] **Step 2: Write the failing provider-mapping test** — `functions/test/gemini.test.ts`.
 
 This test mocks `globalThis.fetch` to return a Gemini `generateContent` body whose candidate text is a JSON array using `box_2d` in 0..1000, and asserts the adapter maps to `bbox` in 0..1 (and orders/maps fields correctly).
 
@@ -277,12 +277,12 @@ describe("geminiAdapter.detectShelfItems", () => {
 });
 ```
 
-- [ ] **Step 3: Run the test to verify it fails**
+- [x] **Step 3: Run the test to verify it fails**
 
 Run: `npm run functions:test`
 Expected: FAIL — `geminiAdapter.detectShelfItems` is `undefined` (calling `!(...)` throws / type error), or the mapping is missing.
 
-- [ ] **Step 4: Write the implementation** — `functions/src/providers/gemini.ts`.
+- [x] **Step 4: Write the implementation** — `functions/src/providers/gemini.ts`.
 
 Add the shelf prompt + mapping helpers and the `detectShelfItems` method. Reuse `extractJsonObject` for fenced/loose JSON, but support a top-level **array** as well as an object wrapper (the existing `extractJsonObject` only handles objects, so add a small array-aware parse here). Validate each mapped detection with `shelfDetectionSchema.safeParse` and drop failures (so one bad row doesn't fail the whole call).
 
@@ -404,12 +404,12 @@ Then add the method to the `geminiAdapter` object (after `validate`):
 
 > The handler (Task 3) supplies `prompt` via `shelfDetectionPrompt(...)`; keep the prompt out of the adapter so behavior stays consistent with `classifyImage`.
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `npm run functions:test`
 Expected: PASS (schemas + the 3 gemini mapping tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add functions/src/providers/types.ts functions/src/providers/gemini.ts functions/test/gemini.test.ts

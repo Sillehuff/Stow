@@ -1,4 +1,4 @@
-import type { HouseholdLlmConfig, VisionSuggestion } from "../shared/schemas.js";
+import type { HouseholdLlmConfig, ShelfDetection, VisionSuggestion } from "../shared/schemas.js";
 
 export type VisionImageInput = {
   mimeType: string;
@@ -13,7 +13,15 @@ export type ProviderContext = {
   image: VisionImageInput;
 };
 
+export type ShelfDetectContext = {
+  apiKey: string;
+  config: HouseholdLlmConfig;
+  prompt: string;
+  image: VisionImageInput;
+};
+
 export interface VisionProviderAdapter {
   classifyImage(context: ProviderContext): Promise<VisionSuggestion>;
   validate(context: { apiKey: string; config: HouseholdLlmConfig }): Promise<{ ok: boolean; message: string }>;
+  detectShelfItems?(context: ShelfDetectContext): Promise<ShelfDetection[]>;
 }
