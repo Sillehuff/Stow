@@ -265,7 +265,7 @@ git commit -m "feat(mobile): load Clash Display + Inter Tight fonts"
 - Create: `src/features/stow/ui/mobile/theme/icons.tsx`
 - Test: `src/features/stow/ui/mobile/theme/icons.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // src/features/stow/ui/mobile/theme/icons.test.ts
@@ -286,12 +286,12 @@ describe("iconForKey", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/ui/mobile/theme/icons.test.ts`
 Expected: FAIL — import cannot be resolved.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 > Note: every name below is a real lucide-react export, but versions drift. After writing, run `npm run typecheck`; if any import errors, swap that name for an existing one (`node -e "console.log(Object.keys(require('lucide-react')))"`).
 
@@ -334,12 +334,12 @@ export {
 };
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/ui/mobile/theme/icons.test.ts`
 Expected: PASS (2 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/theme/icons.tsx src/features/stow/ui/mobile/theme/icons.test.ts
