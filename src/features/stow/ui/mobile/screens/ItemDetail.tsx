@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import type { Item, SpaceWithAreas } from "@/types/domain";
+import type { ImageRef, Item, SpaceWithAreas } from "@/types/domain";
 import {
   ArrowRight,
   ChevronLeft,
@@ -19,17 +19,21 @@ import {
 } from "@/features/stow/ui/mobile/theme/icons";
 import { Button } from "@/features/stow/ui/mobile/components/Button";
 import { Field } from "@/features/stow/ui/mobile/components/Field";
+import { PhotoField } from "@/features/stow/ui/mobile/components/PhotoField";
+import { storagePaths } from "@/lib/firebase/paths";
+import { bestEffortDeleteImage } from "@/lib/firebase/storage";
 
 type Mode = "view" | "edit" | "tag" | "move";
 
 export interface ItemDetailProps {
+  householdId: string;
   item: Item;
   space: SpaceWithAreas | null;
   spaces: SpaceWithAreas[];
   allTags: string[];
   onBack: () => void;
   onTogglePacked: (next: boolean) => void;
-  onSaveEdit: (patch: { name: string; value: number | null; notes: string }) => void;
+  onSaveEdit: (patch: { name: string; value: number | null; notes: string; image?: ImageRef | null }) => Promise<void>;
   onToggleTag: (tag: string) => void;
   onMove: (dest: { spaceId: string; areaId: string; areaNameSnapshot: string }) => void;
   onDelete: () => void;
@@ -109,12 +113,17 @@ function parseValue(value: string) {
 }
 
 export function ItemDetail(props: ItemDetailProps) {
-  const { item, space, spaces, allTags, onBack, onTogglePacked, onSaveEdit, onToggleTag, onMove, onDelete, onFlash } = props;
+  const { householdId, item, space, spaces, allTags, onBack, onTogglePacked, onSaveEdit, onToggleTag, onMove, onDelete, onFlash } = props;
   const [mode, setMode] = useState<Mode>("view");
 
   const [draftName, setDraftName] = useState(item.name);
+  const [editOriginalImage, setEditOriginalImage] = useState<ImageRef | null>(item.image ?? null);
+  const [draftImage, setDraftImage] = useState<ImageRef | null>(item.image ?? null);
   const [draftValue, setDraftValue] = useState(item.value != null ? String(item.value) : "");
   const [draftNotes, setDraftNotes] = useState(item.notes ?? "");
+  const [photoDirty, setPhotoDirty] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const [newTag, setNewTag] = useState("");
   const availableTags = useMemo(() => allTags.filter((tag) => !(item.tags || []).includes(tag)), [allTags, item.tags]);
@@ -127,23 +136,77 @@ export function ItemDetail(props: ItemDetailProps) {
   const locationArea = item.areaNameSnapshot;
   const hasImage = Boolean(item.image?.downloadUrl);
   const imageUrl = item.image?.downloadUrl;
+  const originalEditPath = editOriginalImage?.storagePath;
+  const draftPhotoFieldValue =
+    draftImage && originalEditPath && draftImage.storagePath === originalEditPath
+      ? { ...draftImage, storagePath: undefined }
+      : draftImage;
+
+  useEffect(() => {
+    if (mode !== "edit" || photoDirty || savingEdit) return;
+    const latestImage = item.image ?? null;
+    setEditOriginalImage(latestImage);
+    setDraftImage(latestImage);
+  }, [item.image, mode, photoDirty, savingEdit]);
 
   function startEdit() {
+    const startingImage = item.image ?? null;
     setDraftName(item.name);
+    setEditOriginalImage(startingImage);
+    setDraftImage(startingImage);
     setDraftValue(item.value != null ? String(item.value) : "");
     setDraftNotes(item.notes ?? "");
+    setPhotoDirty(false);
+    setPhotoUploading(false);
+    setSavingEdit(false);
     setMode("edit");
   }
 
-  function saveEdit() {
-    if (!draftName.trim()) return;
-    onSaveEdit({
-      name: draftName.trim(),
-      value: parseValue(draftValue),
-      notes: draftNotes
-    });
+  function changeDraftImage(next: ImageRef | null) {
+    setPhotoDirty(true);
+    setDraftImage(next);
+  }
+
+  function cleanupUnsavedDraftImage() {
+    const draftPath = draftImage?.storagePath;
+    if (draftPath && draftPath !== originalEditPath) void bestEffortDeleteImage(draftImage);
+  }
+
+  function cancelEdit() {
+    cleanupUnsavedDraftImage();
+    setPhotoDirty(false);
+    setPhotoUploading(false);
+    setSavingEdit(false);
     setMode("view");
-    onFlash("Item updated");
+  }
+
+  async function saveEdit() {
+    if (!draftName.trim() || savingEdit || photoUploading) return;
+    const imageToSave = draftImage;
+    const previousImage = item.image ?? null;
+    const previousPath = previousImage?.storagePath;
+    const nextPath = imageToSave?.storagePath;
+    setSavingEdit(true);
+    try {
+      await onSaveEdit({
+        name: draftName.trim(),
+        value: parseValue(draftValue),
+        notes: draftNotes,
+        ...(photoDirty ? { image: imageToSave ?? null } : {})
+      });
+      if (photoDirty) {
+        if (previousPath && previousPath !== nextPath) void bestEffortDeleteImage(previousImage);
+        setEditOriginalImage(imageToSave ?? null);
+        setDraftImage(imageToSave ?? null);
+        setPhotoDirty(false);
+      }
+      setMode("view");
+      onFlash("Item updated");
+    } catch {
+      onFlash("Couldn't update item");
+    } finally {
+      setSavingEdit(false);
+    }
   }
 
   function openMove() {
@@ -342,14 +405,15 @@ export function ItemDetail(props: ItemDetailProps) {
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "var(--stow-ink)" }}>Edit Item</h2>
               <button
                 type="button"
-                onClick={() => setMode("view")}
+                onClick={cancelEdit}
+                disabled={savingEdit}
                 style={{
                   fontSize: 14,
                   fontWeight: 700,
                   color: "var(--stow-warm)",
                   background: "none",
                   border: "none",
-                  cursor: "pointer",
+                  cursor: savingEdit ? "default" : "pointer",
                   fontFamily: "inherit"
                 }}
               >
@@ -359,31 +423,21 @@ export function ItemDetail(props: ItemDetailProps) {
             <Field label="Name" value={draftName} onChange={setDraftName} placeholder="Item name" />
             <div>
               <FieldLabel>Photo</FieldLabel>
-              <div
-                style={{
-                  borderRadius: "var(--stow-radius-input)",
-                  padding: 18,
-                  minHeight: 88,
-                  boxSizing: "border-box",
-                  border: "1.5px dashed var(--stow-border)",
-                  background: "var(--stow-canvas)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "var(--stow-warm)",
-                  fontSize: 14,
-                  fontWeight: 700,
-                  textAlign: "center"
-                }}
-              >
-                Photo editing arrives in P2
+              <div style={{ pointerEvents: savingEdit ? "none" : "auto", opacity: savingEdit ? 0.7 : 1 }}>
+                <PhotoField
+                  value={draftPhotoFieldValue}
+                  onChange={changeDraftImage}
+                  uploadPath={(fileName) => storagePaths.itemImage(householdId, item.id, fileName)}
+                  disabled={savingEdit}
+                  onBusyChange={setPhotoUploading}
+                />
               </div>
             </div>
             <Field label="Value ($)" type="number" value={draftValue} onChange={setDraftValue} placeholder="0" />
             <Field label="Notes" multiline value={draftNotes} onChange={setDraftNotes} placeholder="Serial number, purchase info..." />
-            <Button disabled={!draftName.trim()} onClick={saveEdit}>
+            <Button disabled={!draftName.trim() || savingEdit || photoUploading} onClick={saveEdit}>
               <Save size={16} color="#fff" />
-              Save Changes
+              {savingEdit ? "Saving..." : photoUploading ? "Uploading..." : "Save Changes"}
             </Button>
           </div>
         ) : null}

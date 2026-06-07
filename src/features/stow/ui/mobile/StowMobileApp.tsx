@@ -20,6 +20,7 @@ import { SpaceActionSheet } from "@/features/stow/ui/mobile/spaces/SpaceActionSh
 import { BottomNav } from "@/features/stow/ui/mobile/shell/BottomNav";
 import { Confirm } from "@/features/stow/ui/mobile/shell/Confirm";
 import { Toast } from "@/features/stow/ui/mobile/shell/Toast";
+import { bestEffortDeleteImage } from "@/lib/firebase/storage";
 import "@/features/stow/ui/mobile/theme/tokens.css";
 
 interface StowMobileAppProps {
@@ -185,6 +186,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
 
         {selectedItem ? (
           <ItemDetail
+            householdId={householdId}
             item={selectedItem}
             space={selectedItemSpace}
             spaces={data.spaces}
@@ -194,15 +196,17 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
               void data.actions.togglePacked({ householdId, itemId: selectedItem.id, userId, nextValue: next });
             }}
             onSaveEdit={(patch) => {
-              void data.actions.updateItem({
+              const updatePatch = {
+                name: patch.name,
+                value: patch.value ?? undefined,
+                notes: patch.notes,
+                ...("image" in patch ? { image: patch.image ?? null } : {})
+              };
+              return data.actions.updateItem({
                 householdId,
                 itemId: selectedItem.id,
                 userId,
-                patch: {
-                  name: patch.name,
-                  value: patch.value ?? undefined,
-                  notes: patch.notes
-                }
+                patch: updatePatch
               });
             }}
             onToggleTag={(tag) => {
@@ -354,7 +358,12 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
           onCancel={() => setDeleteItemId(null)}
           onConfirm={() => {
             if (deleteItemId) {
-              void data.actions.deleteItem({ householdId, itemId: deleteItemId, userId }).then(() => flash("Item deleted"));
+              const itemToDelete = data.items.find((item) => item.id === deleteItemId);
+              const imageToClean = itemToDelete?.image;
+              void data.actions.deleteItem({ householdId, itemId: deleteItemId, userId }).then(() => {
+                if (imageToClean) void bestEffortDeleteImage(imageToClean);
+                flash("Item deleted");
+              });
               if (nav.selectedItemId === deleteItemId) nav.back();
             }
             setDeleteItemId(null);

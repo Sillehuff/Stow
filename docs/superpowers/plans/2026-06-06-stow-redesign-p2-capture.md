@@ -735,7 +735,7 @@ Contract §9:
 ```
 Empty state = Take Photo / Library / Scan-with-AI tiles; filled state = preview + Retake / Replace / Remove. On pick: `uploadFileToStorage(uploadPath(name), file)` → `ImageRef` → `onChange`. On replace/remove: `bestEffortDeleteImage(old)` (Task 1). Port markup from `prototype/photo.jsx` `PhotoField` (lines 28-64) + `SourceTile` (lines 15-25).
 
-This component owns the **library/file picker** and the **camera source** by delegating to `PhotoSource` (rendered as an overlay it controls via local state). "Take Photo" opens `PhotoSource` in camera mode; "Library" triggers a hidden `<input type="file">`. "Scan with AI" calls `onScanAI` (the parent runs the scan against the just-uploaded image — see Task 6/7). When the camera is unsupported, "Take Photo" also falls back to the file input with `capture="environment"` (contract §9 fallback note).
+This component owns the **library/file picker** and the **camera source** by delegating to `PhotoSource` (rendered as an overlay it controls via local state). "Take Photo" opens `PhotoSource` in camera mode; "Library" triggers a hidden `<input type="file">`. "Scan with AI" calls `onScanAI` (the parent runs the scan against the just-uploaded image — see Task 6/7). When the camera is unsupported, "Take Photo" also falls back to the file input with `capture="environment"` (contract §9 fallback note). The field also supports optional `disabled` and `onBusyChange` props so save flows can block submission while an upload is still in flight.
 
 **Component prop interface (our code):**
 ```ts
@@ -744,6 +744,8 @@ interface PhotoFieldProps {
   onChange: (next: ImageRef | null) => void;
   onScanAI?: () => void;
   uploadPath: (fileName: string) => string;
+  disabled?: boolean;
+  onBusyChange?: (busy: boolean) => void;
 }
 ```
 
@@ -1576,7 +1578,7 @@ Port intent from `prototype/screens-detail.jsx` `ItemDetail` edit branch (line 7
 
 > **Context:** P1 built `ItemDetail` with view/edit/tag/move sub-modes; the edit sub-mode has a photo placeholder slot (roadmap P1 Task 7: "Edit covers name/photo/value/notes (photo editing — parity gap vs desktop-next)"). P1 already holds an edit-form state object (name/image/value/notes) and calls `updateItem` on save. You are swapping the placeholder for the real field and ensuring cleanup on replace/remove.
 
-- [ ] **Step 1: Add imports**
+- [x] **Step 1: Add imports**
 
 ```tsx
 import { PhotoField } from "@/features/stow/ui/mobile/components/PhotoField";
@@ -1585,7 +1587,7 @@ import { bestEffortDeleteImage } from "@/lib/firebase/storage";
 import type { ImageRef } from "@/types/domain";
 ```
 
-- [ ] **Step 2: Render the real PhotoField in the edit photo slot**
+- [x] **Step 2: Render the real PhotoField in the edit photo slot**
 
 The edit form holds the item id (`item.id`) and an editable image (P1's `edit.image`, typed as `ImageRef | null`). Replace the placeholder with:
 ```tsx
@@ -1600,7 +1602,7 @@ The edit form holds the item id (`item.id`) and an editable image (P1's `edit.im
 ```
 > Bind `editImage`/`setEditImage` to P1's edit-form image state and label primitive. `householdId` is available in `ItemDetail` (props or `useWorkspaceData`). If P1 stored the edit image as a string URL rather than an `ImageRef`, change that piece of P1 state to `ImageRef | null` to match `PhotoField`'s contract `value` type (the rest of the edit form only reads `editImage?.downloadUrl` for preview, which `PhotoField` now owns).
 
-- [ ] **Step 3: Persist the image on Save**
+- [x] **Step 3: Persist the image on Save**
 
 In P1's edit-save handler (the `updateItem` call), pass the edited image. `updateItem`'s patch already accepts `image?: ImageRef | null` (repository contract). Removing the photo sends `image: null`:
 ```tsx
@@ -1614,7 +1616,7 @@ await actions.updateItem({
 });
 ```
 
-- [ ] **Step 4: Cleanup the previous image when it changed**
+- [x] **Step 4: Cleanup the previous image when it changed**
 
 After a successful save, if the saved image differs from the item's prior image, delete the orphaned prior object:
 ```tsx
@@ -1625,8 +1627,10 @@ if (previousPath && previousPath !== nextPath) {
 }
 ```
 > `PhotoField` already cleans up the *intermediate* old upload when the user Replaces within the editor. This Step covers the case where the user replaced/removed and then saved: the **original committed** image (which `PhotoField` never saw as its `value` until edit opened) must be cleaned only on save. Place this block right after the `updateItem` promise resolves. (If P1 seeded `editImage` from `item.image` on entering edit mode, `PhotoField`'s own replace-cleanup already deleted intermediate uploads; this guards the original.)
+>
+> Current implementation note: because `PhotoField` uploads immediately and save is the canonical persist point, `ItemDetail` tracks whether the photo was edited. Notes-only saves do not patch `image`, so a fresh `item.image` from a subscription refresh is not overwritten. The edit form disables Save while `PhotoField` reports `onBusyChange(true)`.
 
-- [ ] **Step 5: Wire item-delete cleanup (spec §7.8)**
+- [x] **Step 5: Wire item-delete cleanup (spec §7.8)**
 
 P1's `ItemDetail` delete action calls `actions.deleteItem`. Add image cleanup so deleting an item with a photo doesn't orphan the Storage object:
 ```tsx
@@ -1640,12 +1644,12 @@ function confirmDelete() {
 ```
 > Match P1's actual delete call signature. The point is: after the item doc is deleted, best-effort-delete its image.
 
-- [ ] **Step 6: Typecheck**
+- [x] **Step 6: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/screens/ItemDetail.tsx

@@ -291,7 +291,7 @@ export function useCamera(): CameraController;
 // Fallback when !supported: callers render <input type="file" accept="image/*" capture="environment">.
 
 // capture/PhotoSource.tsx (P2): { onClose; onPicked: (blob: Blob) => void } — camera + library picker, freeze→Retake/Use.
-// components/PhotoField.tsx (P2): { value: ImageRef | null; onChange: (next: ImageRef | null) => void; onScanAI?: () => void; uploadPath: (fileName: string) => string }
+// components/PhotoField.tsx (P2): { value: ImageRef | null; onChange: (next: ImageRef | null) => void; onScanAI?: () => void; uploadPath: (fileName: string) => string; disabled?: boolean; onBusyChange?: (busy: boolean) => void }
 //   empty = Take Photo / Library / Scan-with-AI tiles; filled = preview + Retake/Replace/Remove.
 //   On pick: uploadFileToStorage(uploadPath(name), file) -> ImageRef; on replace/remove: bestEffortDeleteImage(old) (§9.1).
 // capture/CaptureFirst.tsx (P2): { householdId; spaceId?; areaId?; onClose; onCreated: (itemId: string) => void } — camera-first add (photo→details sheet, AI-filled badge).

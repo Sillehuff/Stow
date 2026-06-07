@@ -12,6 +12,8 @@ export interface PhotoFieldProps {
   onChange: (next: ImageRef | null) => void;
   onScanAI?: () => void;
   uploadPath: (fileName: string) => string;
+  disabled?: boolean;
+  onBusyChange?: (busy: boolean) => void;
 }
 
 function nextFileName() {
@@ -25,7 +27,7 @@ function sameImageRef(left: ImageRef | null, right: ImageRef | null) {
   return left === right;
 }
 
-export function PhotoField({ value, onChange, onScanAI, uploadPath }: PhotoFieldProps) {
+export function PhotoField({ value, onChange, onScanAI, uploadPath, disabled = false, onBusyChange }: PhotoFieldProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const latestValueRef = useRef<ImageRef | null>(value);
   const mountedRef = useRef(false);
@@ -33,6 +35,7 @@ export function PhotoField({ value, onChange, onScanAI, uploadPath }: PhotoField
   const [cameraOpen, setCameraOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const supported = isCameraSupported();
+  const locked = disabled || busy;
 
   latestValueRef.current = value;
 
@@ -44,7 +47,12 @@ export function PhotoField({ value, onChange, onScanAI, uploadPath }: PhotoField
     };
   }, []);
 
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
+
   async function uploadBlob(blob: Blob) {
+    if (disabled) return;
     const requestId = uploadRequestIdRef.current + 1;
     uploadRequestIdRef.current = requestId;
     const name = nextFileName();
@@ -71,11 +79,11 @@ export function PhotoField({ value, onChange, onScanAI, uploadPath }: PhotoField
   function onFilePicked(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (file) void uploadBlob(file);
+    if (file && !disabled) void uploadBlob(file);
   }
 
   function openCamera() {
-    if (busy) return;
+    if (locked) return;
     if (supported) {
       setCameraOpen(true);
       return;
@@ -84,12 +92,12 @@ export function PhotoField({ value, onChange, onScanAI, uploadPath }: PhotoField
   }
 
   function openLibrary() {
-    if (busy) return;
+    if (locked) return;
     fileInputRef.current?.click();
   }
 
   function removePhoto() {
-    if (busy) return;
+    if (locked) return;
     const previous = value;
     onChange(null);
     if (previous) void bestEffortDeleteImage(previous);
@@ -101,6 +109,7 @@ export function PhotoField({ value, onChange, onScanAI, uploadPath }: PhotoField
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        disabled={disabled}
         {...(!supported ? { capture: "environment" as const } : {})}
         onChange={onFilePicked}
         style={{ display: "none" }}
@@ -148,23 +157,23 @@ export function PhotoField({ value, onChange, onScanAI, uploadPath }: PhotoField
             </div>
           ) : null}
           <div style={{ position: "absolute", bottom: 10, left: 10, right: 10, display: "flex", gap: 8 }}>
-            <FilledControl icon={Camera} label="Retake" onClick={openCamera} disabled={busy} />
-            <FilledControl icon={ImageIcon} label="Replace" onClick={openLibrary} disabled={busy} />
+            <FilledControl icon={Camera} label="Retake" onClick={openCamera} disabled={locked} />
+            <FilledControl icon={ImageIcon} label="Replace" onClick={openLibrary} disabled={locked} />
             <div style={{ flex: 1 }} />
-            <FilledControl icon={Trash2} label="" danger onClick={removePhoto} disabled={busy} />
+            <FilledControl icon={Trash2} label="" danger onClick={removePhoto} disabled={locked} />
           </div>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", gap: 10 }}>
-            <SourceTile icon={Camera} label={busy ? "Uploading..." : "Take Photo"} sub="Use camera" onClick={openCamera} disabled={busy} />
-            <SourceTile icon={ImageIcon} label="Library" sub="Choose photo" onClick={openLibrary} disabled={busy} />
+            <SourceTile icon={Camera} label={busy ? "Uploading..." : "Take Photo"} sub="Use camera" onClick={openCamera} disabled={locked} />
+            <SourceTile icon={ImageIcon} label="Library" sub="Choose photo" onClick={openLibrary} disabled={locked} />
           </div>
           {onScanAI ? (
             <button
               type="button"
               onClick={onScanAI}
-              disabled={busy}
+              disabled={locked}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -173,10 +182,10 @@ export function PhotoField({ value, onChange, onScanAI, uploadPath }: PhotoField
                 borderRadius: "var(--stow-radius-button)",
                 border: "1.5px solid color-mix(in srgb, var(--stow-accent) 27%, transparent)",
                 background: "color-mix(in srgb, var(--stow-accent) 10%, transparent)",
-                cursor: busy ? "default" : "pointer",
+                cursor: locked ? "default" : "pointer",
                 fontFamily: "inherit",
                 textAlign: "left",
-                opacity: busy ? 0.6 : 1
+                opacity: locked ? 0.6 : 1
               }}
             >
               <div
