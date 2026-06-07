@@ -318,12 +318,13 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
 
         <AddItemSheet
           open={nav.overlay.kind === "addItem"}
+          householdId={householdId}
           spaces={data.spaces}
           defaultSpaceId={(addItemPayload?.spaceId as string | undefined) ?? nav.selectedSpaceId}
           defaultAreaId={(addItemPayload?.areaId as string | undefined) ?? nav.selectedAreaId}
           onClose={() => nav.closeOverlay()}
           onCreate={(input) => {
-            void data.actions
+            return data.actions
               .createItem({
                 householdId,
                 userId,
@@ -333,10 +334,14 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
                 areaNameSnapshot: input.areaNameSnapshot,
                 value: input.value ?? undefined,
                 tags: input.tags,
-                notes: input.notes
+                notes: input.notes,
+                image: input.image ?? undefined,
+                entryMode: input.entryMode
               })
-              .then(() => flash("Item added"));
-            nav.closeOverlay();
+              .then(() => {
+                flash("Item added");
+                nav.closeOverlay();
+              });
           }}
         />
 

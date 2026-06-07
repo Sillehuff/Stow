@@ -1409,7 +1409,7 @@ Contract §9.2 single-scan flow: capture/upload (done inside `PhotoField`) → `
 
 > **Context for the engineer:** P1 created `AddItemSheet` with a placeholder where the photo field goes (roadmap P1 Task 8: "Photo (`PhotoField` placeholder until P2)") and an "✨ AI filled" badge slot. The sheet already owns form state for name, space/area selection, value, tags, and notes, and already calls `useWorkspaceData().actions.createItem` on submit. You are wiring the real photo field + scan; do **not** rebuild the rest of the sheet. The exact local state names in P1 may differ — adapt the bindings below to the existing state. The required behaviors are fixed.
 
-- [ ] **Step 1: Add image state + the AI-filled flag (if P1 did not already)**
+- [x] **Step 1: Add image state + the AI-filled flag (if P1 did not already)**
 
 In `AddItemSheet`, ensure the component holds:
 ```tsx
@@ -1432,7 +1432,7 @@ const draftImageId = useMemo(() => inventoryRepository.createItemDraftId(househo
 ```
 (Import `inventoryRepository` from `@/features/stow/services/repository` if not already imported. Using a draft id only as a storage-path segment is fine — no draft doc is written for the manual Add Item path; the image becomes the item's image on save.)
 
-- [ ] **Step 2: Define the upload path + scan handler**
+- [x] **Step 2: Define the upload path + scan handler**
 
 ```tsx
 const uploadPath = useCallback(
@@ -1473,7 +1473,7 @@ const runAiScan = useCallback(async () => {
 ```
 > Bind `selectedSpaceId` / `selectedAreaId` / `selectedAreaName` / `name` / `tags` / `notes` / `value` / their setters to whatever P1 named them. `tags` is a `string[]` in the draft fields (the sheet may store tags as an array of chips). `value` is the string-backed numeric input.
 
-- [ ] **Step 3: Render the real PhotoField in the photo slot**
+- [x] **Step 3: Render the real PhotoField in the photo slot**
 
 Replace the P1 placeholder block with:
 ```tsx
@@ -1523,7 +1523,7 @@ Replace the P1 placeholder block with:
 ```
 > `FieldLabel` and `Sparkles`: use P1's field-label primitive (or `components/Field.tsx`'s label) and import `Sparkles` from `lucide-react`. Match the surrounding markup style P1 used.
 
-- [ ] **Step 4: Pass the image (and AI metadata) into the existing save**
+- [x] **Step 4: Pass the image (and AI metadata) into the existing save**
 
 In the sheet's submit handler (P1's `createItem` call), include the image and AI provenance so the saved item carries the photo and is marked AI-assisted when scanned:
 ```tsx
@@ -1535,7 +1535,7 @@ await actions.createItem({
 ```
 > `createItem`'s `photoStatus`/`entryMode` are derived by the repo if omitted (`defaultPhotoStatus`/`defaultEntryMode`), so `entryMode` is the only provenance flag worth setting explicitly. Do not invent a `vision` payload — `VisionCategorizeResponse` does not surface the full `VisionMetadata` to the client here; `entryMode: "ai_assisted"` is sufficient for P2.
 
-- [ ] **Step 5: Reset photo state when the sheet closes/submits**
+- [x] **Step 5: Reset photo state when the sheet closes/submits**
 
 Ensure the sheet's existing reset/close path also clears `image`, `aiFilled`, `scanning`, and `scanError`. If the user closes without saving and an image was uploaded to the draft namespace, that object is orphaned; call `bestEffortDeleteImage(image)` on cancel:
 ```tsx
@@ -1549,12 +1549,12 @@ function handleCancel() {
 ```
 Import `bestEffortDeleteImage` from `@/lib/firebase/storage`. On successful save, clear the state **without** deleting (the image now belongs to the item).
 
-- [ ] **Step 6: Typecheck**
+- [x] **Step 6: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/add/AddItemSheet.tsx
