@@ -272,6 +272,9 @@ test.describe("mobile /app core parity", () => {
     await expect(page.getByText("Shelf A", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Add Item", exact: true }).click();
+    const captureFirstDialog = page.getByRole("dialog", { name: "New Item" });
+    await expect(captureFirstDialog.getByRole("button", { name: "Skip" })).toBeVisible();
+    await captureFirstDialog.getByRole("button", { name: "Skip" }).click();
     const addItemDialog = page.getByRole("dialog", { name: "Add Item" });
     await addItemDialog.getByPlaceholder("e.g. Wireless Charger").fill("Cordless Drill");
     await addItemDialog.getByRole("button", { name: "Add Item" }).click();

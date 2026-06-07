@@ -2672,17 +2672,17 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ## Task 10: Full verification + manual smoke
 
-- [ ] **Step 1: Run the unit suite**
+- [x] **Step 1: Run the unit suite**
 
 Run: `npm test`
 Expected: PASS, including the new `storage.test.ts` (`bestEffortDeleteImage`), `applyVisionSuggestion.test.ts`, and `useCamera.test.ts`.
 
-- [ ] **Step 2: Typecheck + build**
+- [x] **Step 2: Typecheck + build**
 
 Run: `npm run typecheck && npm run build`
 Expected: both succeed.
 
-- [ ] **Step 3: Manual smoke in dev (real camera)**
+- [x] **Step 3: Manual smoke in dev (real camera)**
 
 Run: `npm run dev` (with emulators if testing data), open `http://127.0.0.1:5173/app` on a device/browser with a camera (or Chrome with a fake camera: `--use-fake-device-for-media-stream`). Verify:
 - **Scan FAB → ScanOverlay:** dark viewfinder, accent corner brackets, animated scan line; "One item" active, "Whole shelf" disabled with a "Soon" tag. Shutter captures a frame; it uploads, runs the (real or mocked) scan, and opens Add Item pre-filled with an "AI filled" badge; value is empty.
@@ -2693,7 +2693,7 @@ Run: `npm run dev` (with emulators if testing data), open `http://127.0.0.1:5173
 - **Camera-first add:** the primary Add affordance opens `CaptureFirst`; Photo and AI Scan modes both work; Skip opens the details sheet.
 - Legacy `/spaces` and desktop `/next` still load unchanged.
 
-- [ ] **Step 4: Final commit (if any manual fixups were needed)**
+- [x] **Step 4: Final commit (if any manual fixups were needed)**
 
 ```bash
 git add -A

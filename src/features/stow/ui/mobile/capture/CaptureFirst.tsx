@@ -17,7 +17,7 @@ export interface CaptureFirstProps {
   onClose: () => void;
   onCreated: (itemId: string) => void;
   onOpenDetails: (payload: {
-    image: ImageRef;
+    image?: ImageRef;
     aiFilled: boolean;
     suggestion?: VisionSuggestion;
     spaceId?: string | null;
@@ -69,6 +69,13 @@ export function CaptureFirst({
     clearFrozenPhoto();
     onClose();
   }, [clearFrozenPhoto, onClose, stop]);
+
+  const skipToDetails = useCallback(() => {
+    cancelledRef.current = true;
+    stop();
+    clearFrozenPhoto();
+    onOpenDetails({ aiFilled: false, spaceId, areaId });
+  }, [areaId, clearFrozenPhoto, onOpenDetails, spaceId, stop]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -238,7 +245,7 @@ export function CaptureFirst({
         {!frozen && !busy ? (
           <button
             type="button"
-            onClick={close}
+            onClick={skipToDetails}
             style={{
               fontSize: 14,
               fontWeight: 700,
