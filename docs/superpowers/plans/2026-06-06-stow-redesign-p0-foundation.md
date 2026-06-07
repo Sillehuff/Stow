@@ -594,7 +594,7 @@ git commit -m "feat(mobile): add Toast primitive"
 **Files:**
 - Create: `src/features/stow/ui/mobile/shell/BottomNav.tsx`
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 ```tsx
 // src/features/stow/ui/mobile/shell/BottomNav.tsx
@@ -690,7 +690,7 @@ function NavButton({
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/shell/BottomNav.tsx
