@@ -43,7 +43,7 @@ Legacy reference (for behavior parity):
 - Modify: `src/features/stow/ui/mobile/StowMobileApp.tsx` (overlay routing for the two sheets)
 - Modify: `src/features/stow/ui/mobile/hooks/useMobileNavigation.ts` (extend `OverlayKind` union)
 
-- [ ] **Step 1: Write the failing test for the pure QR helpers**
+- [x] **Step 1: Write the failing test for the pure QR helpers**
 
 ```ts
 // src/features/stow/ui/mobile/capture/qr.test.ts
@@ -95,12 +95,12 @@ describe("parseScannedStowTarget", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/ui/mobile/capture/qr.test.ts`
 Expected: FAIL — "Failed to resolve import" / `spaceQrUrl is not a function`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // src/features/stow/ui/mobile/capture/qr.ts
@@ -153,12 +153,12 @@ export function generateSpaceQrDataUrl(url: string): Promise<string> {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/ui/mobile/capture/qr.test.ts`
 Expected: PASS (3 `describe`s, 7 assertions across them).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/capture/qr.ts src/features/stow/ui/mobile/capture/qr.test.ts
