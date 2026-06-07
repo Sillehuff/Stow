@@ -2065,7 +2065,7 @@ interface CaptureFirstProps {
 **Files:**
 - Create: `src/features/stow/ui/mobile/capture/CaptureFirst.tsx`
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 ```tsx
 // src/features/stow/ui/mobile/capture/CaptureFirst.tsx
@@ -2391,12 +2391,12 @@ export function CaptureFirst({ householdId, spaceId, areaId, onClose, onOpenDeta
 
 > Note: `bestEffortDeleteImage` is imported for symmetry with the other capture surfaces and to make the "Skip after upload" cleanup available; in the flow above, Skip happens before upload so no cleanup is needed. Keep the import only if used; otherwise remove it to satisfy `noUnusedLocals`. (The `AddItemSheet` cancel path, Task 6 Step 5, owns cleanup of the handed-off draft image if the user later abandons the sheet.)
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS. If `bestEffortDeleteImage` is unused, remove its import.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/capture/CaptureFirst.tsx
