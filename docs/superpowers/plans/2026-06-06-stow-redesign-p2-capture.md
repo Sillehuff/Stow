@@ -310,7 +310,7 @@ Contract §9 `CameraController`. Real `getUserMedia({video:{facingMode:"environm
 - Create: `src/features/stow/ui/mobile/hooks/useCamera.ts`
 - Test: `src/features/stow/ui/mobile/hooks/useCamera.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 > We avoid React Testing Library (not in the repo). Instead, `useCamera` is structured so the controller object is produced by a pure factory `createCameraController(deps)` that the hook wraps with `useRef`/`useState`. The factory takes injectable refs + a `setState` callback so we can drive it from a node test. `isCameraSupported()` is also exported and pure. The hook `useCamera()` is the thin React wrapper (covered by manual/Playwright).
 
@@ -440,12 +440,12 @@ describe("createCameraController", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/ui/mobile/hooks/useCamera.test.ts`
 Expected: FAIL — import cannot be resolved.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // src/features/stow/ui/mobile/hooks/useCamera.ts
@@ -642,17 +642,17 @@ export function useCamera(): CameraController {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/ui/mobile/hooks/useCamera.test.ts`
 Expected: PASS (all `isCameraSupported` + `createCameraController` cases).
 
-- [ ] **Step 5: Typecheck**
+- [x] **Step 5: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/hooks/useCamera.ts src/features/stow/ui/mobile/hooks/useCamera.test.ts
