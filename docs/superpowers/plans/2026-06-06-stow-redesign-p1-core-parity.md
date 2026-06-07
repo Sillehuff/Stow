@@ -2079,7 +2079,7 @@ git commit -m "feat(mobile): add location-first ItemDetail with view/edit/tag/mo
 
 Port the Add Item / Add Space / Add Area sheets from `prototype/app.jsx` (the `doAddItem`/`doAddSpace`/`doAddArea` bodies + the `<U.Sheet>` markup, lines 178–338). All three render inside the Task 6 `Sheet`. `AddItemSheet` is **location-first** (contract §10): Photo placeholder slot → Name → Space/Area chips → "More details" disclosure (value/tags/notes) + an "✨ AI filled" badge slot. `AddSpaceSheet` passes `position` (= current space count) for deterministic append. `AddAreaSheet` passes `position` (= current area count in the space).
 
-- [ ] **Step 1: Write `AddItemSheet.tsx`** (full form logic + location-first order)
+- [x] **Step 1: Write `AddItemSheet.tsx`** (full form logic + location-first order)
 
 ```tsx
 // src/features/stow/ui/mobile/add/AddItemSheet.tsx
@@ -2152,7 +2152,7 @@ Port markup from `prototype/app.jsx` Add Item sheet (location-first branch, line
 4. **"More details" disclosure** — a button toggling `moreOpen` (chevron rotates); when open, render `<Field label="Value ($)" type="number"…/>`, `<Field label="Tags (comma separated)"…/>`, `<Field label="Notes" multiline…/>`. Collapsed hint shows filled summary (`$value`, `n tags`) like the prototype.
 5. A submit `Button` (`disabled={!name.trim()}`, `<Plus/>` + "Add Item") → `onClick={submit}`.
 
-- [ ] **Step 2: Write `AddSpaceSheet.tsx`** (passes `position` = current count)
+- [x] **Step 2: Write `AddSpaceSheet.tsx`** (passes `position` = current count)
 
 ```tsx
 // src/features/stow/ui/mobile/add/AddSpaceSheet.tsx
@@ -2206,7 +2206,7 @@ export function AddSpaceSheet(props: AddSpaceSheetProps) {
 ```
 > The default `icon` for a new space is `"box"` (repo `createSpace` default). `onCreate` (wired in Task 15) calls `actions.createSpace({ householdId, userId, name, color, position, icon: "box", areas })`.
 
-- [ ] **Step 3: Write `AddAreaSheet.tsx`** (passes `position` = current area count in the space)
+- [x] **Step 3: Write `AddAreaSheet.tsx`** (passes `position` = current area count in the space)
 
 ```tsx
 // src/features/stow/ui/mobile/add/AddAreaSheet.tsx
@@ -2246,12 +2246,12 @@ export function AddAreaSheet(props: AddAreaSheetProps) {
 }
 ```
 
-- [ ] **Step 4: Typecheck**
+- [x] **Step 4: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/add/
