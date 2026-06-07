@@ -1714,13 +1714,13 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 > E2E against the emulator-backed app at `/app`: add an item, open it, mark it lent to a member, then assert it appears in the Home "Away from home" strip **and** as an entry in the Activity feed. Runs under `npm run test:smoke` (Firestore/Auth/Storage emulators). Use stable `data-testid`s added in the UI tasks where ambiguous (e.g. `data-testid="away-strip"`, `data-testid="activity-row"`, `data-testid="status-lent"`).
 
-- [ ] **Step 1: Add test ids (if not already present)** to the relevant elements:
+- [x] **Step 1: Add test ids (if not already present)** to the relevant elements:
   - `AwayStrip` container → `data-testid="away-strip"`; each away row → `data-testid="away-item"` with the item name as text.
   - `ActivityScreen` rows → `data-testid="activity-row"`.
   - `ItemDetail` status buttons → `data-testid={\`status-\${status}\`}` (e.g. `status-lent`).
   - `LendingSheet` confirm → `data-testid="loan-save"`; member chip → `data-testid={\`borrower-\${uid}\`}`.
 
-- [ ] **Step 2: Write the spec** (mirror the structure of the existing authenticated smoke spec under `tests/smoke/` — reuse its auth/seed helpers)
+- [x] **Step 2: Write the spec** (mirror the structure of the existing authenticated smoke spec under `tests/smoke/` — reuse its auth/seed helpers)
 
 ```ts
 // tests/smoke/app-lending.spec.ts
@@ -1751,12 +1751,12 @@ test("@app marking an item lent surfaces it in the away strip and activity feed"
 ```
 (Item name "Cordless Drill" is illustrative — use whatever the add step created. Prefer driving the UI for the add/lend steps so the activity write happens through the real call sites wired in Tasks 9/11; only seed via emulator if the P1 add flow is not yet test-stable.)
 
-- [ ] **Step 3: Run the smoke suite**
+- [x] **Step 3: Run the smoke suite**
 
 Run: `npm run test:smoke`
 Expected: PASS — the new lending spec plus existing smoke specs (the command boots Auth/Firestore/Storage emulators).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tests/smoke/app-lending.spec.ts
