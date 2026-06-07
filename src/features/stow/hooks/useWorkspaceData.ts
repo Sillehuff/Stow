@@ -3,6 +3,7 @@ import type { User } from "firebase/auth";
 import type { Area, Household, HouseholdInvite, HouseholdMember, Item, PackingList, Space, SpaceWithAreas } from "@/types/domain";
 import type { HouseholdLlmConfig } from "@/types/llm";
 import { inventoryRepository } from "@/features/stow/services/repository";
+import { byPosition } from "@/features/stow/hooks/positionSort";
 
 type CollectionState<T> = {
   items: T[];
@@ -22,6 +23,8 @@ export type WorkspaceActions = {
   updateArea: typeof inventoryRepository.updateArea;
   deleteSpace: typeof inventoryRepository.deleteSpace;
   deleteArea: typeof inventoryRepository.deleteArea;
+  reorderSpaces: typeof inventoryRepository.reorderSpaces;
+  reorderAreas: typeof inventoryRepository.reorderAreas;
   createItem: typeof inventoryRepository.createItem;
   updateItem: typeof inventoryRepository.updateItem;
   togglePacked: typeof inventoryRepository.togglePacked;
@@ -192,12 +195,16 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
   }, [errorsBySource]);
 
   const spacesWithAreas: SpaceWithAreas[] = useMemo(() => {
-    return spacesState.items.map((space) => ({
-      ...space,
-      areas: areasState.items
-        .filter((area) => area.spaceId === space.id)
-        .sort((a, b) => a.name.localeCompare(b.name))
-    }));
+    return spacesState.items
+      .slice()
+      .sort(byPosition)
+      .map((space) => ({
+        ...space,
+        areas: areasState.items
+          .filter((area) => area.spaceId === space.id)
+          .slice()
+          .sort(byPosition)
+      }));
   }, [spacesState.items, areasState.items]);
 
   const sync = useMemo(
@@ -231,6 +238,8 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
       updateArea: inventoryRepository.updateArea,
       deleteSpace: inventoryRepository.deleteSpace,
       deleteArea: inventoryRepository.deleteArea,
+      reorderSpaces: inventoryRepository.reorderSpaces,
+      reorderAreas: inventoryRepository.reorderAreas,
       createItem: inventoryRepository.createItem,
       updateItem: inventoryRepository.updateItem,
       togglePacked: inventoryRepository.togglePacked,

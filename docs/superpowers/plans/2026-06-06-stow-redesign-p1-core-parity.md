@@ -262,7 +262,7 @@ git commit -m "feat(mobile): add reorderSpaces/reorderAreas + position write def
 
 The position-sort comparator (contract §6.1) is pure — extract it into its own module so it is unit-tested, then consume it in the `spacesWithAreas` memo and add the reorder actions.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // src/features/stow/hooks/positionSort.test.ts
@@ -289,12 +289,12 @@ describe("byPosition", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run src/features/stow/hooks/positionSort.test.ts`
 Expected: FAIL — import cannot be resolved.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // src/features/stow/hooks/positionSort.ts
@@ -307,12 +307,12 @@ export function byPosition<T extends { position?: number; name: string }>(a: T, 
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/features/stow/hooks/positionSort.test.ts`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Wire the comparator + actions into `useWorkspaceData`**
+- [x] **Step 5: Wire the comparator + actions into `useWorkspaceData`**
 
 In `src/features/stow/hooks/useWorkspaceData.ts`:
 
@@ -349,12 +349,12 @@ import { byPosition } from "@/features/stow/hooks/positionSort";
       reorderAreas: inventoryRepository.reorderAreas,
 ```
 
-- [ ] **Step 6: Typecheck**
+- [x] **Step 6: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/features/stow/hooks/positionSort.ts src/features/stow/hooks/positionSort.test.ts src/features/stow/hooks/useWorkspaceData.ts
