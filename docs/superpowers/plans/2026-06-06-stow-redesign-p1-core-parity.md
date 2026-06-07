@@ -1903,7 +1903,7 @@ export interface RoomScreenProps {
 }
 ```
 
-- [ ] **Step 1: Write the data wiring** (full logic — space/area item filters)
+- [x] **Step 1: Write the data wiring** (full logic — space/area item filters)
 
 ```tsx
 export function RoomScreen(props: RoomScreenProps) {
@@ -1919,7 +1919,7 @@ export function RoomScreen(props: RoomScreenProps) {
 ```
 > Prototype filtered items by `area` **name** string; live items carry both `areaId` and `areaNameSnapshot` — filter by `areaId` (authoritative). `AreaCard` gets `count={areaItems(area.id).length}` and `color={spaceColor}`.
 
-- [ ] **Step 2: Write the markup** — port from `RoomScreen` (translate per §1.3, map per §11)
+- [x] **Step 2: Write the markup** — port from `RoomScreen` (translate per §1.3, map per §11)
 
 Structure:
 - Sticky glass header (same glass recipe as Home): a back button whose label/behavior is conditional — when `isInArea` → label = `space.name`, `onClick={onClearArea}`; else label = "Spaces", `onClick={onBack}` (both with `<ChevronLeft size={20} color="var(--stow-accent)"/>`). Center title = `isInArea ? selectedArea!.name : space.name`. Right: two buttons — `<Camera size={18}/>` → `onClick={()=>onComingSoon("Camera arrives in P2")}` and `<QrCode size={18}/>` → `onClick={()=>onComingSoon("QR labels arrive in a later release")}` (both `aria-label`led).
@@ -1927,12 +1927,12 @@ Structure:
   - **Areas view** (`!isInArea`): a `Label` "{n} Area(s)"; a 2-col grid (`gridTemplateColumns:"1fr 1fr", gap:10`) of `<AreaCard key={area.id} name={area.name} count={areaItems(area.id).length} color={spaceColor} onClick={()=>onOpenArea(area.id)} />`, followed by a dashed "+ Add Area" cell (`border:2px dashed var(--stow-border)`, `<Plus/>` + "Add Area" in `var(--stow-accent)`) → `onClick={onAddArea}`. If `spaceItems.length > 0`, an "All Items ({n})" section listing `spaceItems.map(it => <ItemRow key={it.id} item={it} spaceName={space.name} onClick={()=>onOpenItem(it.id)} />)`.
   - **Area view** (`isInArea`): if `filtered.length===0`, an empty state (`<Box size={36}/>`, `Nothing in {selectedArea.name}`, "Add your first item to this area", and an "Add Item" primary button → `onClick={()=>onAddItem(selectedArea!.id)}`); else `filtered.map(it => <ItemRow key={it.id} item={it} spaceName={space.name} onClick={()=>onOpenItem(it.id)} />)`. Below, a dashed "+ Add Item to {selectedArea.name}" row → `onClick={()=>onAddItem(selectedArea!.id)}`.
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/features/stow/ui/mobile/screens/RoomScreen.tsx
