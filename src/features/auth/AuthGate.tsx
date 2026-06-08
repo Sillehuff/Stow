@@ -9,14 +9,12 @@ export function AuthGate({
   children,
   unauthTitle,
   unauthSubtitle,
-  beforeAuthForm,
-  variant = "default"
+  beforeAuthForm
 }: {
   children: ReactNode;
   unauthTitle?: string;
   unauthSubtitle?: ReactNode;
   beforeAuthForm?: ReactNode;
-  variant?: "default" | "next";
 }) {
   const { user, loading } = useAuthContext();
   const [email, setEmail] = useState("");
@@ -24,16 +22,16 @@ export function AuthGate({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const shellClassName = variant === "next" ? "center-shell next-auth-shell" : "center-shell";
-  const panelClassName = variant === "next" ? "panel auth-panel next-auth-panel" : "panel auth-panel";
-  const productName = variant === "next" ? "Stow Next" : "Stow";
+  const shellClassName = "center-shell";
+  const panelClassName = "panel auth-panel";
+  const productName = "Stow";
 
   if (!isFirebaseConfigured) {
     return (
       <div className={shellClassName}>
         <div className={panelClassName}>
           <h1>{productName}</h1>
-          <p>{variant === "next" ? "Next needs Firebase before it can open a household." : "Firebase is not configured yet."}</p>
+          <p>Firebase is not configured yet.</p>
           <p className="muted">
             Copy `.env.example` to `.env.local`, fill in Firebase web app credentials, then restart the dev
             server.
@@ -48,7 +46,7 @@ export function AuthGate({
       <div className={shellClassName}>
         <div className={panelClassName}>
           <h1>{productName}</h1>
-          <p>{variant === "next" ? "Checking session..." : "Checking session…"}</p>
+          <p>Checking session…</p>
         </div>
       </div>
     );

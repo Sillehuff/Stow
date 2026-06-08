@@ -9,7 +9,6 @@ export default function AuthFinishPage() {
   const validLink = isEmailLinkSignInUrl(currentUrl);
   const initialEmail = getPendingEmailLinkEmail();
   const [returnTo] = useState(() => getPendingEmailLinkReturnTo(currentUrl));
-  const nextReturn = returnTo.startsWith("/next");
   const [emailInput, setEmailInput] = useState(initialEmail);
   const [submittedEmail, setSubmittedEmail] = useState(initialEmail);
   const completionKeyRef = useRef<string | null>(null);
@@ -57,12 +56,11 @@ export default function AuthFinishPage() {
   }, [currentUrl, navigate, returnTo, submittedEmail, validLink]);
 
   return (
-    <div className={`center-shell ${nextReturn ? "next-auth-shell" : ""}`}>
-      <div className={`panel auth-panel ${nextReturn ? "next-auth-panel" : ""}`}>
-        <h1>{nextReturn ? "Stow Next" : "Stow"}</h1>
-        {status === "working" || status === "done" ? <div className="next-auth-progress" aria-hidden="true"><span /></div> : null}
+    <div className="center-shell">
+      <div className="panel auth-panel">
+        <h1>Stow</h1>
+        {status === "working" || status === "done" ? <div className="auth-progress" aria-hidden="true"><span /></div> : null}
         <p>{message}</p>
-        {nextReturn ? <p className="muted">After this finishes, you will return to the redesigned workspace.</p> : null}
         {status === "idle" ? (
           <form
             className="stack"

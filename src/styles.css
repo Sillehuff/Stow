@@ -147,53 +147,23 @@ select {
   font-weight: 900;
 }
 
-.next-auth-shell {
-  background:
-    linear-gradient(90deg, oklch(16% 0.036 285) 0 92px, transparent 92px),
-    linear-gradient(180deg, oklch(96% 0.014 255) 0%, oklch(98% 0.008 255) 100%);
-}
-
-.next-auth-panel {
-  border-color: oklch(89% 0.018 255);
-  border-radius: 22px;
-  color: oklch(20% 0.038 270);
-  box-shadow: 0 18px 52px color-mix(in oklch, oklch(20% 0.038 270) 10%, transparent);
-}
-
-.next-auth-panel h1 {
-  font-size: 34px;
-  line-height: 1.04;
-  letter-spacing: 0;
-}
-
-.next-auth-context {
-  border: 1px solid oklch(89% 0.018 255);
-  border-radius: 16px;
-  padding: 12px;
-  background: oklch(93% 0.02 250);
-  color: oklch(50% 0.035 270);
-  font-size: 13px;
-  font-weight: 750;
-  line-height: 1.35;
-}
-
-.next-auth-progress {
+.auth-progress {
   height: 7px;
   border-radius: 999px;
   overflow: hidden;
-  background: oklch(93% 0.02 250);
+  background: var(--border-l);
 }
 
-.next-auth-progress span {
+.auth-progress span {
   display: block;
   width: 42%;
   height: 100%;
   border-radius: inherit;
-  background: oklch(63% 0.18 32);
-  animation: next-auth-progress 1.6s ease-in-out infinite;
+  background: var(--accent);
+  animation: auth-progress 1.6s ease-in-out infinite;
 }
 
-@keyframes next-auth-progress {
+@keyframes auth-progress {
   0% { transform: translateX(-100%); }
   50% { transform: translateX(80%); }
   100% { transform: translateX(240%); }
