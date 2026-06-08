@@ -15,7 +15,9 @@
     "functions:build": "npm --prefix functions run build",
     "functions:test": "npm --prefix functions run test",
     "functions:serve": "npm --prefix functions run serve",
-    "seed:demo": "tsx scripts/seed-demo.ts"
+    "seed:demo": "tsx scripts/seed-demo.ts",
+    "backfill:positions": "tsx scripts/backfill-positions.ts",
+    "backfill:status": "tsx scripts/backfill-status.ts"
   },
   "dependencies": {
     "firebase": "^11.4.0",
