@@ -52,7 +52,7 @@ async function waitForEmailLink(email: string) {
 async function signIn(page: Page) {
   const email = `shelf-capture-${Date.now()}@example.com`;
 
-  await page.goto("/app");
+  await page.goto("/spaces");
   await page.getByPlaceholder("you@example.com").fill(email);
   await page.getByRole("button", { name: "Email Me a Sign-In Link" }).click();
   await expect(page.getByText(`Sign-in link sent to ${email}`)).toBeVisible();
@@ -64,7 +64,7 @@ async function signIn(page: Page) {
     await finishSignInButton.click();
   }
 
-  await expect(page).toHaveURL(/\/app(?:$|[/?#])/);
+  await expect(page).toHaveURL(/\/spaces/);
   await expect(page.getByText("Your Spaces")).toBeVisible({ timeout: 20_000 });
 }
 

@@ -60,7 +60,7 @@ async function waitForEmailLink(email: string) {
 async function signIn(page: Page) {
   const email = `app-lending-${Date.now()}@example.com`;
 
-  await page.goto("/app");
+  await page.goto("/spaces");
   await page.getByPlaceholder("you@example.com").fill(email);
   await page.getByRole("button", { name: "Email Me a Sign-In Link" }).click();
   await expect(page.getByText(`Sign-in link sent to ${email}`)).toBeVisible();
@@ -72,7 +72,7 @@ async function signIn(page: Page) {
     await finishSignInButton.click();
   }
 
-  await expect(page).toHaveURL(/\/app(?:$|[/?#])/);
+  await expect(page).toHaveURL(/\/spaces/);
   await expect(page.getByText("Your Spaces")).toBeVisible({ timeout: 20_000 });
   return email;
 }
@@ -225,7 +225,7 @@ test("@app marking an item lent surfaces it in the away strip and activity feed"
   await addSpace(page, "Lending Closet", "Shelf A");
   const space = await findSpace(page, "Lending Closet");
   const areaId = await findArea(page, space.householdId, space.id, "Shelf A");
-  await page.goto(`/app/spaces/${space.id}/areas/${areaId}`);
+  await page.goto(`/spaces/${space.id}/areas/${areaId}`);
   await expect(page.getByText("Shelf A", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Add Item", exact: true }).click();
@@ -239,7 +239,7 @@ test("@app marking an item lent surfaces it in the away strip and activity feed"
   await expect(page.getByText("Item added")).toBeVisible();
   await expect(page.getByText("Cordless Drill")).toBeVisible();
 
-  await clickAndExpectUrl(page, page.getByText("Cordless Drill", { exact: true }).first(), /\/app\/items\/[^/?#]+/);
+  await clickAndExpectUrl(page, page.getByText("Cordless Drill", { exact: true }).first(), /\/items\/[^/?#]+/);
   await page.getByTestId("status-lent").click();
   const loanDialog = page.getByRole("dialog", { name: "Loan details" });
   await loanDialog.getByTestId(/^borrower-/).first().click();
@@ -247,10 +247,10 @@ test("@app marking an item lent surfaces it in the away strip and activity feed"
   await expect(loanDialog).toBeHidden();
   await expect(page.getByText(`Lent to ${borrower}`, { exact: true })).toBeVisible();
 
-  await page.goto("/app");
+  await page.goto("/spaces");
   await expect(page.getByTestId("away-strip")).toBeVisible();
   await expect(page.getByTestId("away-item").filter({ hasText: "Cordless Drill" })).toBeVisible();
 
-  await page.goto("/app/activity");
+  await page.goto("/activity");
   await expect(page.getByTestId("activity-row").filter({ hasText: /marked Cordless Drill lent/i })).toBeVisible();
 });
