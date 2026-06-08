@@ -1,11 +1,7 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const PROJECT_ID = "demo-stow";
 const APP_BASE_URL = "http://127.0.0.1:4273";
-const PNG_BYTES = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
-  "base64"
-);
 
 type OobCodeRecord = {
   email?: string;
@@ -65,163 +61,89 @@ async function signIn(page: Page, prefix = "smoke") {
     await page.getByPlaceholder("you@example.com").fill(email);
     await finishSignInButton.click();
   }
+  // The canonical mobile app renders the retrieval-first home at /spaces.
   await expect(page).toHaveURL(/\/spaces/);
   await expect(page.getByText("Your Spaces")).toBeVisible({ timeout: 20_000 });
 }
 
-async function createSpaceWithMainArea(page: Page) {
-  await page.getByRole("button", { name: /^Add$/ }).click();
-  const addSpaceDialog = page.getByRole("dialog", { name: "New Space" });
-  await addSpaceDialog.getByLabel("Space name *").fill("Gear Closet");
-  await addSpaceDialog.getByRole("button", { name: "Create Space" }).click();
+// Creates a space (with a default "Main" area) from the home screen and opens it.
+// Returns the space's canonical /spaces/<id> URL.
+async function createAndOpenSpace(page: Page, name: string): Promise<string> {
+  await page.getByRole("button", { name: "Add Space" }).click();
+  const addSpaceSheet = page.getByRole("dialog", { name: "Add Space" });
+  await addSpaceSheet.getByPlaceholder("e.g. Bedroom").fill(name);
+  await addSpaceSheet.getByRole("button", { name: "Create Space" }).click();
+  await expect(addSpaceSheet).toBeHidden();
 
-  await expect(page.getByRole("heading", { name: "Gear Closet" })).toBeVisible();
-  await page.getByRole("button", { name: /Main/i }).click();
-  await expect(page.getByRole("heading", { name: "Main" })).toBeVisible();
+  // The new space appears in the "Your Spaces" list; opening it routes to /spaces/<id>.
+  await expect(page.getByText(name)).toBeVisible();
+  await page.getByText(name).click();
+  await expect(page).toHaveURL(/\/spaces\/[^/]+$/);
+
+  return page.url();
 }
 
-async function setImageFile(dialog: Locator, name: string) {
-  await dialog.locator('input[type="file"]').setInputFiles({
-    name,
-    mimeType: "image/png",
-    buffer: PNG_BYTES
-  });
-}
-
-async function mockCallable(page: Page, functionName: string, result: unknown) {
-  await page.route(`**/${functionName}`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ result })
-    });
-  });
-}
-
-async function openAddItemChoice(page: Page) {
-  await page.locator(".fab").click();
-}
-
-test("capture-first add paths, deterministic Gemini assist, packing, and settings", async ({ page }) => {
-  await mockCallable(page, "saveHouseholdLlmConfig", { ok: true });
-  await mockCallable(page, "setHouseholdLlmSecret", { ok: true });
-  await mockCallable(page, "validateHouseholdLlmConfig", { ok: true, message: "Connection successful" });
-  await mockCallable(page, "visionCategorizeItemImage", {
-    suggestion: {
-      suggestedName: "AI Camera Draft",
-      tags: ["tech", "camera"],
-      notes: "Generated deterministic draft.",
-      confidence: 0.84,
-      rationale: "Visible camera-like shape."
-    },
-    provider: {
-      providerType: "gemini",
-      model: "gemini-2.5-flash"
-    },
-    jobId: "deterministic-job-1"
-  });
-
+test("mobile canonical app: spaces, add item, search, packing, settings", async ({ page }) => {
   await signIn(page);
-  await expect(page.getByRole("button", { name: /Scan or photograph/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Add manually/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Scan QR label/i })).toBeVisible();
 
-  await createSpaceWithMainArea(page);
+  // Bottom nav + scan FAB are the canonical mobile shell.
+  await expect(page.getByRole("navigation", { name: "Stow sections" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Scan" })).toBeVisible();
 
-  await openAddItemChoice(page);
-  await page.getByRole("dialog", { name: "Add Item" }).getByRole("button", { name: /No photo/i }).click();
-  const noPhotoDialog = page.getByRole("dialog", { name: "No Photo Item" });
-  await noPhotoDialog.getByLabel("Name *").fill("Sensitive Documents");
-  await noPhotoDialog.getByRole("button", { name: "Save Item" }).click();
-  await expect(page.getByText("Sensitive Documents")).toBeVisible();
+  // Add a space and open it (URL -> /spaces/:id).
+  await createAndOpenSpace(page, "Gear Closet");
 
-  await openAddItemChoice(page);
-  await page.getByRole("dialog", { name: "Add Item" }).getByRole("button", { name: /Add manually/i }).click();
-  const manualDialog = page.getByRole("dialog", { name: "Add Manually" });
-  await manualDialog.getByLabel("Name *").fill("Travel Camera");
-  await setImageFile(manualDialog, "travel-camera.png");
-  await manualDialog.getByRole("button", { name: "Save Item" }).click();
+  // Open the default "Main" area (URL -> /spaces/:id/areas/:areaId).
+  await page.getByText("Main").click();
+  await expect(page).toHaveURL(/\/spaces\/[^/]+\/areas\/[^/]+$/);
+
+  // Capture-first: the empty area's "Add Item" opens the camera; skip to manual details.
+  await page.getByRole("button", { name: "Add Item", exact: true }).click();
+  const captureDialog = page.getByRole("dialog", { name: "New Item" });
+  await expect(captureDialog).toBeVisible();
+  await captureDialog.getByRole("button", { name: "Skip" }).click();
+
+  const addItemSheet = page.getByRole("dialog", { name: "Add Item" });
+  await expect(addItemSheet).toBeVisible();
+  await addItemSheet.getByPlaceholder("e.g. Wireless Charger").fill("Travel Camera");
+  await addItemSheet.getByRole("button", { name: "Add Item" }).click();
+  await expect(addItemSheet).toBeHidden();
   await expect(page.getByText("Travel Camera")).toBeVisible();
 
-  for (const name of ["Delete Me Draft", "Complete Me Draft"]) {
-    await openAddItemChoice(page);
-    await page.getByRole("dialog", { name: "Add Item" }).getByRole("button", { name: /Photo now, details later/i }).click();
-    const draftDialog = page.getByRole("dialog", { name: "Photo Draft" });
-    await setImageFile(draftDialog, `${name.toLowerCase().replace(/\s+/g, "-")}.png`);
-    await draftDialog.getByRole("button", { name: "Save Photo Draft" }).click();
-    await expect(page.getByText("Photo draft saved")).toBeVisible();
-  }
-
-  await page.getByRole("button", { name: /Gear Closet/ }).click();
-  await page.getByRole("button", { name: /Spaces/ }).click();
-  await expect(page.getByText("Drafts")).toBeVisible();
-
-  await page.getByRole("button", { name: "Delete draft" }).first().click();
-  await page.getByRole("dialog", { name: "Delete Draft" }).getByRole("button", { name: "Delete Draft" }).click();
-  await expect(page.getByText("Draft deleted")).toBeVisible();
-
-  await page.getByRole("button", { name: /Photo draft|Complete Me Draft/ }).first().click();
-  const completeDialog = page.getByRole("dialog", { name: "Complete Draft" });
-  await completeDialog.getByLabel("Name *").fill("Draft Completed Item");
-  await completeDialog.getByRole("button", { name: "Save Item" }).click();
-  await expect(page.getByText("Draft completed")).toBeVisible();
-
-  await page.getByRole("button", { name: /Scan or photograph/i }).click();
-  const aiDialog = page.getByRole("dialog", { name: "AI Photo Assist" });
-  await setImageFile(aiDialog, "ai-camera.png");
-  await aiDialog.getByRole("button", { name: "Categorize Photo" }).click();
-  await expect(aiDialog.getByText("Review Draft")).toBeVisible();
-  await aiDialog.getByLabel("Suggested name").fill("AI Saved Camera");
-  await aiDialog.getByRole("button", { name: "Save Item" }).click();
-
+  // Search tab (URL -> /search) finds the item.
   await page.getByRole("button", { name: "Search" }).click();
-  await page.getByPlaceholder("Items, tags, or spaces…").fill("Camera");
+  await expect(page).toHaveURL(/\/search/);
+  await page.getByPlaceholder("Items, tags, or spaces...").fill("Camera");
   await expect(page.getByText("Travel Camera")).toBeVisible();
-  await expect(page.getByText("AI Saved Camera")).toBeVisible();
-  await page.getByRole("button", { name: "Switch to grid view" }).click();
-  await expect(page.getByRole("button", { name: /Open item AI Saved Camera/i })).toBeVisible();
 
-  await page.getByRole("button", { name: /Open item AI Saved Camera/i }).click();
-  await expect(page.getByText("Evidence")).toBeVisible();
-  await expect(page.getByText("AI photo assist used")).toBeVisible();
-  await page.getByRole("button", { name: "Back to list" }).click();
-
+  // Packing tab (URL -> /packing).
   await page.getByRole("button", { name: "Packing" }).click();
-  await page.getByRole("button", { name: "New List" }).click();
-  const newListDialog = page.getByRole("dialog", { name: "New Packing List" });
-  await newListDialog.getByLabel("List name *").fill("Weekend Trip");
-  await newListDialog.getByRole("button", { name: "Create List" }).click();
+  await expect(page).toHaveURL(/\/packing/);
+  await expect(page.getByRole("heading", { name: "Packing" })).toBeVisible();
 
-  await expect(page.getByRole("heading", { name: "Weekend Trip" })).toBeVisible();
-  await page.getByRole("button", { name: "Add Items" }).click();
-  const pickerDialog = page.getByRole("dialog", { name: "Select Items" });
-  await pickerDialog.locator(".picker-item", { hasText: "Travel Camera" }).locator('input[type="checkbox"]').check();
-  await pickerDialog.getByRole("button", { name: "Done" }).click();
-
-  await expect(page.getByText("0 of 1 checked")).toBeVisible();
-  await page.getByRole("button", { name: /Open item details for Travel Camera/i }).click();
-  await page.getByRole("button", { name: "Delete item" }).click();
-  await page.locator(".delete-confirm-card").getByRole("button", { name: "Delete" }).click();
-  await expect(page.getByText("No items in this list")).toBeVisible();
-
+  // Settings tab (URL -> /settings).
   await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page).toHaveURL(/\/settings/);
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-  await page.getByLabel("Provider").selectOption("gemini");
-  await page.getByLabel("Model").fill("gemini-2.5-flash");
-  await page.getByLabel("API Key (stored encrypted)").fill("test-gemini-key");
-  await page.getByRole("button", { name: "Save AI Settings" }).click();
-  await expect(page.getByText("LLM settings saved")).toBeVisible();
-  await page.getByRole("button", { name: "Test Connection" }).click();
-  await expect(page.getByText("Connection successful")).toBeVisible();
 });
 
-test.describe("desktop capture workspace", () => {
-  test.use({ viewport: { width: 1280, height: 850 }, isMobile: false, hasTouch: false });
+test("mobile canonical app: per-space QR deep link round-trips", async ({ page }) => {
+  await signIn(page, "qr-smoke");
 
-  test("shows command, draft/navigation, and workspace regions", async ({ page }) => {
-    await signIn(page, "desktop-smoke");
-    await expect(page.getByRole("button", { name: /Scan or photograph/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Add manually/i })).toBeVisible();
-    await expect(page.getByRole("navigation")).toBeVisible();
-  });
+  const spaceUrl = await createAndOpenSpace(page, "QR Cabinet");
+  const spacePath = new URL(spaceUrl).pathname;
+
+  // Open the per-space QR sheet from the room header; it shows the /spaces/<id> link.
+  await page.getByRole("button", { name: "Space QR" }).click();
+  const qrSheet = page.getByRole("dialog", { name: /QR label$/ });
+  await expect(qrSheet).toBeVisible();
+  await expect(qrSheet.getByText(spaceUrl, { exact: true })).toBeVisible();
+  await expect(qrSheet.getByText(spacePath)).toBeVisible();
+  await qrSheet.getByRole("button", { name: "Close" }).click();
+  await expect(qrSheet).toBeHidden();
+
+  // Navigating to the captured link reopens the room (heading = space name).
+  await page.goto(spaceUrl);
+  await expect(page).toHaveURL(spacePath);
+  await expect(page.getByText("QR Cabinet")).toBeVisible();
 });

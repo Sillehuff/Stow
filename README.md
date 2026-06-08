@@ -14,9 +14,12 @@ Production-oriented rebuild scaffold for the original `stow-v3.jsx` prototype wi
 - Frontend project scaffold and app shell
 - Auth gate (Google + email link)
 - Household bootstrap (first user gets seeded demo household)
-- Firestore-backed spaces/areas/items CRUD UI (core flows)
-- Packing flow, search, item edit/delete, local QR label generation
-- Settings UI for members/invites and LLM config
+- Mobile-first canonical app (routes `/`, `/spaces`, `/spaces/:id`, `/spaces/:id/areas/:areaId`, `/items/:id`, `/search`, `/packing`, `/settings`, `/activity`; `/` and unknown routes redirect to `/spaces`):
+  - Retrieval-first home (search + recently added) with Spaces management (add/rename/reorder/delete, areas)
+  - Camera + AI capture: single-item scan and whole-shelf batch capture, both review-before-save
+  - Activity feed, lending/status tracking, and per-space QR labels (deep-link back into a space)
+  - Packing lists, search, item edit/delete, settings (members/invites + LLM config)
+- The legacy `/spaces` desktop CRUD UI (`StowApp`) and the desktop redesign at `/next` (`StowNextApp`) were removed at the P5 cutover; the mobile app is now canonical on every route.
 - Vision scan flow with backend callable integration + review-before-save
 - Firebase Functions package with callable endpoints and provider adapter abstraction
 - Firestore/Storage rules + index definitions
@@ -68,6 +71,10 @@ npm run seed:demo -- --uid demo-owner --name "Demo Household"
 Optional:
 
 - `--household <id>` to force a specific household ID
+
+### Data migrations
+
+After deploying P5, materialize `position`/`status` on existing households by running `npm run backfill:positions` and `npm run backfill:status` (pass `--dry-run` first to preview). Both scripts are idempotent and safe to re-run.
 
 ## Functions Secret Encryption
 
