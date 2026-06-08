@@ -6,7 +6,7 @@ import { cardStyle } from "@/features/stow/ui/mobile/components/Card";
 import { Chip } from "@/features/stow/ui/mobile/components/Chip";
 import { ItemRow } from "@/features/stow/ui/mobile/components/ItemRow";
 import { pushRecentSearch, readRecentSearches } from "@/features/stow/ui/mobile/screens/recentSearches";
-import { matchesPackingItemPickerQuery } from "@/features/stow/ui/packing/pickerSearch";
+import { matchesPackingItemPickerQuery } from "@/features/stow/ui/mobile/screens/pickerSearch";
 
 const VIEW_KEY = "stow:mobile:search-view";
 

@@ -8,7 +8,7 @@ import { Sheet } from "@/features/stow/ui/mobile/shell/Sheet";
 import { ActionSheet } from "@/features/stow/ui/mobile/shell/ActionSheet";
 import { Button } from "@/features/stow/ui/mobile/components/Button";
 import { Field } from "@/features/stow/ui/mobile/components/Field";
-import { matchesPackingItemPickerQuery } from "@/features/stow/ui/packing/pickerSearch";
+import { matchesPackingItemPickerQuery } from "@/features/stow/ui/mobile/screens/pickerSearch";
 
 export interface PackingScreenProps {
   packingLists: PackingList[];
