@@ -45,9 +45,8 @@ async function main() {
   }, { merge: true });
   batch.set(llmRef, {
     enabled: false,
-    providerType: "openai_compatible",
-    model: "gpt-4.1-mini",
-    baseUrl: "https://api.openai.com/v1",
+    providerType: "gemini",
+    model: "gemini-2.5-flash",
     promptProfile: "default_inventory",
     temperature: 0.2,
     maxTokens: 400,

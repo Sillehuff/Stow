@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { deleteField, doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { db } from "@/lib/firebase/client";
 import { householdPaths } from "@/lib/firebase/paths";
@@ -17,7 +17,38 @@ async function ensureBootstrap(user: User): Promise<string> {
   const userSnap = await getDoc(userRef);
   const existingHouseholdId = userSnap.exists() ? (userSnap.data().currentHouseholdId as string | undefined) : undefined;
   if (existingHouseholdId) {
-    return existingHouseholdId;
+    const householdRef = doc(db, householdPaths.root(existingHouseholdId));
+    const memberRef = doc(db, householdPaths.member(existingHouseholdId, user.uid));
+    const [householdSnap, memberSnap] = await Promise.all([getDoc(householdRef), getDoc(memberRef)]);
+
+    if (householdSnap.exists() && memberSnap.exists()) {
+      if (memberSnap.data().uid !== user.uid) {
+        const repairBatch = writeBatch(db);
+        repairBatch.set(
+          memberRef,
+          {
+            uid: user.uid,
+            email: user.email ?? null,
+            displayName: user.displayName ?? null,
+            updatedAt: serverTimestamp()
+          },
+          { merge: true }
+        );
+        await repairBatch.commit();
+      }
+      return existingHouseholdId;
+    }
+
+    const repairBatch = writeBatch(db);
+    repairBatch.set(
+      userRef,
+      {
+        currentHouseholdId: deleteField(),
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+    await repairBatch.commit();
   }
 
   const householdId = crypto.randomUUID();
@@ -32,6 +63,7 @@ async function ensureBootstrap(user: User): Promise<string> {
     createdBy: user.uid
   });
   batch.set(memberRef, {
+    uid: user.uid,
     role: "OWNER",
     email: user.email ?? null,
     displayName: user.displayName ?? null,
@@ -46,9 +78,8 @@ async function ensureBootstrap(user: User): Promise<string> {
   }, { merge: true });
   batch.set(llmRef, {
     enabled: false,
-    providerType: "openai_compatible",
-    model: "gpt-4.1-mini",
-    baseUrl: "https://api.openai.com/v1",
+    providerType: "gemini",
+    model: "gemini-2.5-flash",
     promptProfile: "default_inventory",
     temperature: 0.2,
     maxTokens: 400

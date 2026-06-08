@@ -14,7 +14,23 @@ export const llmConfigSchema = z.object({
   promptProfile: z.literal("default_inventory"),
   maxTokens: z.number().int().positive().max(4096).optional(),
   temperature: z.number().min(0).max(2).optional(),
-  lastValidatedAt: z.any().optional(),
+  lastValidatedAt: z
+    .union([
+      z.date(),
+      z
+        .object({
+          seconds: z.number().int(),
+          nanoseconds: z.number().int().min(0)
+        })
+        .passthrough(),
+      z
+        .object({
+          _seconds: z.number().int(),
+          _nanoseconds: z.number().int().min(0)
+        })
+        .passthrough()
+    ])
+    .optional(),
   lastValidatedBy: z.string().optional()
 });
 export type HouseholdLlmConfig = z.infer<typeof llmConfigSchema>;
@@ -28,6 +44,22 @@ export const createInviteInputSchema = z.object({
 export const acceptInviteInputSchema = z.object({
   householdId: z.string().min(1),
   token: z.string().min(20)
+});
+
+export const revokeInviteInputSchema = z.object({
+  householdId: z.string().min(1),
+  inviteId: z.string().min(1)
+});
+
+export const updateMemberRoleInputSchema = z.object({
+  householdId: z.string().min(1),
+  uid: z.string().min(1),
+  role: roleSchema
+});
+
+export const removeMemberInputSchema = z.object({
+  householdId: z.string().min(1),
+  uid: z.string().min(1)
 });
 
 export const saveLlmConfigInputSchema = z.object({

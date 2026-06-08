@@ -1,10 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
 import { HttpsError } from "firebase-functions/v2/https";
 import { FieldValue, db, paths } from "./shared/firestore.js";
-import { acceptInviteInputSchema, createInviteInputSchema } from "./shared/schemas.js";
+import { acceptInviteInputSchema, createInviteInputSchema, revokeInviteInputSchema } from "./shared/schemas.js";
 import { requireHouseholdAdmin } from "./shared/authz.js";
 
-function hashInviteToken(token: string) {
+export function hashInviteToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
@@ -22,7 +22,6 @@ export async function createHouseholdInviteHandler(raw: unknown, requestAuth: { 
 
   await inviteRef.set({
     role: input.role,
-    token,
     tokenHash,
     createdAt: FieldValue.serverTimestamp(),
     createdBy: uid,
@@ -81,6 +80,7 @@ export async function acceptHouseholdInviteHandler(raw: unknown, requestAuth: { 
   batch.set(
     memberRef,
     {
+      uid,
       role: inviteData.role,
       email: requestAuth?.token?.email ?? null,
       createdAt: FieldValue.serverTimestamp(),
@@ -94,5 +94,22 @@ export async function acceptHouseholdInviteHandler(raw: unknown, requestAuth: { 
     acceptedBy: uid
   });
   await batch.commit();
+  return { ok: true as const };
+}
+
+export async function revokeHouseholdInviteHandler(raw: unknown, requestAuth: { uid?: string } | undefined) {
+  const uid = requestAuth?.uid ?? (() => {
+    throw new HttpsError("unauthenticated", "Authentication required");
+  })();
+  const input = revokeInviteInputSchema.parse(raw);
+  await requireHouseholdAdmin(input.householdId, uid);
+
+  const inviteRef = db.doc(paths.invite(input.householdId, input.inviteId));
+  const inviteSnap = await inviteRef.get();
+  if (!inviteSnap.exists) {
+    throw new HttpsError("not-found", "Invite not found");
+  }
+
+  await inviteRef.delete();
   return { ok: true as const };
 }

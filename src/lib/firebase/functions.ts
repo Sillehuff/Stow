@@ -36,6 +36,25 @@ export async function acceptHouseholdInvite(input: { householdId: string; token:
   await callFunction<typeof input, { ok: true }>("acceptHouseholdInvite", input);
 }
 
+export async function revokeHouseholdInvite(input: { householdId: string; inviteId: string }): Promise<void> {
+  await callFunction<typeof input, { ok: true }>("revokeHouseholdInvite", input);
+}
+
+export async function updateHouseholdMemberRole(input: {
+  householdId: string;
+  uid: string;
+  role: Role;
+}): Promise<void> {
+  await callFunction<typeof input, { ok: true }>("updateHouseholdMemberRole", input);
+}
+
+export async function removeHouseholdMember(input: {
+  householdId: string;
+  uid: string;
+}): Promise<void> {
+  await callFunction<typeof input, { ok: true }>("removeHouseholdMember", input);
+}
+
 export async function saveHouseholdLlmConfig(input: {
   householdId: string;
   config: HouseholdLlmConfig;

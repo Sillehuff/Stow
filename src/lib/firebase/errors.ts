@@ -7,9 +7,14 @@ export function toUserErrorMessage(error: unknown, fallback = "Something went wr
         : error && typeof error === "object" && "message" in error && typeof error.message === "string"
           ? error.message
           : "";
-  const message = raw.toLowerCase();
+  const normalizedRaw = raw.trim();
+  const message = normalizedRaw.toLowerCase();
 
   if (!message) return fallback;
+
+  if (/^(\[code=internal\]:\s*)?internal$/.test(message)) {
+    return fallback;
+  }
 
   if (
     message.includes("permission-denied") ||
@@ -40,7 +45,7 @@ export function toUserErrorMessage(error: unknown, fallback = "Something went wr
     return "This action needs a database config update. Please try again in a moment.";
   }
 
-  return raw;
+  return normalizedRaw;
 }
 
 export function toLoggedUserErrorMessage(error: unknown, fallback?: string): string {

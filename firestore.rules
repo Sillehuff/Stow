@@ -51,13 +51,13 @@ service cloud.firestore {
 
       match /members/{uid} {
         allow read: if isHouseholdMember(householdId);
-        allow create: if isHouseholdAdmin(householdId) || isBootstrapOwnerMemberCreate(householdId, uid);
-        allow update, delete: if isHouseholdAdmin(householdId);
+        allow create: if isBootstrapOwnerMemberCreate(householdId, uid);
+        allow update, delete: if false;
       }
 
       match /invites/{inviteId} {
         allow read: if isHouseholdAdmin(householdId);
-        allow create, update, delete: if isHouseholdAdmin(householdId);
+        allow create, update, delete: if false;
       }
 
       match /spaces/{spaceId} {
@@ -77,6 +77,11 @@ service cloud.firestore {
         allow create, update, delete: if isHouseholdMember(householdId);
       }
 
+      match /itemDrafts/{draftId} {
+        allow read: if isHouseholdMember(householdId);
+        allow create, update, delete: if isHouseholdMember(householdId);
+      }
+
       match /packingLists/{listId} {
         allow read: if isHouseholdMember(householdId);
         allow create, update, delete: if isHouseholdMember(householdId);
@@ -88,9 +93,18 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      match /settings/llm {
+        allow read: if isHouseholdAdmin(householdId);
+        allow create: if isHouseholdAdmin(householdId) || isHouseholdBeingCreatedBySelf(householdId);
+        allow update, delete: if isHouseholdAdmin(householdId);
+      }
+
+      match /settings/llmSecret {
+        allow read, write: if false;
+      }
+
       match /settings/{docId} {
-        allow read: if isHouseholdMember(householdId);
-        allow write: if isHouseholdAdmin(householdId) || (docId == 'llm' && isHouseholdBeingCreatedBySelf(householdId));
+        allow read, write: if false;
       }
 
       match /visionJobs/{jobId} {

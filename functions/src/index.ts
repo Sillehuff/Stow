@@ -2,13 +2,18 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { logger } from "firebase-functions";
 import { ZodError } from "zod";
-import { createHouseholdInviteHandler, acceptHouseholdInviteHandler } from "./invites.js";
+import {
+  createHouseholdInviteHandler,
+  acceptHouseholdInviteHandler,
+  revokeHouseholdInviteHandler
+} from "./invites.js";
 import {
   saveHouseholdLlmConfigHandler,
   setHouseholdLlmSecretHandler,
   validateHouseholdLlmConfigHandler
 } from "./llmConfig.js";
 import { visionCategorizeItemImageHandler, visionDetectShelfItemsHandler } from "./vision.js";
+import { removeHouseholdMemberHandler, updateHouseholdMemberRoleHandler } from "./members.js";
 
 setGlobalOptions({
   region: process.env.FUNCTIONS_REGION || "us-central1",
@@ -43,6 +48,37 @@ export const acceptHouseholdInvite = onCall(async (request) => {
       request.data,
       request.auth ? { uid: request.auth.uid, token: request.auth.token as { email?: string } } : undefined
     );
+  } catch (error) {
+    throw mapError(error);
+  }
+});
+
+export const revokeHouseholdInvite = onCall(async (request) => {
+  try {
+    return await revokeHouseholdInviteHandler(
+      request.data,
+      request.auth ? { uid: request.auth.uid } : undefined
+    );
+  } catch (error) {
+    throw mapError(error);
+  }
+});
+
+export const updateHouseholdMemberRole = onCall(async (request) => {
+  try {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+    return await updateHouseholdMemberRoleHandler(request.data, uid);
+  } catch (error) {
+    throw mapError(error);
+  }
+});
+
+export const removeHouseholdMember = onCall(async (request) => {
+  try {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Authentication required");
+    return await removeHouseholdMemberHandler(request.data, uid);
   } catch (error) {
     throw mapError(error);
   }

@@ -35,16 +35,43 @@ let emulatorsConnected = false;
 let functionsClientPromise: Promise<Functions | null> | null = null;
 let storageClientPromise: Promise<FirebaseStorage | null> | null = null;
 
+declare global {
+  // Vite HMR can reload this module while Firebase singletons remain alive.
+  // Keep emulator connection state outside the module to avoid duplicate connects.
+  var __stowFirebaseEmulatorsConnected: boolean | undefined;
+}
+
+function isDuplicateEmulatorConnect(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /emulator|already|settings can no longer be changed/i.test(message);
+}
+
 export async function initializeFirebaseClient(): Promise<void> {
   if (!app || !auth) return;
 
-  await setPersistence(auth, browserLocalPersistence);
+  if (useFirebaseEmulators && !emulatorsConnected && !globalThis.__stowFirebaseEmulatorsConnected) {
+    try {
+      if (db) connectFirestoreEmulator(db, "127.0.0.1", 8080);
+    } catch (error) {
+      if (!isDuplicateEmulatorConnect(error)) throw error;
+    }
 
-  if (useFirebaseEmulators && !emulatorsConnected) {
-    if (db) connectFirestoreEmulator(db, "127.0.0.1", 8080);
-    connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+    try {
+      const authWithEmulator = auth as typeof auth & { emulatorConfig?: unknown };
+      if (!authWithEmulator.emulatorConfig) {
+        connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+      }
+    } catch (error) {
+      if (!isDuplicateEmulatorConnect(error)) throw error;
+    }
+
+    emulatorsConnected = true;
+    globalThis.__stowFirebaseEmulatorsConnected = true;
+  } else if (useFirebaseEmulators) {
     emulatorsConnected = true;
   }
+
+  await setPersistence(auth, browserLocalPersistence);
 }
 
 export async function getFunctionsClient(): Promise<Functions | null> {

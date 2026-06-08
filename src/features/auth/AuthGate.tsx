@@ -9,12 +9,14 @@ export function AuthGate({
   children,
   unauthTitle,
   unauthSubtitle,
-  beforeAuthForm
+  beforeAuthForm,
+  variant = "default"
 }: {
   children: ReactNode;
   unauthTitle?: string;
   unauthSubtitle?: ReactNode;
   beforeAuthForm?: ReactNode;
+  variant?: "default" | "next";
 }) {
   const { user, loading } = useAuthContext();
   const [email, setEmail] = useState("");
@@ -22,12 +24,16 @@ export function AuthGate({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const shellClassName = variant === "next" ? "center-shell next-auth-shell" : "center-shell";
+  const panelClassName = variant === "next" ? "panel auth-panel next-auth-panel" : "panel auth-panel";
+  const productName = variant === "next" ? "Stow Next" : "Stow";
+
   if (!isFirebaseConfigured) {
     return (
-      <div className="center-shell">
-        <div className="panel auth-panel">
-          <h1>Stow</h1>
-          <p>Firebase is not configured yet.</p>
+      <div className={shellClassName}>
+        <div className={panelClassName}>
+          <h1>{productName}</h1>
+          <p>{variant === "next" ? "Next needs Firebase before it can open a household." : "Firebase is not configured yet."}</p>
           <p className="muted">
             Copy `.env.example` to `.env.local`, fill in Firebase web app credentials, then restart the dev
             server.
@@ -39,10 +45,10 @@ export function AuthGate({
 
   if (loading) {
     return (
-      <div className="center-shell">
-        <div className="panel auth-panel">
-          <h1>Stow</h1>
-          <p>Checking session…</p>
+      <div className={shellClassName}>
+        <div className={panelClassName}>
+          <h1>{productName}</h1>
+          <p>{variant === "next" ? "Checking session..." : "Checking session…"}</p>
         </div>
       </div>
     );
@@ -51,9 +57,9 @@ export function AuthGate({
   if (user) return <>{children}</>;
 
   return (
-    <div className="center-shell">
-      <div className="panel auth-panel">
-        <h1>{unauthTitle || "Stow"}</h1>
+    <div className={shellClassName}>
+      <div className={panelClassName}>
+        <h1>{unauthTitle || productName}</h1>
         <p className="muted">{unauthSubtitle || "Sign in to access your shared household inventory."}</p>
         {beforeAuthForm}
         {error ? <div className="banner error">{error}</div> : null}
@@ -84,7 +90,7 @@ export function AuthGate({
             setMessage(null);
             setPending("email");
             try {
-              await sendEmailLink(email.trim());
+              await sendEmailLink(email.trim(), `${window.location.pathname}${window.location.search}${window.location.hash}`);
               setMessage(`Sign-in link sent to ${email.trim()}`);
             } catch (err) {
               setError(toLoggedUserErrorMessage(err, "Failed to send email link"));
