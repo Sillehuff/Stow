@@ -9,6 +9,12 @@ type BeforeInstallPromptEvent = Event & {
 export function usePwaInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const { needRefresh, updateServiceWorker } = useRegisterSW();
+  const isStandalone =
+    typeof window !== "undefined" &&
+    (window.matchMedia?.("(display-mode: standalone)")?.matches || (window.navigator as { standalone?: boolean }).standalone === true);
+  const isIos =
+    typeof window !== "undefined" &&
+    /iphone|ipad|ipod/i.test(window.navigator.userAgent);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -29,6 +35,7 @@ export function usePwaInstall() {
 
   return {
     canInstall: Boolean(deferredPrompt),
+    showIosInstallHint: isIos && !isStandalone && !deferredPrompt,
     promptInstall,
     needRefresh: needRefresh[0],
     updateServiceWorker

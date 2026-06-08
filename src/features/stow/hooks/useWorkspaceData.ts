@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
-import type { ActivityEntry, Area, Household, HouseholdInvite, HouseholdMember, Item, PackingList, Space, SpaceWithAreas } from "@/types/domain";
+import type { ActivityEntry, Area, Household, HouseholdInvite, HouseholdMember, Item, ItemDraft, PackingList, Space, SpaceWithAreas } from "@/types/domain";
 import type { HouseholdLlmConfig } from "@/types/llm";
 import { inventoryRepository } from "@/features/stow/services/repository";
 import { byPosition } from "@/features/stow/hooks/positionSort";
@@ -16,6 +16,10 @@ function emptyState<T>(): CollectionState<T> {
 }
 
 export type WorkspaceActions = {
+  createSpaceId: typeof inventoryRepository.createSpaceId;
+  createAreaId: typeof inventoryRepository.createAreaId;
+  createItemId: typeof inventoryRepository.createItemId;
+  createItemDraftId: typeof inventoryRepository.createItemDraftId;
   updateHousehold: typeof inventoryRepository.updateHousehold;
   createSpace: typeof inventoryRepository.createSpace;
   createArea: typeof inventoryRepository.createArea;
@@ -30,6 +34,10 @@ export type WorkspaceActions = {
   updateItem: typeof inventoryRepository.updateItem;
   togglePacked: typeof inventoryRepository.togglePacked;
   deleteItem: typeof inventoryRepository.deleteItem;
+  createItemDraft: typeof inventoryRepository.createItemDraft;
+  updateItemDraft: typeof inventoryRepository.updateItemDraft;
+  completeItemDraft: typeof inventoryRepository.completeItemDraft;
+  deleteItemDraft: typeof inventoryRepository.deleteItemDraft;
   updateMemberRole: typeof inventoryRepository.updateMemberRole;
   removeMember: typeof inventoryRepository.removeMember;
   revokeInvite: typeof inventoryRepository.revokeInvite;
@@ -44,7 +52,7 @@ export type WorkspaceActions = {
   clearItemLoan: typeof inventoryRepository.clearItemLoan;
 };
 
-type WorkspaceErrorSource = "household" | "spaces" | "areas" | "items" | "members" | "invites" | "llmConfig" | "packingLists" | "activity";
+type WorkspaceErrorSource = "household" | "spaces" | "areas" | "items" | "itemDrafts" | "members" | "invites" | "llmConfig" | "packingLists" | "activity";
 type WorkspaceErrorsBySource = Record<WorkspaceErrorSource, string | null>;
 
 function emptyErrors(): WorkspaceErrorsBySource {
@@ -53,6 +61,7 @@ function emptyErrors(): WorkspaceErrorsBySource {
     spaces: null,
     areas: null,
     items: null,
+    itemDrafts: null,
     members: null,
     invites: null,
     llmConfig: null,
@@ -66,6 +75,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
   const [spacesState, setSpacesState] = useState<CollectionState<Space>>(emptyState());
   const [areasState, setAreasState] = useState<CollectionState<Area>>(emptyState());
   const [itemsState, setItemsState] = useState<CollectionState<Item>>(emptyState());
+  const [itemDraftsState, setItemDraftsState] = useState<CollectionState<ItemDraft>>(emptyState());
   const [membersState, setMembersState] = useState<CollectionState<HouseholdMember>>(emptyState());
   const [invitesState, setInvitesState] = useState<CollectionState<HouseholdInvite>>(emptyState());
   const [packingListsState, setPackingListsState] = useState<CollectionState<PackingList>>(emptyState());
@@ -83,6 +93,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     setSpacesState(emptyState());
     setAreasState(emptyState());
     setItemsState(emptyState());
+    setItemDraftsState(emptyState());
     setMembersState(emptyState());
     setInvitesState(emptyState());
     setPackingListsState(emptyState());
@@ -101,6 +112,19 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setSourceError("household", null);
       },
       (e) => setSourceError("household", e.message)
+    );
+    return () => unsub();
+  }, [householdId]);
+
+  useEffect(() => {
+    if (!householdId) return;
+    const unsub = inventoryRepository.subscribeItemDrafts(
+      householdId,
+      (state) => {
+        setItemDraftsState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
+        setSourceError("itemDrafts", null);
+      },
+      (e) => setSourceError("itemDrafts", e.message)
     );
     return () => unsub();
   }, [householdId]);
@@ -157,8 +181,18 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     return () => unsub();
   }, [householdId]);
 
+  const currentUserRole = useMemo(
+    () => membersState.items.find((member) => member.uid === user?.uid)?.role ?? null,
+    [membersState.items, user?.uid]
+  );
+  const canManageHouseholdSettings = currentUserRole === "OWNER" || currentUserRole === "ADMIN";
+
   useEffect(() => {
-    if (!householdId) return;
+    if (!householdId || !canManageHouseholdSettings) {
+      setInvitesState(emptyState());
+      setSourceError("invites", null);
+      return;
+    }
     const unsub = inventoryRepository.subscribeInvites(
       householdId,
       (state) => {
@@ -168,7 +202,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
       (e) => setSourceError("invites", e.message)
     );
     return () => unsub();
-  }, [householdId]);
+  }, [canManageHouseholdSettings, householdId]);
 
   useEffect(() => {
     if (!householdId) return;
@@ -198,7 +232,12 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
   }, [householdId]);
 
   useEffect(() => {
-    if (!householdId) return;
+    if (!householdId || !canManageHouseholdSettings) {
+      setLlmConfig(null);
+      setLlmConfigMeta({ fromCache: true, hasPendingWrites: false });
+      setSourceError("llmConfig", null);
+      return;
+    }
     const unsub = inventoryRepository.subscribeLlmConfig(
       householdId,
       (config, meta) => {
@@ -209,10 +248,10 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
       (e) => setSourceError("llmConfig", e.message)
     );
     return () => unsub();
-  }, [householdId]);
+  }, [canManageHouseholdSettings, householdId]);
 
   const error = useMemo(() => {
-    const order: WorkspaceErrorSource[] = ["household", "spaces", "areas", "items", "members", "invites", "llmConfig", "packingLists", "activity"];
+    const order: WorkspaceErrorSource[] = ["household", "spaces", "areas", "items", "itemDrafts", "members", "invites", "llmConfig", "packingLists", "activity"];
     return order.map((source) => errorsBySource[source]).find(Boolean) ?? null;
   }, [errorsBySource]);
 
@@ -235,6 +274,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         spacesState.fromCache ||
         areasState.fromCache ||
         itemsState.fromCache ||
+        itemDraftsState.fromCache ||
         membersState.fromCache ||
         invitesState.fromCache ||
         packingListsState.fromCache ||
@@ -243,16 +283,21 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         spacesState.hasPendingWrites ||
         areasState.hasPendingWrites ||
         itemsState.hasPendingWrites ||
+        itemDraftsState.hasPendingWrites ||
         membersState.hasPendingWrites ||
         invitesState.hasPendingWrites ||
         packingListsState.hasPendingWrites ||
         llmConfigMeta.hasPendingWrites
     }),
-    [areasState, invitesState, itemsState, llmConfigMeta, membersState, packingListsState, spacesState]
+    [areasState, invitesState, itemDraftsState, itemsState, llmConfigMeta, membersState, packingListsState, spacesState]
   );
 
   const actions: WorkspaceActions = useMemo(
     () => ({
+      createSpaceId: inventoryRepository.createSpaceId,
+      createAreaId: inventoryRepository.createAreaId,
+      createItemId: inventoryRepository.createItemId,
+      createItemDraftId: inventoryRepository.createItemDraftId,
       updateHousehold: inventoryRepository.updateHousehold,
       createSpace: inventoryRepository.createSpace,
       createArea: inventoryRepository.createArea,
@@ -267,6 +312,10 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
       updateItem: inventoryRepository.updateItem,
       togglePacked: inventoryRepository.togglePacked,
       deleteItem: inventoryRepository.deleteItem,
+      createItemDraft: inventoryRepository.createItemDraft,
+      updateItemDraft: inventoryRepository.updateItemDraft,
+      completeItemDraft: inventoryRepository.completeItemDraft,
+      deleteItemDraft: inventoryRepository.deleteItemDraft,
       updateMemberRole: inventoryRepository.updateMemberRole,
       removeMember: inventoryRepository.removeMember,
       revokeInvite: inventoryRepository.revokeInvite,
@@ -288,6 +337,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     spaces: spacesWithAreas,
     areas: areasState.items,
     items: itemsState.items,
+    itemDrafts: itemDraftsState.items,
     members: membersState.items,
     invites: invitesState.items,
     packingLists: packingListsState.items,

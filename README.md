@@ -73,6 +73,10 @@ Optional:
 
 - Production: set `KMS_KEY_NAME` to a Cloud KMS key resource.
 - Local/dev: falls back to AES-GCM using `LOCAL_SECRET_ENCRYPTION_KEY`.
+- Firebase Functions loads deploy env from `functions/.env.<projectId>`. For this
+  project, `functions/.env.stow-50f36` should define the production
+  `KMS_KEY_NAME`; keep real env files local and use `functions/.env.example` as
+  the template.
 
 ## Notes
 

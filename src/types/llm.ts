@@ -24,9 +24,7 @@ export interface VisionSuggestion {
 
 export interface VisionCategorizeRequest {
   householdId: string;
-  imageRef:
-    | { storagePath: string; downloadUrl?: string }
-    | { imageUrl: string };
+  imageRef: { storagePath: string };
   context?: {
     spaceId?: string;
     areaId?: string;
@@ -40,6 +38,7 @@ export interface VisionCategorizeResponse {
     providerType: ProviderType;
     model: string;
   };
+  jobId: string;
 }
 
 export interface ShelfDetection {
