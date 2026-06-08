@@ -43,13 +43,14 @@ interface StowMobileAppProps {
   user: User;
   onSignOut: () => void;
   online: boolean;
+  basePath?: string;
 }
 
-export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobileAppProps) {
+export function StowMobileApp({ householdId, user, onSignOut, online, basePath = "" }: StowMobileAppProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const shelfPreviewUrlRef = useRef<string | null>(null);
   const location = useLocation();
-  const nav = useMobileNavigation(householdId);
+  const nav = useMobileNavigation(householdId, basePath);
   const data = useWorkspaceData(householdId, user);
   const [toast, setToast] = useState<string | null>(null);
   const [spaceMenuId, setSpaceMenuId] = useState<string | null>(null);

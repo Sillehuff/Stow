@@ -90,6 +90,7 @@ function MobileWorkspaceRoute() {
           user={user}
           onSignOut={() => void signOutUser()}
           online={online}
+          basePath=""
         />
       </Suspense>
     </>
