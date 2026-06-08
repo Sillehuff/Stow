@@ -444,6 +444,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
           <EditSpaceSheet
             space={editSpace}
             itemCount={itemCountForSpace(editSpace.id)}
+            items={data.items}
             otherSpaces={data.spaces.filter((space) => space.id !== editSpace.id)}
             onClose={() => nav.closeOverlay()}
             onSaved={(message) => {
@@ -455,6 +456,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online }: StowMobi
               if (nav.selectedSpaceId === editSpace.id) nav.navigateToTab("spaces");
               flash(message);
             }}
+            onError={flash}
             actions={{
               updateSpace: data.actions.updateSpace,
               createArea: data.actions.createArea,

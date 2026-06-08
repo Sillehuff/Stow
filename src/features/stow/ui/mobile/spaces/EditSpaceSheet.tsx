@@ -6,7 +6,7 @@ import { GripVertical, Plus, Trash2 } from "@/features/stow/ui/mobile/theme/icon
 import { iconForKey } from "@/features/stow/ui/mobile/theme/icons";
 import { ColorPicker } from "@/features/stow/ui/mobile/spaces/ColorPicker";
 import { IconPicker } from "@/features/stow/ui/mobile/spaces/IconPicker";
-import type { SpaceWithAreas } from "@/types/domain";
+import type { Item, SpaceWithAreas } from "@/types/domain";
 
 interface DraftArea {
   key: string;
@@ -14,13 +14,26 @@ interface DraftArea {
   name: string;
 }
 
+interface AreaDeleteState {
+  key: string;
+  id: string;
+  name: string;
+}
+
+interface AreaReassignmentDraft {
+  spaceId: string;
+  areaId: string;
+}
+
 export interface EditSpaceSheetProps {
   space: SpaceWithAreas;
   itemCount: number;
+  items: Item[];
   otherSpaces: SpaceWithAreas[];
   onClose: () => void;
   onSaved: (message: string) => void;
   onDeleted: (message: string) => void;
+  onError: (message: string) => void;
   actions: {
     updateSpace: (input: { householdId: string; spaceId: string; patch: { name?: string; icon?: string; color?: string } }) => Promise<void>;
     createArea: (input: { householdId: string; spaceId: string; name: string; position?: number }) => Promise<string>;
@@ -66,7 +79,7 @@ function FieldLabel({ children }: { children: string }) {
 }
 
 export function EditSpaceSheet(props: EditSpaceSheetProps) {
-  const { space, itemCount, otherSpaces, onClose, onSaved, onDeleted, actions, householdId, userId } = props;
+  const { space, itemCount, items, otherSpaces, onClose, onSaved, onDeleted, onError, actions, householdId, userId } = props;
   const surfaceRef = useDismissable(true, onClose);
   const newKeySeq = useRef(0);
 
@@ -78,6 +91,10 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [destSpaceId, setDestSpaceId] = useState(otherSpaces[0]?.id ?? "");
   const [destAreaId, setDestAreaId] = useState(otherSpaces[0]?.areas[0]?.id ?? "");
+  const [areaDelete, setAreaDelete] = useState<AreaDeleteState | null>(null);
+  const [areaDestSpaceId, setAreaDestSpaceId] = useState("");
+  const [areaDestAreaId, setAreaDestAreaId] = useState("");
+  const [areaReassignments, setAreaReassignments] = useState<Record<string, AreaReassignmentDraft>>({});
 
   useEffect(() => {
     newKeySeq.current = 0;
@@ -87,6 +104,8 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
     setAreas(draftAreasFor(space));
     setSaving(false);
     setConfirmingDelete(false);
+    setAreaDelete(null);
+    setAreaReassignments({});
   }, [space.id, space.name, space.color, space.icon]);
 
   useEffect(() => {
@@ -117,6 +136,58 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
   const canSave = Boolean(name.trim()) && !saving;
   const canDeleteWithReassign = itemCount === 0 || (Boolean(destSpace) && Boolean(destAreaId) && otherSpaces.length > 0);
 
+  function itemCountForArea(areaId: string) {
+    return items.filter((item) => item.spaceId === space.id && item.areaId === areaId).length;
+  }
+
+  function activeExistingAreas(excludedIds = new Set<string>()) {
+    return orderedAreas
+      .filter((area) => Boolean(area.id) && !excludedIds.has(area.id as string))
+      .map((area) => ({ id: area.id as string, name: area.name.trim() || "Area" }));
+  }
+
+  function areaDestinationSpaces(excludedAreaId: string) {
+    const excludedIds = new Set([...Object.keys(areaReassignments), excludedAreaId]);
+    const currentAreas = orderedAreas
+      .filter((area) => Boolean(area.id) && !excludedIds.has(area.id as string))
+      .map((area) => ({ id: area.id as string, name: area.name.trim() || "Area" }));
+
+    return [
+      ...(currentAreas.length > 0 ? [{ id: space.id, name: `${space.name} areas`, areas: currentAreas }] : []),
+      ...otherSpaces.map((candidate) => ({
+        id: candidate.id,
+        name: candidate.name,
+        areas: candidate.areas.map((area) => ({ id: area.id, name: area.name }))
+      }))
+    ].filter((candidate) => candidate.areas.length > 0);
+  }
+
+  function areaDestinationFor(spaceId: string, areaId: string, spaces: ReturnType<typeof areaDestinationSpaces>) {
+    const destinationSpace = spaces.find((candidate) => candidate.id === spaceId);
+    const destinationArea = destinationSpace?.areas.find((area) => area.id === areaId);
+    if (!destinationSpace || !destinationArea) return null;
+    return { spaceId: destinationSpace.id, areaId: destinationArea.id, areaNameSnapshot: destinationArea.name };
+  }
+
+  function finalAreaDestinationSpaces() {
+    const currentAreas = activeExistingAreas(new Set(Object.keys(areaReassignments)));
+    return [
+      ...(currentAreas.length > 0 ? [{ id: space.id, name: `${space.name} areas`, areas: currentAreas }] : []),
+      ...otherSpaces.map((candidate) => ({
+        id: candidate.id,
+        name: candidate.name,
+        areas: candidate.areas.map((area) => ({ id: area.id, name: area.name }))
+      }))
+    ].filter((candidate) => candidate.areas.length > 0);
+  }
+
+  function firstAreaDestination(excludedAreaId: string) {
+    const destinationSpace = areaDestinationSpaces(excludedAreaId)[0];
+    const destinationArea = destinationSpace?.areas[0];
+    if (!destinationSpace || !destinationArea) return null;
+    return { spaceId: destinationSpace.id, areaId: destinationArea.id };
+  }
+
   function addArea() {
     const key = `new-area-${space.id}-${newKeySeq.current++}`;
     setAreas((previous) => previous.concat([{ key, id: null, name: "New Area" }]));
@@ -126,9 +197,41 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
     setAreas((previous) => previous.map((area) => (area.key === key ? { ...area, name: value } : area)));
   }
 
-  function removeArea(key: string) {
-    if (suppressClick()) return;
+  function removeAreaFromDraft(key: string) {
     setAreas((previous) => previous.filter((area) => area.key !== key));
+  }
+
+  function requestAreaDelete(area: DraftArea) {
+    if (suppressClick()) return;
+    if (!area.id) {
+      removeAreaFromDraft(area.key);
+      return;
+    }
+    const firstDestination = firstAreaDestination(area.id);
+    setAreaDelete({ key: area.key, id: area.id, name: area.name.trim() || "Area" });
+    setAreaDestSpaceId(firstDestination?.spaceId ?? "");
+    setAreaDestAreaId(firstDestination?.areaId ?? "");
+  }
+
+  function confirmAreaDelete() {
+    if (!areaDelete) return;
+    const affectedCount = itemCountForArea(areaDelete.id);
+    if (affectedCount > 0) {
+      const reassignTo = areaDestinationFor(areaDestSpaceId, areaDestAreaId, areaDestinationSpaces(areaDelete.id));
+      if (!reassignTo) return;
+      setAreaReassignments((previous) => ({
+        ...previous,
+        [areaDelete.id]: { spaceId: reassignTo.spaceId, areaId: reassignTo.areaId }
+      }));
+    } else {
+      setAreaReassignments((previous) => {
+        const next = { ...previous };
+        delete next[areaDelete.id];
+        return next;
+      });
+    }
+    removeAreaFromDraft(areaDelete.key);
+    setAreaDelete(null);
   }
 
   async function save() {
@@ -142,9 +245,21 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
       }
 
       const draftIds = new Set(areas.filter((area) => area.id).map((area) => area.id));
+      const finalDestinationSpaces = finalAreaDestinationSpaces();
       for (const original of space.areas) {
         if (!draftIds.has(original.id)) {
-          await actions.deleteArea({ householdId, spaceId: space.id, areaId: original.id, userId });
+          const reassignment = areaReassignments[original.id];
+          const reassignTo = reassignment
+            ? (areaDestinationFor(reassignment.spaceId, reassignment.areaId, finalDestinationSpaces) ?? undefined)
+            : undefined;
+
+          await actions.deleteArea({
+            householdId,
+            spaceId: space.id,
+            areaId: original.id,
+            userId,
+            reassignTo
+          });
         }
       }
 
@@ -173,6 +288,8 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
       }
 
       onSaved("Space updated");
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Failed to update space");
     } finally {
       setSaving(false);
     }
@@ -194,6 +311,8 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
 
       await actions.deleteSpace({ householdId, spaceId: space.id, userId, reassignTo });
       onDeleted("Space deleted");
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Failed to delete space");
     } finally {
       setSaving(false);
     }
@@ -222,6 +341,14 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
       }
     };
   }
+
+  const areaDeleteItemCount = areaDelete ? itemCountForArea(areaDelete.id) : 0;
+  const areaDeleteDestinationSpaces = areaDelete ? areaDestinationSpaces(areaDelete.id) : [];
+  const selectedAreaDestSpace = areaDeleteDestinationSpaces.find((candidate) => candidate.id === areaDestSpaceId) ?? null;
+  const canConfirmAreaDelete =
+    Boolean(areaDelete) &&
+    !saving &&
+    (areaDeleteItemCount === 0 || Boolean(areaDestinationFor(areaDestSpaceId, areaDestAreaId, areaDeleteDestinationSpaces)));
 
   return (
     <div
@@ -449,7 +576,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                     />
                     <button
                       type="button"
-                      onClick={() => removeArea(area.key)}
+                      onClick={() => requestAreaDelete(area)}
                       style={{
                         width: 26,
                         height: 26,
@@ -470,6 +597,119 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
               })
             )}
           </div>
+
+          {areaDelete ? (
+            <div
+              style={{
+                marginTop: -10,
+                marginBottom: 22,
+                padding: 14,
+                borderRadius: "var(--stow-radius-card)",
+                background: "var(--stow-canvas)",
+                border: "1px solid var(--stow-border-l)"
+              }}
+            >
+              {areaDeleteItemCount > 0 ? (
+                <>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--stow-ink)", marginBottom: 10 }}>
+                    {areaDelete.name} has {areaDeleteItemCount} item{areaDeleteItemCount !== 1 ? "s" : ""} {"\u2014"} choose where they go:
+                  </div>
+                  <select
+                    value={areaDestSpaceId}
+                    onChange={(event) => {
+                      const nextSpaceId = event.target.value;
+                      const nextSpace = areaDeleteDestinationSpaces.find((candidate) => candidate.id === nextSpaceId);
+                      setAreaDestSpaceId(nextSpaceId);
+                      setAreaDestAreaId(nextSpace?.areas[0]?.id ?? "");
+                    }}
+                    style={{
+                      width: "100%",
+                      borderRadius: "var(--stow-radius-input)",
+                      border: "1.5px solid var(--stow-border)",
+                      background: "var(--stow-surface)",
+                      color: "var(--stow-ink)",
+                      padding: "10px 12px",
+                      fontFamily: "inherit",
+                      fontWeight: 700,
+                      marginBottom: 8
+                    }}
+                  >
+                    {areaDeleteDestinationSpaces.length === 0 ? <option value="">No destination spaces</option> : null}
+                    {areaDeleteDestinationSpaces.map((candidate) => (
+                      <option key={candidate.id} value={candidate.id}>
+                        {candidate.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={areaDestAreaId}
+                    onChange={(event) => setAreaDestAreaId(event.target.value)}
+                    disabled={!selectedAreaDestSpace}
+                    style={{
+                      width: "100%",
+                      borderRadius: "var(--stow-radius-input)",
+                      border: "1.5px solid var(--stow-border)",
+                      background: "var(--stow-surface)",
+                      color: "var(--stow-ink)",
+                      padding: "10px 12px",
+                      fontFamily: "inherit",
+                      fontWeight: 700,
+                      marginBottom: 10
+                    }}
+                  >
+                    {!selectedAreaDestSpace ? <option value="">No destination areas</option> : null}
+                    {selectedAreaDestSpace?.areas.map((area) => (
+                      <option key={area.id} value={area.id}>
+                        {area.name}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              ) : (
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--stow-ink)", marginBottom: 10 }}>
+                  Delete {areaDelete.name}? This can&apos;t be undone after you save.
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={confirmAreaDelete}
+                disabled={!canConfirmAreaDelete}
+                style={{
+                  width: "100%",
+                  border: "none",
+                  borderRadius: "var(--stow-radius-input)",
+                  background: canConfirmAreaDelete ? "var(--stow-danger)" : "var(--stow-border-l)",
+                  color: "#fff",
+                  padding: "12px 0",
+                  fontSize: 14,
+                  fontWeight: 800,
+                  cursor: canConfirmAreaDelete ? "pointer" : "default",
+                  fontFamily: "inherit",
+                  marginBottom: 8
+                }}
+              >
+                {areaDeleteItemCount > 0 ? "Delete & move items" : "Delete Area"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAreaDelete(null)}
+                style={{
+                  width: "100%",
+                  border: "1px solid var(--stow-border)",
+                  borderRadius: "var(--stow-radius-input)",
+                  background: "var(--stow-surface)",
+                  color: "var(--stow-ink-muted)",
+                  padding: "11px 0",
+                  fontSize: 14,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  fontFamily: "inherit"
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : null}
 
           <button
             type="button"
