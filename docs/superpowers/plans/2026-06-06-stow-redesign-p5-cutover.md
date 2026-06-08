@@ -616,7 +616,7 @@ The repository already supports reassignment on delete: `inventoryRepository.del
 - `src/features/stow/ui/mobile/spaces/SpaceActionSheet.tsx` (Delete action entry)
 - `src/features/stow/ui/mobile/shell/Confirm.tsx` (the confirm dialog primitive, contract §7)
 
-- [ ] **Step 1: Audit the space-delete path**
+- [x] **Step 1: Audit the space-delete path** — PASS after gap-fill: existing item-count destination picker and destination `areaNameSnapshot` were present; repo throws are now surfaced via `onError`.
 
 Read `EditSpaceSheet.tsx`. Confirm "Delete Space":
   1. Counts items in the space (from `useWorkspaceData` — items where `item.spaceId === space.id`).
@@ -638,19 +638,19 @@ Document the finding inline in the step checkbox (PASS, or the exact missing pie
         />
 ```
 
-- [ ] **Step 2: Audit the area-delete path**
+- [x] **Step 2: Audit the area-delete path** — GAP FIXED: existing areas now require confirm; item-bearing areas require a destination picker and pass `reassignTo` to `deleteArea`.
 
 Read the Areas section of `EditSpaceSheet.tsx` (each area row's delete control). Confirm the same three-way logic against `deleteArea({ householdId, spaceId, areaId, reassignTo? })`: items-in-area → destination picker (an area within the same space, or another space); empty → `Confirm`; repo throw → toast. Add a missing `Confirm` if absent, mirroring Step 1.
 
-- [ ] **Step 3: Verify reassignment destination snapshot correctness**
+- [x] **Step 3: Verify reassignment destination snapshot correctness** — PASS: space and area delete both use the chosen destination area's current display name for `areaNameSnapshot`.
 
 Confirm the destination picker passes `areaNameSnapshot` equal to the *chosen destination area's current name* (so moved items show the right "Room › Area" subtitle). This matches `repository.deleteSpace`/`deleteArea` writing `areaNameSnapshot: input.reassignTo.areaNameSnapshot` (lines 313/345). If the UI passes the source name or omits it, fix it to read the destination area's `name`.
 
-- [ ] **Step 4: Manual smoke**
+- [x] **Step 4: Manual smoke**
 
 Run `npm run dev`. On `/app`: (a) create a space with an area, add 1 item; open Edit Space → Delete Space → it requires a destination → pick another space/area → delete succeeds and the item now lives in the destination (verify via search). (b) Repeat for area delete. (c) Delete an empty space → plain confirm, no picker.
 
-- [ ] **Step 5: Commit (only if a gap was fixed)**
+- [x] **Step 5: Commit (only if a gap was fixed)**
 
 ```bash
 git add src/features/stow/ui/mobile/spaces/EditSpaceSheet.tsx src/features/stow/ui/mobile/spaces/SpaceActionSheet.tsx
@@ -676,7 +676,7 @@ The pure planning functions are unit-tested; the admin I/O wrapper is exercised 
 
 ### 4a — Pure planning helpers + tests
 
-- [ ] **Step 1: Write the failing test for the pure planners**
+- [x] **Step 1: Write the failing test for the pure planners**
 
 ```ts
 // scripts/backfill.test.ts
@@ -741,14 +741,14 @@ describe("planStatus", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run scripts/backfill.test.ts`
 Expected: FAIL — imports cannot be resolved.
 
 > Note: `scripts/` is compiled/run by `tsx`, but the planner files must be importable by Vitest. Export the pure planners as named exports and guard the admin entrypoint behind a `main()` that only runs when invoked directly (see Step 4/5). The repo's Vitest config picks up `scripts/*.test.ts` (it excludes only `tests/firestore.rules.test.ts` and `tests/smoke/**`).
 
-- [ ] **Step 3: Write `scripts/backfill-positions.ts` (planner + admin runner)**
+- [x] **Step 3: Write `scripts/backfill-positions.ts` (planner + admin runner)**
 
 ```ts
 // scripts/backfill-positions.ts
@@ -868,7 +868,7 @@ if (invokedDirectly) {
 }
 ```
 
-- [ ] **Step 4: Write `scripts/backfill-status.ts` (planner + admin runner)**
+- [x] **Step 4: Write `scripts/backfill-status.ts` (planner + admin runner)**
 
 ```ts
 // scripts/backfill-status.ts
@@ -955,12 +955,12 @@ if (invokedDirectly) {
 }
 ```
 
-- [ ] **Step 5: Run the planner test to verify it passes**
+- [x] **Step 5: Run the planner test to verify it passes**
 
 Run: `npx vitest run scripts/backfill.test.ts`
 Expected: PASS. (The `invokedDirectly` guard prevents `main()` from running during import, so no admin init happens under Vitest.)
 
-- [ ] **Step 6: Add npm scripts**
+- [x] **Step 6: Add npm scripts**
 
 In `package.json`, find the `"seed:demo"` script:
 ```json
@@ -973,7 +973,7 @@ Replace with (add a trailing comma and the two backfill scripts):
     "backfill:status": "tsx scripts/backfill-status.ts"
 ```
 
-- [ ] **Step 7: Dry-run against the emulator, then write against the emulator**
+- [x] **Step 7: Dry-run against the emulator, then write against the emulator** — RAN via `firebase emulators:exec --only firestore`: seeded 4 spaces / 8 items, then dry-run → apply → re-run all reported 0 writes because the demo seed already materializes `position`/`status`; idempotency confirmed end-to-end. The write path (legacy docs missing the fields) is covered by the `planPositions`/`planStatus` unit tests.
 
 Document + execute (text for the running engineer):
 
@@ -996,7 +996,7 @@ FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 GCLOUD_PROJECT=demo-stow npm run backfill
 ```
 Expected: step 2 reports nonzero `spaceWrites`/`areaWrites`/`itemWrites`; step 3 applies them; step 4 reports `0` for all (proves idempotency). Optionally `--household <id>` to scope a single household.
 
-- [ ] **Step 8: Production run procedure (document; do not execute here)**
+- [x] **Step 8: Production run procedure (document; do not execute here)**
 
 Add this runbook to the plan; the engineer executes it during the production cutover window, **before** the route swap so the canonical app reads fully-materialized data:
 
@@ -1019,7 +1019,7 @@ npm run backfill:status
 ```
 Safety notes to include: scripts only ever **add** missing fields (`planPositions`/`planStatus` skip docs that already have the target field), never delete or overwrite existing `position`/`status`; safe to re-run; safe to run while the old apps are live because read-time normalization (contract §4.1) already tolerates both the pre- and post-backfill states.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add scripts/backfill-positions.ts scripts/backfill-status.ts scripts/backfill.test.ts package.json
@@ -1037,7 +1037,7 @@ Make the mobile app canonical. The mechanism (contract §3): `StowMobileApp` cal
 - Modify: `src/routes/StowMobileRoutePage.tsx` (pass `basePath=""`)
 - Modify: `src/App.tsx` (repoint routes)
 
-- [ ] **Step 1: Make `StowMobileApp` accept a `basePath` prop**
+- [x] **Step 1: Make `StowMobileApp` accept a `basePath` prop**
 
 In `src/features/stow/ui/mobile/StowMobileApp.tsx`, extend the props and thread it into the nav hook.
 
@@ -1070,7 +1070,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
 ```
 *(Default `""` makes canonical the default; the dev `/app` mount becomes explicit. `useMobileNavigation`'s own default stays `"/app"` per contract §3 — but every caller now passes a value, so behavior is unambiguous.)*
 
-- [ ] **Step 2: Pass `basePath=""` from the route page**
+- [x] **Step 2: Pass `basePath=""` from the route page**
 
 In `src/routes/StowMobileRoutePage.tsx`, find the `<LazyStowMobileApp .../>` render and add `basePath=""`:
 
@@ -1094,7 +1094,7 @@ After:
         />
 ```
 
-- [ ] **Step 3: Repoint the route table in `src/App.tsx`**
+- [x] **Step 3: Repoint the route table in `src/App.tsx`**
 
 Replace the entire `<Routes>` body so every canonical inventory path renders `StowMobileRoutePage`, the `/` and `*` redirects land on `/spaces`, and the temporary `/app/*`, the legacy `/spaces*`/`/items`/`/search`/`/packing`/`/settings` → `SpacesRoutePage`, and the `/next/*` routes are removed.
 
@@ -1195,7 +1195,7 @@ export default function App() {
 > - The `/activity` route is added because P4's `ActivityScreen` is a routed full-screen view at `${basePath}/activity` (contract §3 P4); with `basePath=""` that is `/activity`. If P4 already added `/activity` under `/app`, this promotes it to canonical.
 > - `StowMobileApp` renders the active screen and overlays internally based on `parseMobileRoute`, so a single `StowMobileRoutePage` element behind each path is sufficient (same pattern legacy used with `SpacesRoutePage`). React Router will re-render the element as the URL changes within these paths.
 
-- [ ] **Step 4: Remove the now-unused lazy imports in `src/App.tsx`**
+- [x] **Step 4: Remove the now-unused lazy imports in `src/App.tsx`**
 
 The legacy + next route pages are about to be deleted (Task 6). Remove their imports now so this commit type-checks against the still-present files but no longer references them in the table.
 
@@ -1210,16 +1210,16 @@ const StowMobileRoutePage = lazy(() => import("@/routes/StowMobileRoutePage"));
 ```
 *(If P0 already added the `StowMobileRoutePage` lazy import below the `StowNextRoutePage` line, just delete the `SpacesRoutePage` and `StowNextRoutePage` lines and keep the single `StowMobileRoutePage` import — do not duplicate it.)*
 
-- [ ] **Step 5: Typecheck**
+- [x] **Step 5: Typecheck**
 
 Run: `npm run typecheck`
 Expected: PASS. `SpacesRoutePage.tsx`/`StowNextRoutePage.tsx` still exist on disk (deleted in Task 6) but are no longer imported, which is fine.
 
-- [ ] **Step 6: Manual smoke — canonical routes now serve the new app**
+- [x] **Step 6: Manual smoke — canonical routes now serve the new app**
 
 Run `npm run dev`, open `http://127.0.0.1:5173/` → redirects to `/spaces` → the **mobile** app renders (bottom nav + scan FAB over the warm backdrop). Navigate tabs: URL becomes `/search`, `/packing`, `/settings` (no `/app` prefix); open a space → `/spaces/:id`; open an item → `/items/:id?from=…`; browser Back works. Open `/app/spaces` → it now also resolves (the `/app/*` route was removed, so `*` redirects to `/spaces`). A previously-generated QR link `${origin}/spaces/<id>` opens the room.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/App.tsx src/routes/StowMobileRoutePage.tsx src/features/stow/ui/mobile/StowMobileApp.tsx
@@ -1239,7 +1239,7 @@ With canonical routes on the mobile app, remove the two old UIs and their route 
 - `src/features/stow/ui/next/StowNextApp.tsx` (and the rest of `src/features/stow/ui/next/` if wholly unreferenced)
 - Any of `src/features/stow/ui/tabs/`, `src/features/stow/ui/item/`, `src/features/stow/ui/packing/`, `src/features/stow/ui/shared/` that becomes unreferenced once `StowApp.tsx` is gone
 
-- [ ] **Step 1: Inventory references before deleting**
+- [x] **Step 1: Inventory references before deleting**
 
 Run a grep sweep to see who imports each target (run from repo root):
 ```bash
@@ -1249,7 +1249,7 @@ grep -rn "stow/ui/tabs\|stow/ui/item\b\|stow/ui/packing\|stow/ui/shared" src tes
 ```
 Expected after Task 5: the only hits for the route pages are their own files; `ui/StowApp`/`ui/next/StowNextApp` hits are their own files plus the smoke specs (retargeted in Task 8). Record any *unexpected* importer and resolve it before deleting (e.g. a shared helper that actually belongs under `lib/` — move it, don't delete).
 
-- [ ] **Step 2: Determine which `ui/*` legacy subfolders are safe to delete**
+- [x] **Step 2: Determine which `ui/*` legacy subfolders are safe to delete**
 
 For each of `tabs/`, `item/`, `packing/`, `shared/` under `src/features/stow/ui/`, check whether anything **outside** the deletion set still imports it:
 ```bash
@@ -1260,7 +1260,7 @@ done
 ```
 Delete only the subfolders with **no** external importers. If the mobile module (`ui/mobile/`) imports something from `ui/shared/`, that file must instead live under `ui/mobile/` or `lib/` — relocate it in a prior commit rather than keeping the legacy folder alive. (Per contract §0.2 all new code is under `ui/mobile/`, so this should not happen; the grep confirms it.)
 
-- [ ] **Step 3: Delete the files**
+- [x] **Step 3: Delete the files**
 
 ```bash
 git rm src/routes/SpacesRoutePage.tsx src/routes/StowNextRoutePage.tsx
@@ -1271,7 +1271,7 @@ git rm -r src/features/stow/ui/tabs src/features/stow/ui/item src/features/stow/
 ```
 Adjust the last line to exactly the set Step 2 cleared.
 
-- [ ] **Step 4: Prove nothing references the deleted modules**
+- [x] **Step 4: Prove nothing references the deleted modules**
 
 ```bash
 grep -rn "SpacesRoutePage\|StowNextRoutePage\|ui/StowApp\|StowNextApp" src
@@ -1279,12 +1279,12 @@ grep -rn "stow/ui/tabs\|stow/ui/item\b\|stow/ui/packing\|stow/ui/shared" src
 ```
 Expected: **no output** (empty) from both. If anything remains, it is a missed importer — fix it.
 
-- [ ] **Step 5: Typecheck + build**
+- [x] **Step 5: Typecheck + build**
 
 Run: `npm run typecheck && npm run build`
 Expected: both PASS. The Vite bundle no longer includes the two large legacy chunks. (`grep -rn "qrcode" src` should now show only `ui/mobile/capture/qr.ts` — legacy's QR usage is gone, ours remains.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -1305,7 +1305,7 @@ Three token systems exist today (spec §3 "retire the 3 conflicting palettes at 
 **Files:**
 - Modify: `src/styles.css`
 
-- [ ] **Step 1: Remove the desktop-next `.stow-next` token + style region**
+- [x] **Step 1: Remove the desktop-next `.stow-next` token + style region**
 
 Delete `src/styles.css` from the comment marker `/* Stow Next: isolated redesign route */` (line 2081) through end-of-file (line 4086, the closing `}` of the final `@media (prefers-reduced-motion: reduce)` block). Confirm the deletion boundary first:
 ```bash
@@ -1318,7 +1318,7 @@ grep -n "\.stow-next\|\.next-\|oklch" src/styles.css
 ```
 Expected: **no output**.
 
-- [ ] **Step 2: Remove the legacy-only `.app-shell` UI rules**
+- [x] **Step 2: Remove the legacy-only `.app-shell` UI rules**
 
 The legacy phone-frame UI rules (scoped to `.app-shell`, `.phone-frame`, `.screen`, `.space-list-*`, `.area-card`, `.search-*`, `.pack-*`, `.command-*`, `.capture-*`, `.draft-*`, `.fab`, `.bottom-nav`, `.nav-btn`, `.delete-confirm-card`, etc.) are now dead — only `StowApp.tsx` used them and it is deleted. Identify the legacy region (it begins around the `.app-shell` selector, ~line 350 area, and runs up to the `/* Stow Next … */` marker that Step 1 removed) and delete the legacy-component rules within it.
 
@@ -1333,7 +1333,7 @@ The legacy phone-frame UI rules (scoped to `.app-shell`, `.phone-frame`, `.scree
 > ```
 > Keep `.next-auth-panel`/`.next-auth-progress`? **No** — those were only rendered by the deleted `StowNextRoutePage`; remove them. (Verify: `grep -rn "next-auth" src` → empty after Task 6.)
 
-- [ ] **Step 3: Note the `docs/mockups/capture-flow.html` divergence (do not edit non-plan files)**
+- [x] **Step 3: Note the `docs/mockups/capture-flow.html` divergence (do not edit non-plan files)**
 
 `docs/mockups/capture-flow.html` is a static design mockup that carries its own inline/standalone token values, divergent from the live `--stow-*` system. It is **not** part of the app bundle and is not imported anywhere. Per the cutover scope it should be reconciled or retired separately; record this here as a known divergence and a follow-up (it is a documentation artifact, out of scope for this plan's single-file constraint). Verify it is not referenced by the app:
 ```bash
@@ -1341,7 +1341,7 @@ grep -rn "capture-flow.html\|docs/mockups" src index.html
 ```
 Expected: **no output** (confirms it is inert).
 
-- [ ] **Step 4: Verify token system is singular**
+- [x] **Step 4: Verify token system is singular**
 
 ```bash
 grep -n "color-scheme\|--stow-accent\|--accent:" src/styles.css
@@ -1350,11 +1350,11 @@ grep -rn "var(--stow-" src/features/stow/ui/mobile | head
 ```
 Expected: `src/styles.css` retains exactly one `:root` token block (the shared one) for chrome; the app UI uses `--stow-*` exclusively (scoped to `.stow-mobile`); no `.stow-next`/OKLCH tokens remain.
 
-- [ ] **Step 5: Build + manual smoke**
+- [x] **Step 5: Build + manual smoke**
 
 Run: `npm run build`. Then `npm run dev`: the auth/bootstrap shell (sign-in panel, offline/install banners, loading states) still renders correctly (proves shared chrome survived), and the mobile app renders with its `--stow-*` theme.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/styles.css
@@ -1373,14 +1373,14 @@ Retarget the Playwright smoke coverage to the canonical mobile app and remove th
 - Modify: `playwright.config.ts` (webServer readiness URL is already `/spaces` — confirm it still serves)
 - Modify: `README.md`
 
-- [ ] **Step 1: Remove the desktop-next smoke spec**
+- [x] **Step 1: Remove the desktop-next smoke spec**
 
 `tests/smoke/next-redesign.spec.ts` drives `/next` and `next-*` DOM (e.g. line 44 `page.goto("/next")`, line 55 heading `"Organize inventory"`, line 108 `Open legacy spaces` → `/spaces`). That app no longer exists.
 ```bash
 git rm tests/smoke/next-redesign.spec.ts
 ```
 
-- [ ] **Step 2: Retarget `authenticated-smoke.spec.ts` to the mobile app on canonical routes**
+- [x] **Step 2: Retarget `authenticated-smoke.spec.ts` to the mobile app on canonical routes**
 
 The existing spec (`tests/smoke/authenticated-smoke.spec.ts`) signs in at `/spaces` and drives legacy DOM: `"Your Spaces"` (line 69), the legacy add-space dialog `"New Space"` (line 74), `.fab` (line 102), legacy dialogs (`"Add Item"`, `"No Photo Item"`, `"Photo Draft"`, `"AI Photo Assist"`), `.picker-item`, `.delete-confirm-card`, and a "desktop capture workspace" describe block (lines 218–227). With the mobile app canonical, rewrite the flows against the **mobile** UI selectors. The sign-in helper (`waitForEmailLink`, the emulator OOB-code dance) and `mockCallable` are reusable as-is; the post-sign-in assertions change.
 
@@ -1475,23 +1475,23 @@ test("mobile canonical app: per-space QR deep link round-trips", async ({ page }
 > - Replace placeholder/role names above with the **actual** accessible names from the shipped P1–P4 components if they differ (e.g. the AddSpace sheet's button label, the search input placeholder "Find anything…"). Keep: sign-in at `/spaces`, the canonical-URL assertions (`/search`, `/packing`, `/settings`, `/spaces/:id`), and at least one QR/recent-search assertion to cover P5 parity.
 > - The vision callable mocks (`mockCallable(page, "visionCategorizeItemImage", …)`) from the current spec remain valid if you keep an AI-scan flow assertion; they are provider-shaped, not UI-shaped.
 
-- [ ] **Step 3: Confirm Playwright webServer readiness**
+- [x] **Step 3: Confirm Playwright webServer readiness**
 
 `playwright.config.ts` `webServer.url` is `${BASE_URL}/spaces`. Post-cutover `/spaces` serves the mobile app behind auth (the route resolves and returns HTML), so readiness still works — no change required. Confirm by reading the config; if the team prefers, change the readiness URL to `${BASE_URL}/` (also valid; redirects to `/spaces`). Leave as-is unless the smoke run reports the server never became ready.
 
-- [ ] **Step 4: Run the smoke suite**
+- [x] **Step 4: Run the smoke suite**
 
 Run: `npm run test:smoke`
 Expected: PASS — the two retargeted tests drive the mobile app on canonical routes. Iterate selector names against the real components until green. (`test:smoke` boots emulators + the Vite dev server via the `webServer` config and runs everything except `@live-gemini`.)
 
-- [ ] **Step 5: Update `README.md`**
+- [x] **Step 5: Update `README.md`**
 
 Make the README reflect the single canonical app:
 - "What Is Implemented" (line 12 block): change "Firestore-backed spaces/areas/items CRUD UI (core flows)" / "Packing flow, search, item edit/delete, local QR label generation" wording to describe the **mobile-first canonical app** (retrieval-first home, Spaces Option D management, camera + AI single + whole-shelf batch capture, activity feed, lending/status), and note that the legacy `/spaces` and desktop `/next` UIs were removed at cutover.
 - Add a one-line "Data migrations" note under "Demo Seeding": after deploying P5, run `npm run backfill:positions` and `npm run backfill:status` (dry-run first) to materialize `position`/`status` on existing households; both are idempotent.
 - If the README references screenshots of the old UI, replace/remove them. (There are currently none in `README.md`; if a future screenshot section is added, it should show the mobile app.) Record "no screenshots present" if that remains true.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tests/smoke/authenticated-smoke.spec.ts README.md
@@ -1505,27 +1505,27 @@ git commit -m "test+docs: retarget smoke specs to canonical mobile app; update R
 
 Run every gate green and confirm the cutover invariants.
 
-- [ ] **Step 1: Unit suite + typecheck + build**
+- [x] **Step 1: Unit suite + typecheck + build**
 
 Run: `npm run typecheck && npm test && npm run build`
 Expected: all PASS, including the new `qr.test.ts`, `recentSearches.test.ts`, and `backfill.test.ts`; no references to deleted modules; the production bundle builds without the legacy/next chunks.
 
-- [ ] **Step 2: Rules tests**
+- [x] **Step 2: Rules tests**
 
 Run: `npm run test:rules`
 Expected: PASS (the P4 `activity` rules test and existing rules tests are unaffected by cutover).
 
-- [ ] **Step 3: Smoke (E2E)**
+- [x] **Step 3: Smoke (E2E)**
 
 Run: `npm run test:smoke`
 Expected: PASS — both retargeted specs drive the canonical mobile app; no `/next` spec remains.
 
-- [ ] **Step 4: Functions tests**
+- [x] **Step 4: Functions tests**
 
 Run: `npm run functions:test`
 Expected: PASS (functions are untouched by P5; this confirms no incidental breakage).
 
-- [ ] **Step 5: Confirm cutover invariants by inspection**
+- [x] **Step 5: Confirm cutover invariants by inspection**
 
 ```bash
 # Default route renders the new app: App.tsx has no SpacesRoutePage/StowNextRoutePage imports,
@@ -1543,11 +1543,11 @@ grep -rn "qrcode" src ; echo "(expected: only ui/mobile/capture/qr.ts)"
 ```
 Expected outputs: `App.tsx` shows only `StowMobileRoutePage`; the three "expected: empty" greps are empty; `qrcode` appears only in `ui/mobile/capture/qr.ts`.
 
-- [ ] **Step 6: Manual end-to-end sanity in dev**
+- [x] **Step 6: Manual end-to-end sanity in dev**
 
 Run `npm run dev`. Verify: `/` → `/spaces` renders the mobile app; tabs route to `/search`/`/packing`/`/settings`; a space deep link opens the room and its QR sheet generates a scannable code; the Scan FAB → "Scan a Stow QR label" navigates from a pasted link; recent searches persist across reloads; delete-with-reassignment requires a destination when items exist; an item shows `status` ("Away from home" strip for non-home). Legacy `/next` now redirects to `/spaces` (route removed).
 
-- [ ] **Step 7: Final commit (if any fixups)**
+- [x] **Step 7: Final commit (if any fixups)**
 
 ```bash
 git add -A
@@ -1584,3 +1584,25 @@ git commit -m "chore: P5 cutover verified — mobile app canonical, legacy remov
 **Contract §12 (P5 index): "run §4.1 backfills; repoint routes (basePath `""`); delete legacy/desktop; remove old token sets; QR + recent-searches parity; smoke specs."** → Tasks 4, 5, 6, 7, 1+2, 8 respectively. All covered. ✓
 
 **Conventions/format (contract §0, P0 template):** writing-plans header (Goal/Architecture/Tech Stack/Spec+Roadmap+Contract links + sub-skill note); `## Task N` sections with **Files** + bite-sized `- [ ]` steps; TDD (failing test → run → impl → run → commit) for the QR helper, recent-searches helper, and backfill planners; explicit before/after edit blocks + grep/verify for the mechanical route repoint, deletions, and token removal; every commit ends with the `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>` trailer; verification = `npm run typecheck && npm test && npm run build` (no `verify` script), plus `test:rules`/`test:smoke`/`functions:test` in Task 9. No placeholders — full code given for both backfill scripts, the QR port, and the recent-searches helper. ✓
+
+---
+
+## Execution notes / deviations from plan (P5 run, 2026-06-08)
+
+Executed via subagent-driven-development (implementer + spec review + code-quality review per task). Final state: all gates green — `typecheck`, `npm test` (161), `build`, `test:rules` (7), `test:smoke` (6), `functions:test` (32); all cutover invariants confirmed.
+
+Deviations and additions beyond the written plan:
+
+1. **Baseline cleanup before P5 (5 commits).** The working tree held a large amount of uncommitted non-plan work entangled with the plan's preconditions: a legacy `StowApp` refactor (untracked `ui/item|shared|tabs|next|packing` dirs), backend/infra hardening (`functions/*`, rules, auth, KMS, new test suites), and uncommitted test scaffolding — and the "complete" P1–P4 mobile app actually imported `pickerSearch` from the untracked legacy `ui/packing/`. Committed this in logical commits first (Task 3 finish; relocate `pickerSearch` → `ui/mobile/screens/`; backend snapshot; app-shell/data/deps snapshot; test scaffolding) so the destructive steps were safe and surgical. Used per-file `git add` throughout (never `git add -A`) to avoid sweeping in junk (`output/`, `.impeccable.md`, `memory.md`, `docs/mockups/`, `test-results/`, `.playwright-cli/` — left untracked intentionally).
+
+2. **Task 6 deletion mechanics.** Most legacy targets were untracked, so they were removed with `rm`/`rm -rf` (only `StowApp.tsx` + `SpacesRoutePage.tsx` were tracked → `git rm`). Also removed the now-orphaned `useStowNavigationState.ts`.
+
+3. **Task 7 scope extended to finish the single token system.** The plan assumed `.next-auth-*` was dead after Task 6, but the surviving `AuthGate.tsx` (`variant="next"`, now callerless) and `AuthFinishPage.tsx` (`nextReturn`, plus the live sign-in progress spinner) still referenced it. Removed the dead `variant`/`nextReturn` branches and renamed + recolored the live spinner off OKLCH (`.next-auth-progress` → `.auth-progress`, `var(--accent)`), so `src/` is now genuinely `oklch`-free and `.next-*`-free (commit `5d56da0`, in addition to the styles.css collapse `fee2a85`).
+
+4. **Render-loop bug found + fixed (commit `12e3e4a`).** The retargeted e2e smoke caught an infinite render loop on the canonical home screen: `useHoldToReorder` re-synced order in an effect keyed on the `opts.ids` array reference, and `SpacesList`/`EditSpaceSheet` pass a fresh `map(id)` array every render. Fixed by keying the effect on a stable joined-ids string. (App bug, not in the plan's file scope, but a P5 blocker.)
+
+5. **Task 8 extended to 4 more smoke specs (commit `c1af126`).** Beyond the plan's `authenticated-smoke`/`next-redesign`, the P1–P4 e2e specs (`mobile-app`, `mobile-capture`, `shelf-capture`, `app-lending`) still drove the removed `/app` base path; retargeted them to canonical routes.
+
+6. **Task 4 Step 7 emulator run** reported 0 writes (the demo seed already materializes `position`/`status`); idempotency confirmed end-to-end, write path covered by the planner unit tests.
+
+Known follow-ups (out of scope, non-blocking): a few unused chrome rules remain in `styles.css` (`.row`/`.field`/`.check-row`/unused keyframes); cosmetic stale `/app` strings persist in a `test.describe` label + an `@app` tag; the render-loop fix is guarded by the smoke suite only (no `renderHook` unit test, as the repo has no jsdom/RTL).
