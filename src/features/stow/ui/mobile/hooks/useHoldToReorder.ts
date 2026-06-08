@@ -50,6 +50,8 @@ export function useHoldToReorder<T>(opts: HoldToReorderOpts<T>): {
 
   orderRef.current = order;
 
+  const idsKey = opts.ids.join(",");
+
   const clearHold = useCallback(() => {
     if (holdTimer.current != null) {
       window.clearTimeout(holdTimer.current);
@@ -64,7 +66,8 @@ export function useHoldToReorder<T>(opts: HoldToReorderOpts<T>): {
       setOrder(opts.ids);
       orderRef.current = opts.ids;
     }
-  }, [opts.ids]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey]);
 
   const rowTops = useCallback((): number[] => {
     const container = containerRef.current;
