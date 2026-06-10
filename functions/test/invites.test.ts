@@ -104,6 +104,35 @@ describe("invite handlers", () => {
     expect(persistedInvite).not.toHaveProperty("token");
   });
 
+  it("refuses to build invite links from the Origin header in production", async () => {
+    process.env.K_SERVICE = "stow-fn";
+    delete process.env.APP_BASE_URL;
+    try {
+      await expect(
+        createHouseholdInviteHandler({ householdId: "h1", role: "MEMBER" }, { uid: "admin-1" }, "https://evil.example")
+      ).rejects.toMatchObject({ code: "failed-precondition" });
+    } finally {
+      delete process.env.K_SERVICE;
+    }
+  });
+
+  it("uses APP_BASE_URL and ignores the Origin header in production", async () => {
+    process.env.K_SERVICE = "stow-fn";
+    process.env.APP_BASE_URL = "https://stow.example";
+    try {
+      const result = await createHouseholdInviteHandler(
+        { householdId: "h1", role: "MEMBER" },
+        { uid: "admin-1" },
+        "https://evil.example"
+      );
+      expect(result.inviteUrl.startsWith("https://stow.example/invite?")).toBe(true);
+      expect(result.inviteUrl).not.toContain("evil.example");
+    } finally {
+      delete process.env.K_SERVICE;
+      delete process.env.APP_BASE_URL;
+    }
+  });
+
   it("accepts invites by token hash and stores membership metadata", async () => {
     const inviteDoc = {
       ref: { path: "households/h1/invites/invite-123" },

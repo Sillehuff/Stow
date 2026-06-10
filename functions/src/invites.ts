@@ -8,6 +8,15 @@ export function hashInviteToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
+function resolveInviteBaseUrl(originHeader?: string): string {
+  if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL;
+  if (process.env.K_SERVICE) {
+    // Never derive user-facing links from a client-controlled header in production.
+    throw new HttpsError("failed-precondition", "Server is missing APP_BASE_URL configuration");
+  }
+  return originHeader ?? "http://localhost:5173";
+}
+
 export async function createHouseholdInviteHandler(raw: unknown, requestAuth: { uid?: string } | undefined, originHeader?: string) {
   const uid = requestAuth?.uid ?? (() => {
     throw new HttpsError("unauthenticated", "Authentication required");
@@ -29,7 +38,7 @@ export async function createHouseholdInviteHandler(raw: unknown, requestAuth: { 
     invitedEmail: input.email?.trim().toLowerCase() ?? null
   });
 
-  const baseUrl = process.env.APP_BASE_URL ?? originHeader ?? "http://localhost:5173";
+  const baseUrl = resolveInviteBaseUrl(originHeader);
   const normalizedBase = baseUrl.replace(/\/+$/, "");
 
   return {
