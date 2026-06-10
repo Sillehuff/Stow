@@ -119,7 +119,8 @@ test.describe("mobile capture fallback", () => {
     await expect(scanDialog.getByRole("button", { name: "Choose from library" })).toBeVisible();
 
     const fileInput = scanDialog.locator('input[type="file"]');
-    await expect(fileInput).toHaveAttribute("capture", "environment");
+    // Library fallback must NOT force the camera back open (capture attr removed).
+    await expect(fileInput).not.toHaveAttribute("capture", /.*/);
     await fileInput.setInputFiles(FIXTURE);
 
     const addItemDialog = page.getByRole("dialog", { name: "Add Item" });
