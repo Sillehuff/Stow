@@ -18,7 +18,9 @@ export interface HomeScreenProps {
 }
 
 function timestampMillis(createdAt: Item["createdAt"] | null | undefined) {
-  return createdAt?.toMillis?.() ?? 0;
+  // A just-added item has a pending server timestamp (null) until it resolves; treat that
+  // as newest so the item the user just added sorts to the top of "Recently added".
+  return createdAt?.toMillis?.() ?? Number.MAX_SAFE_INTEGER;
 }
 
 export function HomeScreen({ spaces, items, members, householdName, onOpenItem, onBell, spacesList }: HomeScreenProps) {
