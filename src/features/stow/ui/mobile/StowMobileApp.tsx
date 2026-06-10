@@ -14,6 +14,7 @@ import { AddAreaSheet } from "@/features/stow/ui/mobile/add/AddAreaSheet";
 import { AddItemSheet } from "@/features/stow/ui/mobile/add/AddItemSheet";
 import type { AddItemInitial } from "@/features/stow/ui/mobile/add/AddItemSheet";
 import { AddSpaceSheet } from "@/features/stow/ui/mobile/add/AddSpaceSheet";
+import { Button } from "@/features/stow/ui/mobile/components/Button";
 import { ActivityScreen } from "@/features/stow/ui/mobile/screens/ActivityScreen";
 import { CaptureFirst } from "@/features/stow/ui/mobile/capture/CaptureFirst";
 import { PhotoSource } from "@/features/stow/ui/mobile/capture/PhotoSource";
@@ -100,6 +101,16 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
   const addAreaSpace = addAreaSpaceId ? data.spaces.find((space) => space.id === addAreaSpaceId) ?? null : null;
   const addItemInitial = nav.overlay.kind === "addItem" ? (nav.overlay.payload as AddItemInitial | undefined) : undefined;
   const activityOpen = isActivityPath(location.pathname, nav.basePath);
+
+  const spaceMissing = Boolean(nav.selectedSpaceId && data.spaces.length > 0 && !selectedSpace);
+
+  useEffect(() => {
+    if (nav.selectedItemId && data.items.length > 0 && !selectedItem) {
+      flash("That item was removed");
+      nav.navigateToTab("spaces");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nav.selectedItemId, selectedItem, data.items.length]);
 
   function itemCountForSpace(spaceId: string) {
     return data.items.filter((item) => item.spaceId === spaceId).length;
@@ -213,7 +224,15 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
   let screen: ReactNode = null;
 
   if (nav.tab === "spaces") {
-    screen = selectedSpace ? (
+    screen = spaceMissing ? (
+      <div style={{ padding: "48px 24px", textAlign: "center", display: "flex", flexDirection: "column", gap: 12, alignItems: "center" }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: "var(--stow-ink)" }}>Space not found</div>
+        <div style={{ fontSize: 14, color: "var(--stow-ink-muted)" }}>
+          It may have been deleted. QR labels for deleted spaces stop working.
+        </div>
+        <Button variant="primary" onClick={() => nav.navigateToTab("spaces")}>All Spaces</Button>
+      </div>
+    ) : selectedSpace ? (
       <RoomScreen
         space={selectedSpace}
         items={data.items}
