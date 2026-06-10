@@ -25,6 +25,24 @@ describe("secret encryption configuration guard", () => {
     );
   });
 
+  it("refuses local-key crypto in production even with a custom seed", async () => {
+    process.env.K_SERVICE = "stow-fn";
+    process.env.LOCAL_SECRET_ENCRYPTION_KEY = "custom-not-placeholder";
+    delete process.env.KMS_KEY_NAME;
+    delete process.env.FIREBASE_EMULATOR_HUB;
+    delete process.env.FUNCTIONS_EMULATOR;
+    const prevNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      const { encryptSecret } = await import("../src/crypto/kms.js");
+      await expect(encryptSecret("sk-test")).rejects.toThrow(/KMS_KEY_NAME/);
+    } finally {
+      delete process.env.K_SERVICE;
+      delete process.env.LOCAL_SECRET_ENCRYPTION_KEY;
+      process.env.NODE_ENV = prevNodeEnv;
+    }
+  });
+
   it("still allows local fallback encryption in test mode", async () => {
     process.env = {
       ...originalEnv,

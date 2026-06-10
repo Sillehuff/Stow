@@ -1,4 +1,4 @@
-import { extractJsonObject, normalizeSuggestion, requireOk } from "./common.js";
+import { extractJsonObject, normalizeSuggestion, providerFetch, requireOk } from "./common.js";
 import type { ProviderContext, VisionProviderAdapter } from "./types.js";
 
 function toDataUrl(mimeType: string, bytes: Buffer) {
@@ -8,7 +8,7 @@ function toDataUrl(mimeType: string, bytes: Buffer) {
 export const openaiCompatibleAdapter: VisionProviderAdapter = {
   async classifyImage({ apiKey, config, prompt, image }: ProviderContext) {
     const baseUrl = (config.baseUrl ?? "https://api.openai.com/v1").replace(/\/+$/, "");
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const response = await providerFetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -49,7 +49,7 @@ export const openaiCompatibleAdapter: VisionProviderAdapter = {
 
   async validate({ apiKey, config }) {
     const baseUrl = (config.baseUrl ?? "https://api.openai.com/v1").replace(/\/+$/, "");
-    const response = await fetch(`${baseUrl}/models`, {
+    const response = await providerFetch(`${baseUrl}/models`, {
       headers: { Authorization: `Bearer ${apiKey}` }
     });
     if (!response.ok) {

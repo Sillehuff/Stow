@@ -1,6 +1,7 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { FieldValue, db, paths, storage } from "./shared/firestore.js";
 import { requireHouseholdMember } from "./shared/authz.js";
+import { consumeVisionQuota } from "./shared/rateLimit.js";
 import { inventoryVisionPrompt } from "./providers/common.js";
 import { shelfDetectionPrompt } from "./providers/gemini.js";
 import { getVisionAdapter } from "./providers/registry.js";
@@ -85,6 +86,7 @@ async function resolveImage(householdId: string, imageRef: { storagePath: string
 export async function visionCategorizeItemImageHandler(raw: unknown, uid: string) {
   const input = visionCategorizeInputSchema.parse(raw);
   await requireHouseholdMember(input.householdId, uid);
+  await consumeVisionQuota(input.householdId);
   const { config, apiKey } = await loadConfigAndSecret(input.householdId);
   if (!config.enabled) throw new HttpsError("failed-precondition", "Vision categorization is disabled for this household");
 
@@ -125,6 +127,7 @@ export async function visionCategorizeItemImageHandler(raw: unknown, uid: string
 export async function visionDetectShelfItemsHandler(raw: unknown, uid: string) {
   const input = visionDetectShelfInputSchema.parse(raw);
   await requireHouseholdMember(input.householdId, uid);
+  await consumeVisionQuota(input.householdId);
   const { config, apiKey } = await loadConfigAndSecret(input.householdId);
   if (!config.enabled) throw new HttpsError("failed-precondition", "Vision categorization is disabled for this household");
 

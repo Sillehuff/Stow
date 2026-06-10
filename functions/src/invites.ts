@@ -8,6 +8,15 @@ export function hashInviteToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
+function resolveInviteBaseUrl(originHeader?: string): string {
+  if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL;
+  if (process.env.K_SERVICE) {
+    // Never derive user-facing links from a client-controlled header in production.
+    throw new HttpsError("failed-precondition", "Server is missing APP_BASE_URL configuration");
+  }
+  return originHeader ?? "http://localhost:5173";
+}
+
 export async function createHouseholdInviteHandler(raw: unknown, requestAuth: { uid?: string } | undefined, originHeader?: string) {
   const uid = requestAuth?.uid ?? (() => {
     throw new HttpsError("unauthenticated", "Authentication required");
@@ -25,10 +34,11 @@ export async function createHouseholdInviteHandler(raw: unknown, requestAuth: { 
     tokenHash,
     createdAt: FieldValue.serverTimestamp(),
     createdBy: uid,
-    expiresAt
+    expiresAt,
+    invitedEmail: input.email?.trim().toLowerCase() ?? null
   });
 
-  const baseUrl = process.env.APP_BASE_URL ?? originHeader ?? "http://localhost:5173";
+  const baseUrl = resolveInviteBaseUrl(originHeader);
   const normalizedBase = baseUrl.replace(/\/+$/, "");
 
   return {
@@ -55,45 +65,58 @@ export async function acceptHouseholdInviteHandler(raw: unknown, requestAuth: { 
     throw new HttpsError("not-found", "Invite not found or invalid");
   }
 
-  const inviteDoc = inviteQuery.docs[0];
-  const inviteData = inviteDoc.data() as {
-    role: string;
-    expiresAt?: { toDate?: () => Date } | Date;
-    acceptedAt?: unknown;
-  };
-
-  if (inviteData.acceptedAt) {
-    throw new HttpsError("already-exists", "Invite has already been used");
-  }
-
-  const expiresDate =
-    inviteData.expiresAt instanceof Date
-      ? inviteData.expiresAt
-      : inviteData.expiresAt?.toDate?.();
-  if (expiresDate && expiresDate.getTime() < Date.now()) {
-    throw new HttpsError("deadline-exceeded", "Invite has expired");
-  }
-
+  const inviteRef = inviteQuery.docs[0].ref;
   const memberRef = db.doc(paths.member(input.householdId, uid));
   const userRef = db.doc(paths.user(uid));
-  const batch = db.batch();
-  batch.set(
-    memberRef,
-    {
-      uid,
-      role: inviteData.role,
-      email: requestAuth?.token?.email ?? null,
-      createdAt: FieldValue.serverTimestamp(),
-      createdBy: inviteDoc.get("createdBy") ?? null
-    },
-    { merge: true }
-  );
-  batch.set(userRef, { currentHouseholdId: input.householdId, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-  batch.update(inviteDoc.ref, {
-    acceptedAt: FieldValue.serverTimestamp(),
-    acceptedBy: uid
+
+  await db.runTransaction(async (tx) => {
+    // Registers inviteRef in the transaction's read set; this arms the version check
+    // that enforces single-use. Must precede the writes below — do not refactor away.
+    const snap = await tx.get(inviteRef);
+    if (!snap.exists) throw new HttpsError("not-found", "Invite not found or invalid");
+    const inviteData = snap.data() as {
+      role: string;
+      expiresAt?: { toDate?: () => Date } | Date;
+      acceptedAt?: unknown;
+      invitedEmail?: string | null;
+    };
+
+    if (inviteData.acceptedAt) throw new HttpsError("already-exists", "Invite has already been used");
+
+    const expiresDate =
+      inviteData.expiresAt instanceof Date ? inviteData.expiresAt : inviteData.expiresAt?.toDate?.();
+    if (expiresDate && expiresDate.getTime() < Date.now()) {
+      throw new HttpsError("deadline-exceeded", "Invite has expired");
+    }
+
+    if (inviteData.invitedEmail) {
+      const callerEmail = (requestAuth?.token?.email ?? "").trim().toLowerCase();
+      if (callerEmail !== inviteData.invitedEmail) {
+        // permission-denied (not not-found) is deliberate: the valid token already proves the
+        // invite exists, the message names no email, and the specific copy lets a legitimate
+        // invitee who signed in with the wrong account understand they need to switch accounts.
+        throw new HttpsError("permission-denied", "This invite was issued to a different email address");
+      }
+    }
+
+    tx.set(
+      memberRef,
+      {
+        uid,
+        role: inviteData.role,
+        email: requestAuth?.token?.email ?? null,
+        createdAt: FieldValue.serverTimestamp(),
+        createdBy: snap.get("createdBy") ?? null
+      },
+      { merge: true }
+    );
+    tx.set(
+      userRef,
+      { currentHouseholdId: input.householdId, updatedAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    );
+    tx.update(inviteRef, { acceptedAt: FieldValue.serverTimestamp(), acceptedBy: uid });
   });
-  await batch.commit();
   return { ok: true as const };
 }
 

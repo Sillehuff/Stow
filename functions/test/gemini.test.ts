@@ -45,7 +45,8 @@ describe("gemini vision adapter", () => {
 
     expect(result).toEqual({ ok: true, message: "Connection successful" });
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash?key=test-key"
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash?key=test-key",
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
     );
   });
 

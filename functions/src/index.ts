@@ -27,7 +27,7 @@ function mapError(error: unknown): HttpsError {
     return new HttpsError("invalid-argument", issue ? `${issue.path.join(".")}: ${issue.message}` : "Invalid request");
   }
   logger.error("Unhandled function error", error);
-  return new HttpsError("internal", error instanceof Error ? error.message : "Unexpected error");
+  return new HttpsError("internal", "Something went wrong. Please try again.");
 }
 
 export const createHouseholdInvite = onCall(async (request) => {

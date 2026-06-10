@@ -1,9 +1,9 @@
-import { extractJsonObject, normalizeSuggestion, requireOk } from "./common.js";
+import { extractJsonObject, normalizeSuggestion, providerFetch, requireOk } from "./common.js";
 import type { ProviderContext, VisionProviderAdapter } from "./types.js";
 
 export const anthropicAdapter: VisionProviderAdapter = {
   async classifyImage({ apiKey, config, prompt, image }: ProviderContext) {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await providerFetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "x-api-key": apiKey,
@@ -45,7 +45,7 @@ export const anthropicAdapter: VisionProviderAdapter = {
   },
 
   async validate({ apiKey, config }) {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await providerFetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "x-api-key": apiKey,
