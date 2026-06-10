@@ -77,7 +77,6 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf, onScanQr
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         onChange={onFilePicked}
         style={{ display: "none" }}
       />

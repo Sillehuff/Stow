@@ -202,7 +202,6 @@ export function CaptureFirst({
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         onChange={onFilePicked}
         style={{ display: "none" }}
       />
