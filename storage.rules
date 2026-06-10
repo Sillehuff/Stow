@@ -11,7 +11,13 @@ service firebase.storage {
     }
 
     match /households/{householdId}/{allPaths=**} {
-      allow read, write: if isMember(householdId);
+      allow read: if isMember(householdId);
+      // create/update must be image-only and bounded; delete is split out so it
+      // is not blocked by size/contentType checks (request.resource is null on delete).
+      allow create, update: if isMember(householdId)
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isMember(householdId);
     }
   }
 }
