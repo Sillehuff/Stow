@@ -70,4 +70,26 @@ describe("consumeVisionQuota", () => {
     await expect(consumeVisionQuota("h1")).rejects.toMatchObject({ code: "resource-exhausted" });
     expect(tx.set).not.toHaveBeenCalled();
   });
+
+  it("falls back to the default cap when VISION_DAILY_LIMIT is non-numeric", async () => {
+    // Number("abc") is NaN; without the guard, used >= NaN is always false and the cap
+    // would be silently disabled. The default 200 must still enforce.
+    process.env.VISION_DAILY_LIMIT = "abc";
+    const today = new Date().toISOString().slice(0, 10);
+    tx.get.mockResolvedValue({
+      exists: true,
+      get: (f: string) => (f === "day" ? today : f === "count" ? 200 : undefined)
+    });
+    await expect(consumeVisionQuota("h1")).rejects.toMatchObject({ code: "resource-exhausted" });
+    expect(tx.set).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the default cap (does not block) when VISION_DAILY_LIMIT is empty", async () => {
+    // Number("") is 0; without the guard, used >= 0 blocks every scan. An empty override
+    // must behave as unset and fall back to the default 200, so usage at 0 increments.
+    process.env.VISION_DAILY_LIMIT = "";
+    tx.get.mockResolvedValue({ exists: false, get: () => undefined });
+    await expect(consumeVisionQuota("h1")).resolves.toBeUndefined();
+    expect(tx.set).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ count: 1 }));
+  });
 });

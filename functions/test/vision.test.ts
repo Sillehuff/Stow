@@ -5,6 +5,7 @@ const requireHouseholdMember = vi.fn();
 const consumeVisionQuota = vi.fn();
 const loadConfigAndSecret = vi.fn();
 const classifyImage = vi.fn();
+const detectShelfItems = vi.fn();
 
 const fileExists = vi.fn();
 const fileGetMetadata = vi.fn();
@@ -25,7 +26,8 @@ vi.mock("../src/llmConfig.js", () => ({
 
 vi.mock("../src/providers/registry.js", () => ({
   getVisionAdapter: vi.fn(() => ({
-    classifyImage
+    classifyImage,
+    detectShelfItems
   }))
 }));
 
@@ -55,7 +57,7 @@ vi.mock("../src/shared/firestore.js", () => ({
   }
 }));
 
-const { visionCategorizeItemImageHandler } = await import("../src/vision.js");
+const { visionCategorizeItemImageHandler, visionDetectShelfItemsHandler } = await import("../src/vision.js");
 
 // Minimal Readable-like stub: emits one data chunk then end on the next tick so the
 // handler's stream.on("data"/"end") download path resolves.
@@ -157,5 +159,22 @@ describe("vision categorization input guards", () => {
 
     expect(consumeVisionQuota).toHaveBeenCalledWith("h1");
     expect(classifyImage).toHaveBeenCalled();
+  });
+
+  it("consumes the household vision quota before detecting shelf items", async () => {
+    fileGetMetadata.mockResolvedValue([{ contentType: "image/png", size: "1024" }]);
+    fileCreateReadStream.mockReturnValue(stubReadStream(Buffer.from("png-bytes")));
+    detectShelfItems.mockResolvedValue([]);
+
+    await visionDetectShelfItemsHandler(
+      {
+        householdId: "h1",
+        imageRef: { storagePath: "households/h1/items/item-1/file.png" }
+      },
+      "user-1"
+    );
+
+    expect(consumeVisionQuota).toHaveBeenCalledWith("h1");
+    expect(detectShelfItems).toHaveBeenCalled();
   });
 });

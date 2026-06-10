@@ -14,7 +14,11 @@ const DEFAULT_DAILY_LIMIT = 200;
  * which is the safe direction for a budget guard (it never over-spends).
  */
 export async function consumeVisionQuota(householdId: string): Promise<void> {
-  const limit = Number(process.env.VISION_DAILY_LIMIT ?? DEFAULT_DAILY_LIMIT);
+  // Guard the override: Number("abc") is NaN (used >= NaN is always false, disabling the
+  // cap) and Number("") is 0 (blocks every scan). Fall back to the default unless the env
+  // parses to a finite positive number.
+  const parsed = Number(process.env.VISION_DAILY_LIMIT);
+  const limit = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_DAILY_LIMIT;
   const day = new Date().toISOString().slice(0, 10);
   const ref = db.doc(paths.visionUsage(householdId));
 
