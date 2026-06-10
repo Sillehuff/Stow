@@ -1,6 +1,28 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { visionSuggestionSchema, type VisionSuggestion } from "../shared/schemas.js";
 
+const PROVIDER_TIMEOUT_MS = 30_000;
+
+/** fetch with a hard timeout — a hung provider must not pin the function until the platform kills it. */
+export async function providerFetch(
+  url: string,
+  init: RequestInit,
+  timeoutMs = PROVIDER_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new HttpsError("deadline-exceeded", "AI provider request timed out");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function inventoryVisionPrompt(extraContext?: { areaName?: string }) {
   return [
     "You categorize household inventory items from a single image.",

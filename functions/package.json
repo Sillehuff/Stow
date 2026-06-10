@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "serve": "firebase emulators:start --only functions",
-    "test": "vitest run --config vitest.config.ts"
+    "test": "vitest run"
   },
   "dependencies": {
     "@google-cloud/kms": "^5.1.0",

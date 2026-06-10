@@ -1,33 +1,96 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { completeEmailLinkSignIn } from "@/lib/firebase/auth";
+import { completeEmailLinkSignIn, getPendingEmailLinkEmail, getPendingEmailLinkReturnTo, isEmailLinkSignInUrl } from "@/lib/firebase/auth";
 import { toLoggedUserErrorMessage } from "@/lib/firebase/errors";
 
 export default function AuthFinishPage() {
   const navigate = useNavigate();
-  const [status, setStatus] = useState<"working" | "done" | "error">("working");
-  const [message, setMessage] = useState("Completing sign-in…");
+  const currentUrl = window.location.href;
+  const validLink = isEmailLinkSignInUrl(currentUrl);
+  const initialEmail = getPendingEmailLinkEmail();
+  const [returnTo] = useState(() => getPendingEmailLinkReturnTo(currentUrl));
+  const [emailInput, setEmailInput] = useState(initialEmail);
+  const [submittedEmail, setSubmittedEmail] = useState(initialEmail);
+  const completionKeyRef = useRef<string | null>(null);
+  const completionPromiseRef = useRef<Promise<void> | null>(null);
+  const [status, setStatus] = useState<"idle" | "working" | "done" | "error" | "invalid">(
+    validLink ? (initialEmail ? "working" : "idle") : "invalid"
+  );
+  const [message, setMessage] = useState(
+    validLink
+      ? initialEmail
+        ? "Completing sign-in…"
+        : "Confirm your email to finish signing in."
+      : "This sign-in link is invalid or has already expired. Request a fresh link and try again."
+  );
 
   useEffect(() => {
-    completeEmailLinkSignIn(window.location.href)
-      .then((result) => {
+    if (!validLink || !submittedEmail) return;
+    const completionKey = `${currentUrl}::${submittedEmail}`;
+    if (completionKeyRef.current !== completionKey) {
+      completionKeyRef.current = completionKey;
+      completionPromiseRef.current = completeEmailLinkSignIn(currentUrl, submittedEmail).then(() => undefined);
+    }
+    const completionPromise = completionPromiseRef.current;
+    if (!completionPromise) return;
+
+    let cancelled = false;
+    setStatus("working");
+    setMessage("Completing sign-in…");
+    void completionPromise
+      .then(() => {
+        if (cancelled) return;
         setStatus("done");
         setMessage("Sign-in complete. Redirecting…");
-        setTimeout(() => navigate(result?.continuePath || "/", { replace: true }), 700);
+        setTimeout(() => navigate(returnTo, { replace: true }), 700);
       })
       .catch((error) => {
+        if (cancelled) return;
         setStatus("error");
         setMessage(toLoggedUserErrorMessage(error, "Unable to complete sign-in"));
       });
-  }, [navigate]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUrl, navigate, returnTo, submittedEmail, validLink]);
 
   return (
     <div className="center-shell">
       <div className="panel auth-panel">
         <h1>Stow</h1>
+        {status === "working" || status === "done" ? <div className="auth-progress" aria-hidden="true"><span /></div> : null}
         <p>{message}</p>
-        {status === "error" ? (
-          <button className="btn" onClick={() => navigate("/", { replace: true })}>
+        {status === "idle" ? (
+          <form
+            className="stack"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!emailInput.trim()) {
+                setStatus("error");
+                setMessage("Enter the same email address used for the sign-in link.");
+                return;
+              }
+              setSubmittedEmail(emailInput.trim());
+              setStatus("working");
+            }}
+          >
+            <input
+              className="input"
+              type="email"
+              required
+              autoFocus
+              value={emailInput}
+              placeholder="you@example.com"
+              onChange={(event) => setEmailInput(event.target.value)}
+            />
+            <button className="btn primary" type="submit">
+              Finish Sign-In
+            </button>
+          </form>
+        ) : null}
+        {status === "error" || status === "invalid" ? (
+          <button className="btn" onClick={() => navigate(returnTo, { replace: true })}>
             Back to sign-in
           </button>
         ) : null}

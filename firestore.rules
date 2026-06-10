@@ -9,6 +9,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/households/$(householdId)/members/$(request.auth.uid);
     }
 
+    function householdDoc(householdId) {
+      return /databases/$(database)/documents/households/$(householdId);
+    }
+
     function isHouseholdMember(householdId) {
       return isSignedIn() && exists(membershipDoc(householdId));
     }
@@ -21,48 +25,34 @@ service cloud.firestore {
       return isHouseholdMember(householdId) && (memberRole(householdId) in ['OWNER', 'ADMIN']);
     }
 
-    function spaceDoc(householdId, spaceId) {
-      return /databases/$(database)/documents/households/$(householdId)/spaces/$(spaceId);
+    function isHouseholdBeingCreatedBySelf(householdId) {
+      return isSignedIn()
+        && !exists(householdDoc(householdId))
+        && existsAfter(householdDoc(householdId))
+        && getAfter(householdDoc(householdId)).data.createdBy == request.auth.uid;
     }
 
-    function areaDoc(householdId, spaceId, areaId) {
-      return /databases/$(database)/documents/households/$(householdId)/spaces/$(spaceId)/areas/$(areaId);
-    }
-
-    function hasNoDeleteLifecycleFields(data) {
-      return !('deletedAt' in data)
-        && !('deletingAt' in data)
-        && !('deletingBy' in data)
-        && !('deleteTargetSpaceId' in data)
-        && !('deleteTargetAreaId' in data);
-    }
-
-    function spaceExistsAndOpen(householdId, spaceId) {
-      return exists(spaceDoc(householdId, spaceId))
-        && hasNoDeleteLifecycleFields(get(spaceDoc(householdId, spaceId)).data);
-    }
-
-    function areaExistsAndOpen(householdId, spaceId, areaId) {
-      return exists(areaDoc(householdId, spaceId, areaId))
-        && get(areaDoc(householdId, spaceId, areaId)).data.householdId == householdId
-        && get(areaDoc(householdId, spaceId, areaId)).data.spaceId == spaceId
-        && hasNoDeleteLifecycleFields(get(areaDoc(householdId, spaceId, areaId)).data);
+    function isBootstrapOwnerMemberCreate(householdId, uid) {
+      return isHouseholdBeingCreatedBySelf(householdId)
+        && uid == request.auth.uid
+        && request.resource.data.role == 'OWNER'
+        && request.resource.data.createdBy == request.auth.uid;
     }
 
     match /users/{uid} {
-      allow read: if isSignedIn() && request.auth.uid == uid;
-      allow write: if false;
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
     }
 
     match /households/{householdId} {
-      allow create: if false;
+      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
       allow read: if isHouseholdMember(householdId);
       allow update: if isHouseholdAdmin(householdId);
       allow delete: if false;
 
       match /members/{uid} {
         allow read: if isHouseholdMember(householdId);
-        allow create, update, delete: if false;
+        allow create: if isBootstrapOwnerMemberCreate(householdId, uid);
+        allow update, delete: if false;
       }
 
       match /invites/{inviteId} {
@@ -72,68 +62,65 @@ service cloud.firestore {
 
       match /spaces/{spaceId} {
         allow read: if isHouseholdMember(householdId);
-        allow create: if isHouseholdMember(householdId)
-          && request.resource.data.householdId == householdId
-          && hasNoDeleteLifecycleFields(request.resource.data);
-        allow update: if isHouseholdMember(householdId)
-          && resource.data.householdId == householdId
-          && request.resource.data.householdId == householdId
-          && hasNoDeleteLifecycleFields(resource.data)
-          && hasNoDeleteLifecycleFields(request.resource.data);
-        allow delete: if false;
+        // create permits the bootstrap transaction, where the member doc isn't yet committed.
+        allow create: if isHouseholdMember(householdId) || isHouseholdBeingCreatedBySelf(householdId);
+        allow update, delete: if isHouseholdMember(householdId);
 
         match /areas/{areaId} {
           allow read: if isHouseholdMember(householdId);
-          allow create: if request.resource.data.householdId == householdId
-            && request.resource.data.spaceId == spaceId
-            && isHouseholdMember(request.resource.data.householdId)
-            && spaceExistsAndOpen(householdId, spaceId)
-            && hasNoDeleteLifecycleFields(request.resource.data);
-          allow update: if request.resource.data.householdId == householdId
-            && request.resource.data.spaceId == spaceId
-            && resource.data.householdId == householdId
-            && resource.data.spaceId == spaceId
-            && isHouseholdMember(request.resource.data.householdId)
-            && spaceExistsAndOpen(householdId, spaceId)
-            && hasNoDeleteLifecycleFields(resource.data)
-            && hasNoDeleteLifecycleFields(request.resource.data);
-          allow delete: if false;
+          allow create: if request.resource.data.householdId == householdId && (isHouseholdMember(householdId) || isHouseholdBeingCreatedBySelf(householdId));
+          allow update: if request.resource.data.householdId == householdId && isHouseholdMember(request.resource.data.householdId);
+          allow delete: if resource.data.householdId == householdId && isHouseholdMember(resource.data.householdId);
         }
       }
 
       match /items/{itemId} {
         allow read: if isHouseholdMember(householdId);
-        allow create: if isHouseholdMember(householdId)
-          && request.resource.data.householdId == householdId
-          && hasNoDeleteLifecycleFields(request.resource.data)
-          && spaceExistsAndOpen(householdId, request.resource.data.spaceId)
-          && areaExistsAndOpen(householdId, request.resource.data.spaceId, request.resource.data.areaId);
-        allow update: if isHouseholdMember(householdId)
-          && resource.data.householdId == householdId
-          && request.resource.data.householdId == householdId
-          && hasNoDeleteLifecycleFields(resource.data)
-          && hasNoDeleteLifecycleFields(request.resource.data)
-          && spaceExistsAndOpen(householdId, resource.data.spaceId)
-          && areaExistsAndOpen(householdId, resource.data.spaceId, resource.data.areaId)
-          && spaceExistsAndOpen(householdId, request.resource.data.spaceId)
-          && areaExistsAndOpen(householdId, request.resource.data.spaceId, request.resource.data.areaId);
-        allow delete: if false;
+        allow create, update, delete: if isHouseholdMember(householdId);
+      }
+
+      match /itemDrafts/{draftId} {
+        allow read: if isHouseholdMember(householdId);
+        allow create, update, delete: if isHouseholdMember(householdId);
       }
 
       match /packingLists/{listId} {
         allow read: if isHouseholdMember(householdId);
-        allow create, update, delete: if false;
+        allow create, update, delete: if isHouseholdMember(householdId);
+      }
+
+      match /activity/{activityId} {
+        allow read: if isHouseholdMember(householdId);
+        allow create: if isHouseholdMember(householdId);
+        allow update, delete: if false;
+      }
+
+      match /settings/llm {
+        allow read: if isHouseholdAdmin(householdId);
+        allow create: if isHouseholdAdmin(householdId) || isHouseholdBeingCreatedBySelf(householdId);
+        allow update, delete: if isHouseholdAdmin(householdId);
+      }
+
+      match /settings/llmSecret {
+        allow read, write: if false;
       }
 
       match /settings/{docId} {
-        allow read: if docId != 'llmSecret' && isHouseholdMember(householdId);
-        allow write: if docId != 'llmSecret' && isHouseholdAdmin(householdId);
+        allow read, write: if false;
       }
 
       match /visionJobs/{jobId} {
         allow read: if isHouseholdMember(householdId);
-        allow write: if false;
+        allow write: if isHouseholdMember(householdId);
       }
+    }
+
+    // Collection-group queries on `areas` require a recursive wildcard match.
+    match /{path=**}/areas/{areaId} {
+      allow read: if isHouseholdMember(resource.data.householdId);
+      allow create: if isHouseholdMember(request.resource.data.householdId);
+      allow update: if isHouseholdMember(request.resource.data.householdId);
+      allow delete: if isHouseholdMember(resource.data.householdId);
     }
   }
 }

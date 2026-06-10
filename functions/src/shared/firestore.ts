@@ -9,7 +9,6 @@ export const auth = admin.auth();
 export const storage = admin.storage();
 
 export const FieldValue = admin.firestore.FieldValue;
-export const FieldPath = admin.firestore.FieldPath;
 
 export const paths = {
   household: (householdId: string) => `households/${householdId}`,
@@ -17,17 +16,9 @@ export const paths = {
   members: (householdId: string) => `households/${householdId}/members`,
   invite: (householdId: string, inviteId: string) => `households/${householdId}/invites/${inviteId}`,
   invites: (householdId: string) => `households/${householdId}/invites`,
-  space: (householdId: string, spaceId: string) => `households/${householdId}/spaces/${spaceId}`,
-  spaces: (householdId: string) => `households/${householdId}/spaces`,
-  area: (householdId: string, spaceId: string, areaId: string) =>
-    `households/${householdId}/spaces/${spaceId}/areas/${areaId}`,
-  areas: (householdId: string, spaceId: string) => `households/${householdId}/spaces/${spaceId}/areas`,
-  item: (householdId: string, itemId: string) => `households/${householdId}/items/${itemId}`,
-  items: (householdId: string) => `households/${householdId}/items`,
-  packingList: (householdId: string, listId: string) => `households/${householdId}/packingLists/${listId}`,
-  packingLists: (householdId: string) => `households/${householdId}/packingLists`,
   llmConfig: (householdId: string) => `households/${householdId}/settings/llm`,
   llmSecret: (householdId: string) => `households/${householdId}/settings/llmSecret`,
+  visionUsage: (householdId: string) => `households/${householdId}/settings/visionUsage`,
   visionJobs: (householdId: string) => `households/${householdId}/visionJobs`,
   user: (uid: string) => `users/${uid}`
 };

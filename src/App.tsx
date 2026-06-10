@@ -3,7 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 const AuthFinishPage = lazy(() => import("@/routes/AuthFinishPage"));
 const AcceptInvitePage = lazy(() => import("@/routes/AcceptInvitePage"));
-const SpacesRoutePage = lazy(() => import("@/routes/SpacesRoutePage"));
+const StowMobileRoutePage = lazy(() => import("@/routes/StowMobileRoutePage"));
 
 function RouteLoading({ message }: { message: string }) {
   return (
@@ -39,7 +39,7 @@ export default function App() {
         path="/spaces"
         element={
           <Suspense fallback={<RouteLoading message="Loading app…" />}>
-            <SpacesRoutePage />
+            <StowMobileRoutePage />
           </Suspense>
         }
       />
@@ -47,7 +47,7 @@ export default function App() {
         path="/spaces/:spaceId"
         element={
           <Suspense fallback={<RouteLoading message="Loading app…" />}>
-            <SpacesRoutePage />
+            <StowMobileRoutePage />
           </Suspense>
         }
       />
@@ -55,7 +55,7 @@ export default function App() {
         path="/spaces/:spaceId/areas/:areaId"
         element={
           <Suspense fallback={<RouteLoading message="Loading app…" />}>
-            <SpacesRoutePage />
+            <StowMobileRoutePage />
           </Suspense>
         }
       />
@@ -63,7 +63,7 @@ export default function App() {
         path="/items/:itemId"
         element={
           <Suspense fallback={<RouteLoading message="Loading app…" />}>
-            <SpacesRoutePage />
+            <StowMobileRoutePage />
           </Suspense>
         }
       />
@@ -71,7 +71,7 @@ export default function App() {
         path="/search"
         element={
           <Suspense fallback={<RouteLoading message="Loading app…" />}>
-            <SpacesRoutePage />
+            <StowMobileRoutePage />
           </Suspense>
         }
       />
@@ -79,7 +79,7 @@ export default function App() {
         path="/packing"
         element={
           <Suspense fallback={<RouteLoading message="Loading app…" />}>
-            <SpacesRoutePage />
+            <StowMobileRoutePage />
           </Suspense>
         }
       />
@@ -87,7 +87,15 @@ export default function App() {
         path="/settings"
         element={
           <Suspense fallback={<RouteLoading message="Loading app…" />}>
-            <SpacesRoutePage />
+            <StowMobileRoutePage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/activity"
+        element={
+          <Suspense fallback={<RouteLoading message="Loading app…" />}>
+            <StowMobileRoutePage />
           </Suspense>
         }
       />

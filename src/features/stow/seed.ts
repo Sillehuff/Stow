@@ -176,22 +176,24 @@ export function stripUndefined<T extends Record<string, any>>(obj: T): T {
 
 export function normalizeSeedForHousehold(householdId: string) {
   const now = new Date();
-  const spaces: Omit<Space, "createdAt" | "updatedAt">[] = seedSpaceTemplates.map((space) => ({
+  const spaces: Omit<Space, "createdAt" | "updatedAt">[] = seedSpaceTemplates.map((space, index) => ({
     id: space.id,
     householdId,
     name: space.name,
     icon: space.icon,
     color: space.color,
-    image: toImageRef(space.image)
+    image: toImageRef(space.image),
+    position: index
   }));
 
   const areas: Omit<Area, "createdAt" | "updatedAt">[] = seedSpaceTemplates.flatMap((space) =>
-    space.areas.map((area) => ({
+    space.areas.map((area, index) => ({
       id: area.id,
       householdId,
       spaceId: space.id,
       name: area.name,
-      image: toImageRef(area.image)
+      image: toImageRef(area.image),
+      position: index
     }))
   );
 
@@ -209,9 +211,37 @@ export function normalizeSeedForHousehold(householdId: string) {
       isPriceless: item.isPriceless,
       tags: item.tags,
       notes: item.notes,
-      isPacked: item.isPacked
+      isPacked: item.isPacked,
+      status: item.isPacked ? "packed" : "home",
+      photoStatus: item.image ? "attached" : "later",
+      entryMode: "manual"
     })
   );
 
   return { spaces, areas, items, seededAt: now };
+}
+
+/** Starter layout for a brand-new household: spaces + areas only — no demo items, no external images. */
+export function buildStarterSpaces(householdId: string): {
+  spaces: Array<Omit<Space, "createdAt" | "updatedAt" | "image">>;
+  areas: Array<Omit<Area, "createdAt" | "updatedAt" | "image">>;
+} {
+  const spaces = seedSpaceTemplates.map((space, index) => ({
+    id: space.id,
+    householdId,
+    name: space.name,
+    icon: space.icon,
+    color: space.color,
+    position: index
+  }));
+  const areas = seedSpaceTemplates.flatMap((space) =>
+    space.areas.map((area, index) => ({
+      id: area.id,
+      householdId,
+      spaceId: space.id,
+      name: area.name,
+      position: index
+    }))
+  );
+  return { spaces, areas };
 }

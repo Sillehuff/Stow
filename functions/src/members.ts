@@ -1,115 +1,127 @@
 import { HttpsError } from "firebase-functions/v2/https";
-import { db, FieldValue, paths } from "./shared/firestore.js";
-import { removeHouseholdMemberInputSchema, updateMemberRoleInputSchema } from "./shared/schemas.js";
+import { FieldValue, db, paths } from "./shared/firestore.js";
+import { requireHouseholdAdmin } from "./shared/authz.js";
+import {
+  removeMemberInputSchema,
+  updateMemberRoleInputSchema,
+  type Role
+} from "./shared/schemas.js";
 
-function ownersQuery(householdId: string) {
-  return db.collection(paths.members(householdId)).where("role", "==", "OWNER");
+function assertAdminTargetAllowed(targetRole: Role, nextRole?: Role) {
+  if (targetRole === "OWNER") {
+    throw new HttpsError("permission-denied", "Admins cannot manage owners");
+  }
+  if (nextRole === "OWNER") {
+    throw new HttpsError("permission-denied", "Admins cannot assign owner");
+  }
 }
 
-async function requireActingAdminRole(
-  transaction: FirebaseFirestore.Transaction,
-  householdId: string,
-  actingUid: string
-) {
-  const actingMemberRef = db.doc(paths.member(householdId, actingUid));
-  const actingMemberSnap = await transaction.get(actingMemberRef);
-  if (!actingMemberSnap.exists) {
-    throw new HttpsError("permission-denied", "Admin role required");
-  }
-
-  const actingRole = actingMemberSnap.get("role");
-  if (actingRole !== "OWNER" && actingRole !== "ADMIN") {
-    throw new HttpsError("permission-denied", "Admin role required");
-  }
-
-  return actingRole;
-}
-
-export async function updateHouseholdMemberRoleHandler(raw: unknown, actingUid: string) {
+export async function updateHouseholdMemberRoleHandler(raw: unknown, actorUid: string) {
   const input = updateMemberRoleInputSchema.parse(raw);
+  // Actor role is read pre-tx deliberately: the security-critical invariant is the in-tx
+  // owner-count check below, not the actor's authority. A just-demoted actor getting one
+  // stale-authority action is accepted, bounded risk.
+  const actorRole = (await requireHouseholdAdmin(input.householdId, actorUid)) as Role;
+  const memberRef = db.doc(paths.member(input.householdId, input.uid));
+  const ownersQuery = db.collection(paths.members(input.householdId)).where("role", "==", "OWNER");
 
-  await db.runTransaction(async (transaction) => {
-    const actingRole = await requireActingAdminRole(transaction, input.householdId, actingUid);
-    const memberRef = db.doc(paths.member(input.householdId, input.uid));
-    const memberSnap = await transaction.get(memberRef);
+  await db.runTransaction(async (tx) => {
+    const memberSnap = await tx.get(memberRef);
     if (!memberSnap.exists) {
-      throw new HttpsError("not-found", "Member not found");
+      throw new HttpsError("not-found", "Household member not found");
+    }
+    const targetRole = memberSnap.get("role") as Role;
+    if (targetRole !== "OWNER" && targetRole !== "ADMIN" && targetRole !== "MEMBER") {
+      throw new HttpsError("failed-precondition", "Household member role is invalid");
     }
 
-    const currentRole = memberSnap.get("role");
-    if (typeof currentRole !== "string") {
-      throw new HttpsError("failed-precondition", "Member role is invalid");
-    }
-    if (currentRole === input.role) {
-      return;
+    if (actorRole === "ADMIN") {
+      assertAdminTargetAllowed(targetRole, input.role);
     }
 
-    if (actingRole !== "OWNER" && (currentRole === "OWNER" || input.role === "OWNER")) {
-      throw new HttpsError("permission-denied", "Only owners can change owner roles");
-    }
-
-    if (currentRole === "OWNER" && input.role !== "OWNER") {
-      const ownersSnap = await transaction.get(ownersQuery(input.householdId));
-      if (ownersSnap.size <= 1) {
-        throw new HttpsError("failed-precondition", "Household must keep at least one owner");
+    const isOwnerDemotion = targetRole === "OWNER" && input.role !== "OWNER";
+    if (actorRole !== "ADMIN" && isOwnerDemotion) {
+      // Registers the owners query in the transaction's read set; this arms the version
+      // check that enforces the at-least-one-owner invariant under concurrent demotion.
+      // Must run inside the tx — do not refactor away.
+      // The owner count can only drop via this same handler (demotion/removal), whose writes
+      // are version-checked against this query's result set, so no phantom path sneaks it down.
+      const owners = await tx.get(ownersQuery);
+      if (owners.size <= 1) {
+        throw new HttpsError("failed-precondition", "This household must keep at least one owner");
       }
     }
 
-    transaction.update(memberRef, {
-      role: input.role
-    });
+    if (targetRole === input.role) {
+      return;
+    }
+
+    tx.set(
+      memberRef,
+      {
+        uid: input.uid,
+        role: input.role,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: actorUid
+      },
+      { merge: true }
+    );
   });
 
   return { ok: true as const };
 }
 
-export async function removeHouseholdMemberHandler(raw: unknown, actingUid: string) {
-  const input = removeHouseholdMemberInputSchema.parse(raw);
+export async function removeHouseholdMemberHandler(raw: unknown, actorUid: string) {
+  const input = removeMemberInputSchema.parse(raw);
+  // Actor role is read pre-tx deliberately: the security-critical invariant is the in-tx
+  // owner-count check below, not the actor's authority (see update handler for the full note).
+  const actorRole = (await requireHouseholdAdmin(input.householdId, actorUid)) as Role;
+  const memberRef = db.doc(paths.member(input.householdId, input.uid));
+  const userRef = db.doc(paths.user(input.uid));
+  const ownersQuery = db.collection(paths.members(input.householdId)).where("role", "==", "OWNER");
 
-  if (input.uid === actingUid) {
-    throw new HttpsError("failed-precondition", "Ask another owner or admin to remove this account");
-  }
-
-  await db.runTransaction(async (transaction) => {
-    const actingRole = await requireActingAdminRole(transaction, input.householdId, actingUid);
-    const memberRef = db.doc(paths.member(input.householdId, input.uid));
-    const userRef = db.doc(paths.user(input.uid));
-    const memberSnap = await transaction.get(memberRef);
+  await db.runTransaction(async (tx) => {
+    // Admin SDK transactions require ALL reads before ANY writes — read member, owners
+    // (when relevant), and the user doc up front, then perform the deletes/sets below.
+    const memberSnap = await tx.get(memberRef);
     if (!memberSnap.exists) {
-      throw new HttpsError("not-found", "Member not found");
+      throw new HttpsError("not-found", "Household member not found");
+    }
+    const targetRole = memberSnap.get("role") as Role;
+    if (targetRole !== "OWNER" && targetRole !== "ADMIN" && targetRole !== "MEMBER") {
+      throw new HttpsError("failed-precondition", "Household member role is invalid");
     }
 
-    const currentRole = memberSnap.get("role");
-    if (typeof currentRole !== "string") {
-      throw new HttpsError("failed-precondition", "Member role is invalid");
+    if (actorRole === "ADMIN") {
+      assertAdminTargetAllowed(targetRole);
     }
 
-    if (actingRole !== "OWNER" && currentRole === "OWNER") {
-      throw new HttpsError("permission-denied", "Only owners can remove another owner");
-    }
-
-    if (currentRole === "OWNER") {
-      const ownersSnap = await transaction.get(ownersQuery(input.householdId));
-      if (ownersSnap.size <= 1) {
-        throw new HttpsError("failed-precondition", "Household must keep at least one owner");
+    if (actorRole !== "ADMIN" && targetRole === "OWNER") {
+      // Registers the owners query in the transaction's read set; this arms the version
+      // check that enforces the at-least-one-owner invariant under concurrent removal.
+      // Must run inside the tx — do not refactor away.
+      // The owner count can only drop via this same handler (demotion/removal), whose writes
+      // are version-checked against this query's result set, so no phantom path sneaks it down.
+      const owners = await tx.get(ownersQuery);
+      if (owners.size <= 1) {
+        throw new HttpsError("failed-precondition", "This household must keep at least one owner");
       }
     }
 
-    const userSnap = await transaction.get(userRef);
+    const userSnap = await tx.get(userRef);
+
+    tx.delete(memberRef);
+
     if (userSnap.exists && userSnap.get("currentHouseholdId") === input.householdId) {
-      transaction.set(
+      tx.set(
         userRef,
         {
-          currentHouseholdId: null,
-          removedFromHouseholdAt: FieldValue.serverTimestamp(),
-          removedFromHouseholdId: input.householdId,
+          currentHouseholdId: FieldValue.delete(),
           updatedAt: FieldValue.serverTimestamp()
         },
         { merge: true }
       );
     }
-
-    transaction.delete(memberRef);
   });
 
   return { ok: true as const };

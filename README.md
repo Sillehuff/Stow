@@ -1,6 +1,6 @@
 # Stow PWA (Firebase + Firestore + Vision LLM Adapters)
 
-Production-oriented rebuild scaffold for the original `stow-v3.jsx` prototype with:
+Production-oriented rebuild of the original `stow-v3` prototype (since removed from the tree) with:
 
 - React + TypeScript + Vite
 - PWA support (`vite-plugin-pwa`)
@@ -14,9 +14,12 @@ Production-oriented rebuild scaffold for the original `stow-v3.jsx` prototype wi
 - Frontend project scaffold and app shell
 - Auth gate (Google + email link)
 - Household bootstrap (first user gets seeded demo household)
-- Firestore-backed spaces/areas/items CRUD UI (core flows)
-- Packing flow, search, item edit/delete, local QR label generation
-- Settings UI for members/invites and LLM config
+- Mobile-first canonical app (routes `/`, `/spaces`, `/spaces/:id`, `/spaces/:id/areas/:areaId`, `/items/:id`, `/search`, `/packing`, `/settings`, `/activity`; `/` and unknown routes redirect to `/spaces`):
+  - Retrieval-first home (search + recently added) with Spaces management (add/rename/reorder/delete, areas)
+  - Camera + AI capture: single-item scan and whole-shelf batch capture, both review-before-save
+  - Activity feed, lending/status tracking, and per-space QR labels (deep-link back into a space)
+  - Packing lists, search, item edit/delete, settings (members/invites + LLM config)
+- The legacy `/spaces` desktop CRUD UI (`StowApp`) and the desktop redesign at `/next` (`StowNextApp`) were removed at the P5 cutover; the mobile app is now canonical on every route.
 - Vision scan flow with backend callable integration + review-before-save
 - Firebase Functions package with callable endpoints and provider adapter abstraction
 - Firestore/Storage rules + index definitions
@@ -27,7 +30,7 @@ Production-oriented rebuild scaffold for the original `stow-v3.jsx` prototype wi
 - Dependency installation and build verification in this environment
 - End-to-end emulator runs
 - Real provider credential testing (LLM validation/categorization)
-- Broader security-rule coverage beyond the first emulator harness
+- Security-rule emulator tests (scenarios are planned; harness not fully implemented yet)
 - UI parity refinements vs the original prototype visuals
 
 ## Quick Start
@@ -45,64 +48,32 @@ npm --prefix functions install
 cp .env.example .env.local
 ```
 
-If you are testing locally against emulators, set:
-
-```bash
-VITE_USE_FIREBASE_EMULATORS=true
-```
-
 3. Start Firebase emulators (from repo root):
 
 ```bash
-npm run emulators:start
+firebase emulators:start
 ```
 
-4. In another terminal, run the frontend with emulator mode enabled:
+4. In another terminal, run the frontend:
 
 ```bash
-VITE_USE_FIREBASE_EMULATORS=true \
 npm run dev
 ```
 
-## Verification
+## Deploying backend changes
 
-Core verification commands:
-
-```bash
-npm run verify:local
-npm run verify:emulator
-npm run verify
-```
-
-- `verify:local` runs typecheck, frontend tests, functions tests, both builds.
-- `verify:emulator` starts the Firebase emulators with the repo-installed Firebase CLI, runs the rules suite against the shared QA project, seeds repeatable QA data, and exercises an auth-plus-callable invite smoke path. A local JRE/JDK is required for Firestore and Storage emulators.
-- `verify` runs both.
-
-## QA Seeding
-
-To seed the deterministic QA fixture set used by the pre-launch audit:
+CI deploys **hosting only** (on merge to main). Any change under `functions/`,
+`firestore.rules`, `firestore.indexes.json`, or `storage.rules` must be deployed
+manually after merge:
 
 ```bash
-npm run seed:qa
+npm run deploy:backend
 ```
 
-This creates a `qa-household`, seeded spaces/items/packing data, a reusable invite token, and three emulator-only QA accounts:
-
-- `qa-owner@example.com`
-- `qa-admin@example.com`
-- `qa-member@example.com`
-
-The shared password is printed by the seed script and is only meant for local emulator use.
-
-For long-lived manual QA sessions, keep the emulators up in one terminal and the app in another:
-
-```bash
-npm run emulators:start
-VITE_USE_FIREBASE_EMULATORS=true \\
-npm run dev -- --host 127.0.0.1
-```
-
-When `VITE_USE_FIREBASE_EMULATORS=true`, the auth screen also exposes emulator-only quick access buttons for those accounts plus a `Fresh Tester` path for anonymous smoke testing.
+Required prod env (functions): `APP_BASE_URL` (invite links), `KMS_KEY_NAME`
+(secret encryption — without it, prod fails closed at the first encrypt/decrypt call), optional `VISION_DAILY_LIMIT`
+(default 200/household/day), optional `FUNCTIONS_REGION` (default us-central1 —
+must match the client's `VITE_FUNCTIONS_REGION`).
 
 ## Demo Seeding
 
@@ -116,31 +87,18 @@ Optional:
 
 - `--household <id>` to force a specific household ID
 
-## Playwright Session Entry Point
+### Data migrations
 
-For repeatable browser audit sessions using the local Playwright CLI wrapper:
-
-```bash
-npm run e2e:open
-npm run e2e:snapshot
-npm run e2e:screenshot
-npm run e2e:console
-npm run e2e:close
-```
-
-These commands expect the local dev server to be running at `http://127.0.0.1:5173` unless `BASE_URL` is overridden.
-
-## Audit Docs
-
-Launch-audit coordination lives in:
-
-- [docs/prelaunch-audit-runbook.md](/Users/ellishuff/.codex/worktrees/9cfc/Stow/docs/prelaunch-audit-runbook.md)
-- [docs/prelaunch-audit-ledger.md](/Users/ellishuff/.codex/worktrees/9cfc/Stow/docs/prelaunch-audit-ledger.md)
+After deploying P5, materialize `position`/`status` on existing households by running `npm run backfill:positions` and `npm run backfill:status` (pass `--dry-run` first to preview). Both scripts are idempotent and safe to re-run.
 
 ## Functions Secret Encryption
 
 - Production: set `KMS_KEY_NAME` to a Cloud KMS key resource.
 - Local/dev: falls back to AES-GCM using `LOCAL_SECRET_ENCRYPTION_KEY`.
+- Firebase Functions loads deploy env from `functions/.env.<projectId>`. For this
+  project, `functions/.env.stow-50f36` should define the production
+  `KMS_KEY_NAME`; keep real env files local and use `functions/.env.example` as
+  the template.
 
 ## Notes
 

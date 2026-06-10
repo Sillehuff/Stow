@@ -24,7 +24,7 @@ export interface VisionSuggestion {
 
 export interface VisionCategorizeRequest {
   householdId: string;
-  imageRef: { storagePath: string; downloadUrl?: string };
+  imageRef: { storagePath: string };
   context?: {
     spaceId?: string;
     areaId?: string;
@@ -38,4 +38,27 @@ export interface VisionCategorizeResponse {
     providerType: ProviderType;
     model: string;
   };
+  jobId: string;
+}
+
+export interface ShelfDetection {
+  label: string;
+  confidence: number;
+  bbox: [number, number, number, number];
+  suggestedValue?: number;
+  tags?: string[];
+}
+
+export interface VisionDetectShelfRequest {
+  householdId: string;
+  imageRef: { storagePath: string };
+  spaceId?: string;
+  areaId?: string;
+  areaName?: string;
+}
+
+export interface VisionDetectShelfResponse {
+  detections: ShelfDetection[];
+  provider: string;
+  jobId: string;
 }

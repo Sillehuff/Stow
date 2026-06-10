@@ -6,10 +6,13 @@ dist
 .env
 .env.local
 .env.*.local
+/functions/.env
+/functions/.env.*
+!/functions/.env.example
 /functions/node_modules
 /functions/lib
 /coverage
-/output/playwright
-*.tsbuildinfo
+# tsc -b artifacts that would shadow vite.config.ts
 vite.config.js
 vite.config.d.ts
+*.tsbuildinfo

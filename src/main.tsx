@@ -3,45 +3,38 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { initializeFirebaseClient } from "@/lib/firebase/client";
 import { AuthProvider } from "@/features/auth/AuthProvider";
+import { RootErrorBoundary } from "@/RootErrorBoundary";
 import App from "@/App";
 import "@/styles.css";
 
-function renderInitFailure(error: unknown) {
-  ReactDOM.createRoot(document.getElementById("root")!).render(
-    <React.StrictMode>
-      <div className="center-shell">
-        <div className="panel auth-panel">
-          <h1>Stow</h1>
-          <p>Stow couldn’t finish startup.</p>
-          <p className="muted">
-            Refresh and try again. If this keeps happening in local QA, restart the Firebase emulators and confirm the web app is using the local emulator settings.
-          </p>
-          {import.meta.env.DEV && error instanceof Error ? (
-            <pre className="banner error" style={{ whiteSpace: "pre-wrap" }}>{error.message}</pre>
-          ) : null}
-        </div>
-      </div>
-    </React.StrictMode>
-  );
-}
-
-async function boot() {
+async function renderApp() {
   try {
     await initializeFirebaseClient();
   } catch (error) {
-    renderInitFailure(error);
-    return;
+    console.error("Firebase initialization failed; rendering anyway", error);
   }
 
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
-      <BrowserRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </BrowserRouter>
+      <RootErrorBoundary>
+        <BrowserRouter>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </BrowserRouter>
+      </RootErrorBoundary>
     </React.StrictMode>
   );
 }
 
-void boot();
+renderApp().catch((error) => {
+  console.error("Failed to start Stow", error);
+  const root = document.getElementById("root");
+  if (root) {
+    root.innerHTML =
+      '<div style="font-family:system-ui;padding:32px;text-align:center">' +
+      "<h1>Stow couldn’t start</h1>" +
+      "<p>Please reload. If you’re in a private window, try a regular one.</p>" +
+      '<button onclick="location.reload()" style="padding:8px 20px">Reload</button></div>';
+  }
+});
