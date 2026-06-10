@@ -25,7 +25,8 @@ export async function createHouseholdInviteHandler(raw: unknown, requestAuth: { 
     tokenHash,
     createdAt: FieldValue.serverTimestamp(),
     createdBy: uid,
-    expiresAt
+    expiresAt,
+    invitedEmail: input.email?.trim().toLowerCase() ?? null
   });
 
   const baseUrl = process.env.APP_BASE_URL ?? originHeader ?? "http://localhost:5173";
@@ -68,6 +69,7 @@ export async function acceptHouseholdInviteHandler(raw: unknown, requestAuth: { 
       role: string;
       expiresAt?: { toDate?: () => Date } | Date;
       acceptedAt?: unknown;
+      invitedEmail?: string | null;
     };
 
     if (inviteData.acceptedAt) throw new HttpsError("already-exists", "Invite has already been used");
@@ -76,6 +78,13 @@ export async function acceptHouseholdInviteHandler(raw: unknown, requestAuth: { 
       inviteData.expiresAt instanceof Date ? inviteData.expiresAt : inviteData.expiresAt?.toDate?.();
     if (expiresDate && expiresDate.getTime() < Date.now()) {
       throw new HttpsError("deadline-exceeded", "Invite has expired");
+    }
+
+    if (inviteData.invitedEmail) {
+      const callerEmail = (requestAuth?.token?.email ?? "").trim().toLowerCase();
+      if (callerEmail !== inviteData.invitedEmail) {
+        throw new HttpsError("permission-denied", "This invite was issued to a different email address");
+      }
     }
 
     tx.set(

@@ -38,7 +38,8 @@ export type HouseholdLlmConfig = z.infer<typeof llmConfigSchema>;
 export const createInviteInputSchema = z.object({
   householdId: z.string().min(1),
   role: roleSchema.refine((r) => r !== "OWNER", "Owner invites are not supported via link"),
-  expiresInHours: z.number().int().min(1).max(24 * 14).optional()
+  expiresInHours: z.number().int().min(1).max(24 * 14).optional(),
+  email: z.string().email().max(320).optional()
 });
 
 export const acceptInviteInputSchema = z.object({

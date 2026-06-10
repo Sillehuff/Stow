@@ -28,6 +28,7 @@ export async function createHouseholdInvite(input: {
   householdId: string;
   role: Role;
   expiresInHours?: number;
+  email?: string;
 }): Promise<{ inviteId: string; inviteUrl: string; expiresAt: string }> {
   return callFunction<typeof input, { inviteId: string; inviteUrl: string; expiresAt: string }>("createHouseholdInvite", input);
 }

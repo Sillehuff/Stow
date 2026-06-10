@@ -217,6 +217,7 @@ export function SettingsScreen(props: SettingsScreenProps) {
   const [testResult, setTestResult] = useState<string | null>(null);
   const [savingAi, setSavingAi] = useState(false);
   const [inviteRole, setInviteRole] = useState<Role>("MEMBER");
+  const [inviteEmail, setInviteEmail] = useState("");
   const [defaultSpaceId, setDefaultSpaceId] = useState(readDefaultSpaceId);
 
   useEffect(() => {
@@ -349,7 +350,12 @@ export function SettingsScreen(props: SettingsScreenProps) {
   async function createInvite() {
     if (!canManage) return;
     try {
-      const invite = await createHouseholdInvite({ householdId, role: inviteRole });
+      const invite = await createHouseholdInvite({
+        householdId,
+        role: inviteRole,
+        email: inviteEmail.trim() || undefined
+      });
+      setInviteEmail("");
       if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(invite.inviteUrl);
         onFlash("Invite created and copied");
@@ -570,6 +576,14 @@ export function SettingsScreen(props: SettingsScreenProps) {
 
           {canManage ? (
             <div style={{ borderTop: members.length ? "1px solid var(--stow-border-l)" : "none" }}>
+              <div style={{ padding: "15px 18px 0" }}>
+                <Field
+                  label="Restrict to email (optional)"
+                  value={inviteEmail}
+                  onChange={setInviteEmail}
+                  placeholder="name@example.com"
+                />
+              </div>
               <div
                 style={{
                   display: "flex",

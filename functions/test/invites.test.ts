@@ -265,6 +265,56 @@ describe("invite handlers", () => {
     expect(writesPerInvocation).toEqual([3, 0]);
   });
 
+  it("rejects acceptance when the invite is bound to a different email", async () => {
+    const inviteDoc = {
+      ref: { path: "households/h1/invites/invite-123" },
+      data: () => ({ role: "MEMBER", invitedEmail: "alice@example.com" }),
+      get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+    };
+    inviteQueryGet.mockResolvedValue({
+      empty: false,
+      docs: [inviteDoc]
+    });
+    tx.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ role: "MEMBER", invitedEmail: "alice@example.com" }),
+      get: () => undefined
+    });
+
+    await expect(
+      acceptHouseholdInviteHandler(
+        { householdId: "h1", token: "a".repeat(32) },
+        { uid: "u2", token: { email: "mallory@example.com" } }
+      )
+    ).rejects.toMatchObject({ code: "permission-denied" });
+    expect(tx.set).not.toHaveBeenCalled();
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  it("accepts case-insensitively when the bound email matches", async () => {
+    const inviteDoc = {
+      ref: { path: "households/h1/invites/invite-123" },
+      data: () => ({ role: "MEMBER", invitedEmail: "alice@example.com" }),
+      get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+    };
+    inviteQueryGet.mockResolvedValue({
+      empty: false,
+      docs: [inviteDoc]
+    });
+    tx.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ role: "MEMBER", invitedEmail: "alice@example.com" }),
+      get: () => undefined
+    });
+
+    await expect(
+      acceptHouseholdInviteHandler(
+        { householdId: "h1", token: "a".repeat(32) },
+        { uid: "u2", token: { email: "Alice@Example.com" } }
+      )
+    ).resolves.toEqual({ ok: true });
+  });
+
   it("rejects acceptance when the invite was revoked between query and transaction", async () => {
     const inviteDoc = {
       ref: { path: "households/h1/invites/invite-123" },
