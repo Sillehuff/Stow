@@ -26,9 +26,8 @@ function getLocalKeySeed() {
 function assertLocalFallbackAllowed() {
   if (getKmsKeyName()) return;
   if (isLocalRuntime()) return;
-  if (getLocalKeySeed() !== DEFAULT_LOCAL_SECRET_ENCRYPTION_KEY) return;
   throw new Error(
-    "Secret encryption is misconfigured: set KMS_KEY_NAME or provide a non-placeholder LOCAL_SECRET_ENCRYPTION_KEY outside local development/emulators."
+    "Secret encryption is misconfigured: KMS_KEY_NAME must be set in production runtimes."
   );
 }
 
