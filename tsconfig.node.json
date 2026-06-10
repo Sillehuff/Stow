@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "outDir": "./node_modules/.cache/tsconfig-node",
     "composite": true,
     "skipLibCheck": true,
     "module": "ESNext",
