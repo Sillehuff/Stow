@@ -26,6 +26,7 @@ import {
   Tag,
   X
 } from "@/features/stow/ui/mobile/theme/icons";
+import { completeWrite } from "@/lib/firebase/completeWrite";
 import { visionDetectShelfItems } from "@/lib/firebase/functions";
 import { storagePaths } from "@/lib/firebase/paths";
 import { uploadFileToStorage } from "@/lib/firebase/storage";
@@ -35,7 +36,7 @@ export interface QuickCaptureProps {
   spaceId?: string;
   areaId?: string;
   onClose: () => void;
-  onCommitted: (count: number) => void;
+  onCommitted: (count: number, committed: boolean) => void;
 }
 
 export interface QuickCaptureData {
@@ -266,25 +267,29 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
     setCommitting(true);
     setCommitError(null);
     try {
-      let committedCount = 0;
-      if (commitItems.length > 0) {
-        const itemIds = await createItemsBatch({ householdId, userId, items: commitItems });
-        committedCount = itemIds.length;
-        await logActivity({
+      if (commitItems.length === 0) {
+        onCommitted(0, true);
+        return;
+      }
+      const write = createItemsBatch({ householdId, userId, items: commitItems }).then((itemIds) => {
+        // Best-effort: an activity-log failure must not look like a failed save (it caused duplicate items on retry).
+        logActivity({
           householdId,
           entry: buildActivityEntry({
             type: "items_added_batch",
             actorUid: userId,
             actorName,
-            count: committedCount,
+            count: itemIds.length,
             spaceName: destination.space?.name,
             areaName: state.destination.areaNameSnapshot,
             spaceId: state.destination.spaceId ?? undefined,
             areaId: state.destination.areaId ?? undefined
           })
-        });
-      }
-      onCommitted(committedCount);
+        }).catch((error) => console.error("Activity log failed", error));
+        return itemIds;
+      });
+      const committed = await completeWrite(write);
+      onCommitted(commitItems.length, committed);
     } catch {
       setCommitError("Couldn't file these items. Try again.");
       setCommitting(false);
