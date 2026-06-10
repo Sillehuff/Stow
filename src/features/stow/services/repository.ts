@@ -18,7 +18,8 @@ import {
   where,
   writeBatch,
   type DocumentData,
-  type QuerySnapshot
+  type QuerySnapshot,
+  type WriteBatch
 } from "firebase/firestore";
 import type { Unsubscribe } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
@@ -200,6 +201,13 @@ export function buildActivityEntry(
 /** Pure: map an ordered id list to {id, position} pairs (position = index). Unit-tested. */
 export function positionUpdatesFor(orderedIds: string[]): Array<{ id: string; position: number }> {
   return orderedIds.map((id, index) => ({ id, position: index }));
+}
+
+/** Firestore batches cap at 500 ops; stay under it with headroom. */
+export function chunkOps<T>(ops: T[], size = 450): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < ops.length; i += size) chunks.push(ops.slice(i, i + size));
+  return chunks;
 }
 
 export const inventoryRepository = {
@@ -412,10 +420,13 @@ export const inventoryRepository = {
     const database = requireDb();
     const batch = writeBatch(database);
     for (const { id, position } of positionUpdatesFor(input.orderedIds)) {
-      batch.update(doc(database, householdPaths.space(input.householdId, id)), {
-        position,
-        updatedAt: serverTimestamp()
-      });
+      // set+merge (not update): update rejects the whole batch if any id was deleted
+      // on another device mid-drag; set+merge still writes positions for the survivors.
+      batch.set(
+        doc(database, householdPaths.space(input.householdId, id)),
+        { position, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
     }
     await batch.commit();
   },
@@ -424,10 +435,12 @@ export const inventoryRepository = {
     const database = requireDb();
     const batch = writeBatch(database);
     for (const { id, position } of positionUpdatesFor(input.orderedIds)) {
-      batch.update(doc(database, householdPaths.area(input.householdId, input.spaceId, id)), {
-        position,
-        updatedAt: serverTimestamp()
-      });
+      // set+merge (not update): tolerate a concurrent delete of any area mid-drag.
+      batch.set(
+        doc(database, householdPaths.area(input.householdId, input.spaceId, id)),
+        { position, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
     }
     await batch.commit();
   },
@@ -485,24 +498,36 @@ export const inventoryRepository = {
       throw new Error("Space contains items. Choose a destination space/area first.");
     }
 
-    const batch = writeBatch(database);
+    // Build the write set as ordered closures, then commit in <=450-op chunks so a
+    // space with hundreds of items/areas survives Firestore's 500-op batch limit.
+    // Order is load-bearing: item reassigns → area deletes → space delete LAST, so a
+    // mid-way failure never leaves a deleted space with orphaned children.
+    const ops: Array<(batch: WriteBatch) => void> = [];
     if (input.reassignTo) {
+      const reassignTo = input.reassignTo;
       for (const itemDoc of itemsSnap.docs) {
-        batch.update(itemDoc.ref, {
-          spaceId: input.reassignTo.spaceId,
-          areaId: input.reassignTo.areaId,
-          areaNameSnapshot: input.reassignTo.areaNameSnapshot,
-          updatedAt: serverTimestamp(),
-          updatedBy: input.userId
-        });
+        ops.push((batch) =>
+          batch.update(itemDoc.ref, {
+            spaceId: reassignTo.spaceId,
+            areaId: reassignTo.areaId,
+            areaNameSnapshot: reassignTo.areaNameSnapshot,
+            updatedAt: serverTimestamp(),
+            updatedBy: input.userId
+          })
+        );
       }
     }
 
     for (const areaDoc of areasSnap.docs) {
-      batch.delete(areaDoc.ref);
+      ops.push((batch) => batch.delete(areaDoc.ref));
     }
-    batch.delete(doc(database, householdPaths.space(input.householdId, input.spaceId)));
-    await batch.commit();
+    ops.push((batch) => batch.delete(doc(database, householdPaths.space(input.householdId, input.spaceId))));
+
+    for (const chunk of chunkOps(ops)) {
+      const batch = writeBatch(database);
+      chunk.forEach((apply) => apply(batch));
+      await batch.commit();
+    }
   },
 
   async createItem(input: {
