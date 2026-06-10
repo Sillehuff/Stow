@@ -71,7 +71,12 @@ export async function initializeFirebaseClient(): Promise<void> {
     emulatorsConnected = true;
   }
 
-  await setPersistence(auth, browserLocalPersistence);
+  try {
+    await setPersistence(auth, browserLocalPersistence);
+  } catch (error) {
+    // Storage-restricted contexts (private mode, blocked IndexedDB): fall back to in-memory session.
+    console.error("Auth persistence unavailable, continuing without it", error);
+  }
 }
 
 export async function getFunctionsClient(): Promise<Functions | null> {
