@@ -66,10 +66,20 @@ export async function completeEmailLinkSignIn(currentUrl: string, email: string)
     throw new Error("This sign-in link is invalid or has already been used");
   }
   if (!email.trim()) throw new Error("Email is required to complete sign-in");
-  const result = await signInWithEmailLink(auth, email, currentUrl);
-  window.localStorage.removeItem(EMAIL_LINK_STORAGE_KEY);
-  window.localStorage.removeItem(EMAIL_LINK_RETURN_TO_STORAGE_KEY);
-  return result.user;
+  try {
+    const result = await signInWithEmailLink(auth, email, currentUrl);
+    window.localStorage.removeItem(EMAIL_LINK_STORAGE_KEY);
+    window.localStorage.removeItem(EMAIL_LINK_RETURN_TO_STORAGE_KEY);
+    return result.user;
+  } catch (error) {
+    const code = (error as { code?: string })?.code ?? "";
+    if (code === "auth/invalid-action-code" || code === "auth/expired-action-code") {
+      // Terminal for this link: a stale stored email would mislead the next attempt.
+      window.localStorage.removeItem(EMAIL_LINK_STORAGE_KEY);
+      window.localStorage.removeItem(EMAIL_LINK_RETURN_TO_STORAGE_KEY);
+    }
+    throw error;
+  }
 }
 
 export async function signOutUser(): Promise<void> {
