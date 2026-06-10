@@ -35,6 +35,9 @@ export interface QuickCaptureProps {
   householdId: string;
   spaceId?: string;
   areaId?: string;
+  // Optional: reactive online signal from the host app. Defaults to completeWrite's own
+  // navigator.onLine when absent, so create flows stay consistent with the rest of the app.
+  isOnline?: () => boolean;
   onClose: () => void;
   onCommitted: (count: number, committed: boolean) => void;
 }
@@ -135,6 +138,7 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
     householdId,
     spaceId,
     areaId,
+    isOnline,
     onClose,
     onCommitted,
     spaces,
@@ -264,6 +268,8 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
       setCommitError("Choose a destination before filing these items.");
       return;
     }
+    // Note: success/empty paths never reset `committing` — onCommitted → clearShelfCapture()
+    // unmounts this component, so there's no state left to reset (don't "fix" this).
     setCommitting(true);
     setCommitError(null);
     try {
@@ -288,7 +294,7 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
         }).catch((error) => console.error("Activity log failed", error));
         return itemIds;
       });
-      const committed = await completeWrite(write);
+      const committed = isOnline ? await completeWrite(write, isOnline) : await completeWrite(write);
       onCommitted(commitItems.length, committed);
     } catch {
       setCommitError("Couldn't file these items. Try again.");

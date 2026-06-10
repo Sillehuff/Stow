@@ -515,7 +515,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
                   .catch((error) => console.error("Activity log failed", error));
                 return spaceId;
               });
-            const committed = await completeWrite(write);
+            const committed = await completeWrite(write, () => online);
             flash(committed ? "Space created" : "Space saved — will sync when you’re online");
             nav.closeOverlay();
           }}
@@ -533,7 +533,8 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
                   spaceId: addAreaSpace.id,
                   name: input.name,
                   position: input.position
-                })
+                }),
+                () => online
               );
               flash(committed ? "Area added" : "Area saved — will sync when you’re online");
             }
@@ -585,7 +586,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
                   .catch((error) => console.error("Activity log failed", error));
                 return itemId;
               });
-            const committed = await completeWrite(write);
+            const committed = await completeWrite(write, () => online);
             flash(committed ? "Item added" : "Item saved — will sync when you’re online");
             nav.closeOverlay();
           }}
@@ -627,6 +628,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
             logActivity={data.actions.logActivity}
             capturedBlob={shelfCapture.blob}
             capturedPreviewUrl={shelfCapture.previewUrl}
+            isOnline={() => online}
             onClose={clearShelfCapture}
             onCommitted={(count, committed) => {
               clearShelfCapture();
