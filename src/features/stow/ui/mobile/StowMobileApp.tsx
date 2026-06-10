@@ -64,6 +64,12 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
 
   const flash = (message: string) => setToast(message);
 
+  function logActivitySafe(entry: Parameters<typeof buildActivityEntry>[0]) {
+    data.actions
+      .logActivity({ householdId, entry: buildActivityEntry(entry) })
+      .catch((error) => console.error("Activity log failed", error));
+  }
+
   useEffect(() => {
     if (rootRef.current) applyPalette(rootRef.current, makePalette());
   }, []);
@@ -361,19 +367,16 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
               const destinationSpace = data.spaces.find((space) => space.id === dest.spaceId) ?? null;
               return (async () => {
                 await data.actions.updateItem({ householdId, itemId: selectedItem.id, userId, patch: dest });
-                await data.actions.logActivity({
-                  householdId,
-                  entry: buildActivityEntry({
-                    type: "item_moved",
-                    actorUid: userId,
-                    actorName,
-                    itemName: selectedItem.name,
-                    spaceName: destinationSpace?.name,
-                    areaName: dest.areaNameSnapshot,
-                    spaceId: dest.spaceId,
-                    areaId: dest.areaId,
-                    itemId: selectedItem.id
-                  })
+                logActivitySafe({
+                  type: "item_moved",
+                  actorUid: userId,
+                  actorName,
+                  itemName: selectedItem.name,
+                  spaceName: destinationSpace?.name,
+                  areaName: dest.areaNameSnapshot,
+                  spaceId: dest.spaceId,
+                  areaId: dest.areaId,
+                  itemId: selectedItem.id
                 });
               })();
             }}
@@ -386,16 +389,13 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
               } else {
                 await data.actions.setItemStatus({ householdId, itemId: selectedItem.id, userId, status: next });
               }
-              await data.actions.logActivity({
-                householdId,
-                entry: buildActivityEntry({
-                  type: "item_status_changed",
-                  actorUid: userId,
-                  actorName,
-                  itemName: selectedItem.name,
-                  status: next,
-                  itemId: selectedItem.id
-                })
+              logActivitySafe({
+                type: "item_status_changed",
+                actorUid: userId,
+                actorName,
+                itemName: selectedItem.name,
+                status: next,
+                itemId: selectedItem.id
               });
             }}
             onConfirmLoan={async (loan) => {
@@ -411,17 +411,14 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
                   ...(loan.note ? { note: loan.note } : {})
                 }
               });
-              await data.actions.logActivity({
-                householdId,
-                entry: buildActivityEntry({
-                  type: "item_status_changed",
-                  actorUid: userId,
-                  actorName,
-                  itemName: selectedItem.name,
-                  status: "lent",
-                  loanTo: loan.to,
-                  itemId: selectedItem.id
-                })
+              logActivitySafe({
+                type: "item_status_changed",
+                actorUid: userId,
+                actorName,
+                itemName: selectedItem.name,
+                status: "lent",
+                loanTo: loan.to,
+                itemId: selectedItem.id
               });
             }}
             onDelete={() => setDeleteItemId(selectedItem.id)}
@@ -485,15 +482,12 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
               reorderAreas: data.actions.reorderAreas,
               deleteSpace: async (input) => {
                 await data.actions.deleteSpace(input);
-                await data.actions.logActivity({
-                  householdId: input.householdId,
-                  entry: buildActivityEntry({
-                    type: "space_deleted",
-                    actorUid: input.userId,
-                    actorName,
-                    spaceName: editSpace.name,
-                    spaceId: editSpace.id
-                  })
+                logActivitySafe({
+                  type: "space_deleted",
+                  actorUid: input.userId,
+                  actorName,
+                  spaceName: editSpace.name,
+                  spaceId: editSpace.id
                 });
               }
             }}
@@ -693,15 +687,12 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
             void (async () => {
               try {
                 await data.actions.deleteItem({ householdId, itemId: itemIdToDelete, userId });
-                await data.actions.logActivity({
-                  householdId,
-                  entry: buildActivityEntry({
-                    type: "item_deleted",
-                    actorUid: userId,
-                    actorName,
-                    itemName: itemToDelete?.name,
-                    itemId: itemIdToDelete
-                  })
+                logActivitySafe({
+                  type: "item_deleted",
+                  actorUid: userId,
+                  actorName,
+                  itemName: itemToDelete?.name,
+                  itemId: itemIdToDelete
                 });
                 if (imageToClean) void bestEffortDeleteImage(imageToClean);
                 flash("Item deleted");

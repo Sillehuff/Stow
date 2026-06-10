@@ -1,4 +1,5 @@
 import { getFunctionsClient } from "@/lib/firebase/client";
+import { toUserErrorMessage } from "@/lib/firebase/errors";
 import type {
   HouseholdLlmConfig,
   VisionCategorizeRequest,
@@ -20,8 +21,13 @@ async function callFunction<TInput, TOutput>(name: string, input: TInput): Promi
     requireFunctions()
   ]);
   const callable = httpsCallable<TInput, TOutput>(functions, name);
-  const result = await callable(input);
-  return result.data;
+  try {
+    const result = await callable(input);
+    return result.data;
+  } catch (error) {
+    console.error(`Callable ${name} failed`, error);
+    throw new Error(toUserErrorMessage(error, "That didn’t go through. Please try again."));
+  }
 }
 
 export async function createHouseholdInvite(input: {
