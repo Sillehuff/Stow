@@ -52,7 +52,7 @@ export default defineConfig({
               cacheName: "firebase-storage-images",
               expiration: {
                 maxEntries: 200,
-                maxAgeSeconds: 60 * 60 * 24 * 30
+                maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days: balances offline access vs. media lingering after member removal
               }
             }
           }
