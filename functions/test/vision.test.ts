@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HttpsError } from "firebase-functions/v2/https";
 
 const requireHouseholdMember = vi.fn();
+const consumeVisionQuota = vi.fn();
 const loadConfigAndSecret = vi.fn();
 const classifyImage = vi.fn();
 
@@ -12,6 +13,10 @@ const visionJobSet = vi.fn();
 
 vi.mock("../src/shared/authz.js", () => ({
   requireHouseholdMember
+}));
+
+vi.mock("../src/shared/rateLimit.js", () => ({
+  consumeVisionQuota
 }));
 
 vi.mock("../src/llmConfig.js", () => ({
@@ -51,6 +56,23 @@ vi.mock("../src/shared/firestore.js", () => ({
 }));
 
 const { visionCategorizeItemImageHandler } = await import("../src/vision.js");
+
+// Minimal Readable-like stub: emits one data chunk then end on the next tick so the
+// handler's stream.on("data"/"end") download path resolves.
+function stubReadStream(chunk: Buffer) {
+  const handlers: Record<string, (arg?: unknown) => void> = {};
+  setTimeout(() => {
+    handlers.data?.(chunk);
+    handlers.end?.();
+  }, 0);
+  return {
+    on(event: string, cb: (arg?: unknown) => void) {
+      handlers[event] = cb;
+      return this;
+    },
+    destroy() {}
+  };
+}
 
 describe("vision categorization input guards", () => {
   beforeEach(() => {
@@ -119,5 +141,21 @@ describe("vision categorization input guards", () => {
       code: "invalid-argument"
     });
     expect(classifyImage).not.toHaveBeenCalled();
+  });
+
+  it("consumes the household vision quota before calling the provider", async () => {
+    fileGetMetadata.mockResolvedValue([{ contentType: "image/png", size: "1024" }]);
+    fileCreateReadStream.mockReturnValue(stubReadStream(Buffer.from("png-bytes")));
+
+    await visionCategorizeItemImageHandler(
+      {
+        householdId: "h1",
+        imageRef: { storagePath: "households/h1/items/item-1/file.png" }
+      },
+      "user-1"
+    );
+
+    expect(consumeVisionQuota).toHaveBeenCalledWith("h1");
+    expect(classifyImage).toHaveBeenCalled();
   });
 });

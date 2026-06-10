@@ -18,6 +18,7 @@ export const paths = {
   invites: (householdId: string) => `households/${householdId}/invites`,
   llmConfig: (householdId: string) => `households/${householdId}/settings/llm`,
   llmSecret: (householdId: string) => `households/${householdId}/settings/llmSecret`,
+  visionUsage: (householdId: string) => `households/${householdId}/settings/visionUsage`,
   visionJobs: (householdId: string) => `households/${householdId}/visionJobs`,
   user: (uid: string) => `users/${uid}`
 };
