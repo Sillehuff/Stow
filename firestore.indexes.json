@@ -26,14 +26,6 @@
       ]
     },
     {
-      "collectionGroup": "members",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "role", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "areas",
       "queryScope": "COLLECTION_GROUP",
       "fields": [

@@ -1,6 +1,6 @@
 # Stow PWA (Firebase + Firestore + Vision LLM Adapters)
 
-Production-oriented rebuild scaffold for the original `stow-v3.jsx` prototype with:
+Production-oriented rebuild of the original `stow-v3` prototype (since removed from the tree) with:
 
 - React + TypeScript + Vite
 - PWA support (`vite-plugin-pwa`)
@@ -59,6 +59,21 @@ firebase emulators:start
 ```bash
 npm run dev
 ```
+
+## Deploying backend changes
+
+CI deploys **hosting only** (on merge to main). Any change under `functions/`,
+`firestore.rules`, `firestore.indexes.json`, or `storage.rules` must be deployed
+manually after merge:
+
+```bash
+npm run deploy:backend
+```
+
+Required prod env (functions): `APP_BASE_URL` (invite links), `KMS_KEY_NAME`
+(secret encryption — without it, prod fails closed at the first encrypt/decrypt call), optional `VISION_DAILY_LIMIT`
+(default 200/household/day), optional `FUNCTIONS_REGION` (default us-central1 —
+must match the client's `VITE_FUNCTIONS_REGION`).
 
 ## Demo Seeding
 

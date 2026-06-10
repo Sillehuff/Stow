@@ -12,6 +12,7 @@ dist
 /functions/node_modules
 /functions/lib
 /coverage
-*.tsbuildinfo
+# tsc -b artifacts that would shadow vite.config.ts
 vite.config.js
 vite.config.d.ts
+*.tsbuildinfo
