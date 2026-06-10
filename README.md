@@ -60,6 +60,21 @@ firebase emulators:start
 npm run dev
 ```
 
+## Deploying backend changes
+
+CI deploys **hosting only** (on merge to main). Any change under `functions/`,
+`firestore.rules`, `firestore.indexes.json`, or `storage.rules` must be deployed
+manually after merge:
+
+```bash
+npm run deploy:backend
+```
+
+Required prod env (functions): `APP_BASE_URL` (invite links), `KMS_KEY_NAME`
+(secret encryption — deploys without it fail closed), optional `VISION_DAILY_LIMIT`
+(default 200/household/day), optional `FUNCTIONS_REGION` (default us-central1 —
+must match the client's `VITE_FUNCTIONS_REGION`).
+
 ## Demo Seeding
 
 To seed a demo household into the emulator or your configured project:

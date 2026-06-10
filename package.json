@@ -15,6 +15,7 @@
     "functions:build": "npm --prefix functions run build",
     "functions:test": "npm --prefix functions run test",
     "functions:serve": "npm --prefix functions run serve",
+    "deploy:backend": "firebase deploy --only functions,firestore,storage",
     "seed:demo": "tsx scripts/seed-demo.ts",
     "backfill:positions": "tsx scripts/backfill-positions.ts",
     "backfill:status": "tsx scripts/backfill-status.ts"
