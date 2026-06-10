@@ -8,7 +8,15 @@ type BeforeInstallPromptEvent = Event & {
 
 export function usePwaInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const { needRefresh, updateServiceWorker } = useRegisterSW();
+  const { needRefresh, updateServiceWorker } = useRegisterSW({
+    onRegisteredSW(_swUrl, registration) {
+      if (!registration) return;
+      // Long-lived installed PWAs never re-navigate; poll hourly so deploys actually reach users.
+      setInterval(() => {
+        void registration.update();
+      }, 60 * 60 * 1000);
+    }
+  });
   const isStandalone =
     typeof window !== "undefined" &&
     (window.matchMedia?.("(display-mode: standalone)")?.matches || (window.navigator as { standalone?: boolean }).standalone === true);
