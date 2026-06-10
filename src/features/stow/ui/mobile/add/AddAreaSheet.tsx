@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus } from "@/features/stow/ui/mobile/theme/icons";
 import { Button } from "@/features/stow/ui/mobile/components/Button";
 import { Field } from "@/features/stow/ui/mobile/components/Field";
@@ -14,6 +14,14 @@ export interface AddAreaSheetProps {
 export function AddAreaSheet(props: AddAreaSheetProps) {
   const { open, areaCount, onClose, onCreate } = props;
   const [name, setName] = useState("");
+  const wasOpen = useRef(false);
+
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      setName("");
+    }
+    wasOpen.current = open;
+  }, [open]);
 
   function submit() {
     if (!name.trim()) return;
