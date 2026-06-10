@@ -18,6 +18,9 @@ function assertAdminTargetAllowed(targetRole: Role, nextRole?: Role) {
 
 export async function updateHouseholdMemberRoleHandler(raw: unknown, actorUid: string) {
   const input = updateMemberRoleInputSchema.parse(raw);
+  // Actor role is read pre-tx deliberately: the security-critical invariant is the in-tx
+  // owner-count check below, not the actor's authority. A just-demoted actor getting one
+  // stale-authority action is accepted, bounded risk.
   const actorRole = (await requireHouseholdAdmin(input.householdId, actorUid)) as Role;
   const memberRef = db.doc(paths.member(input.householdId, input.uid));
   const ownersQuery = db.collection(paths.members(input.householdId)).where("role", "==", "OWNER");
@@ -41,6 +44,8 @@ export async function updateHouseholdMemberRoleHandler(raw: unknown, actorUid: s
       // Registers the owners query in the transaction's read set; this arms the version
       // check that enforces the at-least-one-owner invariant under concurrent demotion.
       // Must run inside the tx — do not refactor away.
+      // The owner count can only drop via this same handler (demotion/removal), whose writes
+      // are version-checked against this query's result set, so no phantom path sneaks it down.
       const owners = await tx.get(ownersQuery);
       if (owners.size <= 1) {
         throw new HttpsError("failed-precondition", "This household must keep at least one owner");
@@ -68,6 +73,8 @@ export async function updateHouseholdMemberRoleHandler(raw: unknown, actorUid: s
 
 export async function removeHouseholdMemberHandler(raw: unknown, actorUid: string) {
   const input = removeMemberInputSchema.parse(raw);
+  // Actor role is read pre-tx deliberately: the security-critical invariant is the in-tx
+  // owner-count check below, not the actor's authority (see update handler for the full note).
   const actorRole = (await requireHouseholdAdmin(input.householdId, actorUid)) as Role;
   const memberRef = db.doc(paths.member(input.householdId, input.uid));
   const userRef = db.doc(paths.user(input.uid));
@@ -93,6 +100,8 @@ export async function removeHouseholdMemberHandler(raw: unknown, actorUid: strin
       // Registers the owners query in the transaction's read set; this arms the version
       // check that enforces the at-least-one-owner invariant under concurrent removal.
       // Must run inside the tx — do not refactor away.
+      // The owner count can only drop via this same handler (demotion/removal), whose writes
+      // are version-checked against this query's result set, so no phantom path sneaks it down.
       const owners = await tx.get(ownersQuery);
       if (owners.size <= 1) {
         throw new HttpsError("failed-precondition", "This household must keep at least one owner");

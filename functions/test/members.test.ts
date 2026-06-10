@@ -110,6 +110,8 @@ describe("member management handlers", () => {
       code: "permission-denied"
     });
     expect(tx.set).not.toHaveBeenCalled();
+    // Admins are gated before the owner-count branch; the owners query is never read.
+    expect(tx.get).not.toHaveBeenCalledWith(ownersQuery);
   });
 
   it("blocks admins from removing existing owners", async () => {
@@ -126,6 +128,8 @@ describe("member management handlers", () => {
       code: "permission-denied"
     });
     expect(tx.delete).not.toHaveBeenCalled();
+    // Admins are gated before the owner-count branch; the owners query is never read.
+    expect(tx.get).not.toHaveBeenCalledWith(ownersQuery);
   });
 
   it("prevents demoting the last remaining owner", async () => {
@@ -160,6 +164,9 @@ describe("member management handlers", () => {
       updateHouseholdMemberRoleHandler({ householdId: "h1", uid: "target-user", role: "MEMBER" }, "owner-1")
     ).rejects.toMatchObject({ code: "failed-precondition" });
     expect(tx.set).not.toHaveBeenCalled();
+    // Pin the load-bearing invariant: the owner count MUST be read inside the transaction.
+    // A refactor that moves it back outside the tx fails here even with the same count value.
+    expect(tx.get).toHaveBeenCalledWith(ownersQuery);
   });
 
   it("prevents removing the last remaining owner", async () => {
@@ -175,6 +182,9 @@ describe("member management handlers", () => {
       code: "failed-precondition"
     });
     expect(tx.delete).not.toHaveBeenCalled();
+    // Pin the load-bearing invariant: the owner count MUST be read inside the transaction.
+    // A refactor that moves it back outside the tx fails here even with the same count value.
+    expect(tx.get).toHaveBeenCalledWith(ownersQuery);
   });
 
   it("allows owners to promote another member to owner", async () => {
@@ -223,6 +233,8 @@ describe("member management handlers", () => {
 
     expect(tx.delete).toHaveBeenCalledWith(memberRef);
     expect(tx.set).not.toHaveBeenCalled();
+    // Removing a plain MEMBER never triggers the owner-count guard.
+    expect(tx.get).not.toHaveBeenCalledWith(ownersQuery);
   });
 
   it("clears the removed member household pointer when it still targets the household", async () => {
