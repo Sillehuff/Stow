@@ -14,6 +14,7 @@ import { AddAreaSheet } from "@/features/stow/ui/mobile/add/AddAreaSheet";
 import { AddItemSheet } from "@/features/stow/ui/mobile/add/AddItemSheet";
 import type { AddItemInitial } from "@/features/stow/ui/mobile/add/AddItemSheet";
 import { AddSpaceSheet } from "@/features/stow/ui/mobile/add/AddSpaceSheet";
+import { Button } from "@/features/stow/ui/mobile/components/Button";
 import { ActivityScreen } from "@/features/stow/ui/mobile/screens/ActivityScreen";
 import { CaptureFirst } from "@/features/stow/ui/mobile/capture/CaptureFirst";
 import { PhotoSource } from "@/features/stow/ui/mobile/capture/PhotoSource";
@@ -63,6 +64,12 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
 
   const flash = (message: string) => setToast(message);
 
+  function logActivitySafe(entry: Parameters<typeof buildActivityEntry>[0]) {
+    data.actions
+      .logActivity({ householdId, entry: buildActivityEntry(entry) })
+      .catch((error) => console.error("Activity log failed", error));
+  }
+
   useEffect(() => {
     if (rootRef.current) applyPalette(rootRef.current, makePalette());
   }, []);
@@ -100,6 +107,16 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
   const addAreaSpace = addAreaSpaceId ? data.spaces.find((space) => space.id === addAreaSpaceId) ?? null : null;
   const addItemInitial = nav.overlay.kind === "addItem" ? (nav.overlay.payload as AddItemInitial | undefined) : undefined;
   const activityOpen = isActivityPath(location.pathname, nav.basePath);
+
+  const spaceMissing = Boolean(nav.selectedSpaceId && data.spaces.length > 0 && !selectedSpace);
+
+  useEffect(() => {
+    if (nav.selectedItemId && data.items.length > 0 && !selectedItem) {
+      flash("That item was removed");
+      nav.navigateToTab("spaces");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nav.selectedItemId, selectedItem, data.items.length]);
 
   function itemCountForSpace(spaceId: string) {
     return data.items.filter((item) => item.spaceId === spaceId).length;
@@ -213,7 +230,15 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
   let screen: ReactNode = null;
 
   if (nav.tab === "spaces") {
-    screen = selectedSpace ? (
+    screen = spaceMissing ? (
+      <div style={{ padding: "48px 24px", textAlign: "center", display: "flex", flexDirection: "column", gap: 12, alignItems: "center" }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: "var(--stow-ink)" }}>Space not found</div>
+        <div style={{ fontSize: 14, color: "var(--stow-ink-muted)" }}>
+          It may have been deleted. QR labels for deleted spaces stop working.
+        </div>
+        <Button variant="primary" onClick={() => nav.navigateToTab("spaces")}>All Spaces</Button>
+      </div>
+    ) : selectedSpace ? (
       <RoomScreen
         space={selectedSpace}
         items={data.items}
@@ -225,7 +250,6 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
         onAddArea={() => nav.openOverlay("addArea", { spaceId: selectedSpace.id })}
         onAddItem={(areaId) => nav.openOverlay("captureFirst", { spaceId: selectedSpace.id, areaId })}
         onOpenSpaceQr={() => nav.openOverlay("spaceQr", { spaceId: selectedSpace.id })}
-        onComingSoon={flash}
       />
     ) : (
       <HomeScreen
@@ -343,41 +367,33 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
               const destinationSpace = data.spaces.find((space) => space.id === dest.spaceId) ?? null;
               return (async () => {
                 await data.actions.updateItem({ householdId, itemId: selectedItem.id, userId, patch: dest });
-                await data.actions.logActivity({
-                  householdId,
-                  entry: buildActivityEntry({
-                    type: "item_moved",
-                    actorUid: userId,
-                    actorName,
-                    itemName: selectedItem.name,
-                    spaceName: destinationSpace?.name,
-                    areaName: dest.areaNameSnapshot,
-                    spaceId: dest.spaceId,
-                    areaId: dest.areaId,
-                    itemId: selectedItem.id
-                  })
+                logActivitySafe({
+                  type: "item_moved",
+                  actorUid: userId,
+                  actorName,
+                  itemName: selectedItem.name,
+                  spaceName: destinationSpace?.name,
+                  areaName: dest.areaNameSnapshot,
+                  spaceId: dest.spaceId,
+                  areaId: dest.areaId,
+                  itemId: selectedItem.id
                 });
               })();
             }}
             onChangeStatus={async (next: ItemStatus) => {
+              if (next === selectedItem.status) return; // re-tapping "lent" must not wipe the loan
               if (selectedItem.status === "lent") {
-                await data.actions.clearItemLoan({ householdId, itemId: selectedItem.id, userId });
-                if (next !== "home") {
-                  await data.actions.setItemStatus({ householdId, itemId: selectedItem.id, userId, status: next });
-                }
+                await data.actions.clearItemLoan({ householdId, itemId: selectedItem.id, userId, nextStatus: next });
               } else {
                 await data.actions.setItemStatus({ householdId, itemId: selectedItem.id, userId, status: next });
               }
-              await data.actions.logActivity({
-                householdId,
-                entry: buildActivityEntry({
-                  type: "item_status_changed",
-                  actorUid: userId,
-                  actorName,
-                  itemName: selectedItem.name,
-                  status: next,
-                  itemId: selectedItem.id
-                })
+              logActivitySafe({
+                type: "item_status_changed",
+                actorUid: userId,
+                actorName,
+                itemName: selectedItem.name,
+                status: next,
+                itemId: selectedItem.id
               });
             }}
             onConfirmLoan={async (loan) => {
@@ -393,17 +409,14 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
                   ...(loan.note ? { note: loan.note } : {})
                 }
               });
-              await data.actions.logActivity({
-                householdId,
-                entry: buildActivityEntry({
-                  type: "item_status_changed",
-                  actorUid: userId,
-                  actorName,
-                  itemName: selectedItem.name,
-                  status: "lent",
-                  loanTo: loan.to,
-                  itemId: selectedItem.id
-                })
+              logActivitySafe({
+                type: "item_status_changed",
+                actorUid: userId,
+                actorName,
+                itemName: selectedItem.name,
+                status: "lent",
+                loanTo: loan.to,
+                itemId: selectedItem.id
               });
             }}
             onDelete={() => setDeleteItemId(selectedItem.id)}
@@ -467,15 +480,12 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
               reorderAreas: data.actions.reorderAreas,
               deleteSpace: async (input) => {
                 await data.actions.deleteSpace(input);
-                await data.actions.logActivity({
-                  householdId: input.householdId,
-                  entry: buildActivityEntry({
-                    type: "space_deleted",
-                    actorUid: input.userId,
-                    actorName,
-                    spaceName: editSpace.name,
-                    spaceId: editSpace.id
-                  })
+                logActivitySafe({
+                  type: "space_deleted",
+                  actorUid: input.userId,
+                  actorName,
+                  spaceName: editSpace.name,
+                  spaceId: editSpace.id
                 });
               }
             }}
@@ -675,15 +685,12 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
             void (async () => {
               try {
                 await data.actions.deleteItem({ householdId, itemId: itemIdToDelete, userId });
-                await data.actions.logActivity({
-                  householdId,
-                  entry: buildActivityEntry({
-                    type: "item_deleted",
-                    actorUid: userId,
-                    actorName,
-                    itemName: itemToDelete?.name,
-                    itemId: itemIdToDelete
-                  })
+                logActivitySafe({
+                  type: "item_deleted",
+                  actorUid: userId,
+                  actorName,
+                  itemName: itemToDelete?.name,
+                  itemId: itemIdToDelete
                 });
                 if (imageToClean) void bestEffortDeleteImage(imageToClean);
                 flash("Item deleted");

@@ -101,7 +101,6 @@ export function PhotoSource({ onClose, onPicked }: PhotoSourceProps) {
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         onChange={onFilePicked}
         style={{ display: "none" }}
       />

@@ -37,11 +37,35 @@ vi.mock("@/lib/firebase/functions", () => ({
   updateHouseholdMemberRole: vi.fn()
 }));
 
-import { inventoryRepository } from "@/features/stow/services/repository";
+import { inventoryRepository, normalizeItemDoc } from "@/features/stow/services/repository";
 
 afterEach(() => {
   setCalls.length = 0;
   commit.mockClear();
+});
+
+const validItemDoc = {
+  householdId: "h1",
+  spaceId: "s1",
+  areaId: "a1",
+  areaNameSnapshot: "Desk",
+  name: "Keyboard",
+  kind: "item",
+  tags: [],
+  isPacked: false,
+  status: "home"
+};
+
+// normalizeItemDoc takes a Firestore snapshot ({ id, data() }), so wrap raw fields.
+const snapOf = (data: Record<string, unknown>) => ({ id: "i1", data: () => data });
+
+describe("normalizeItemDoc", () => {
+  it("defaults malformed name/notes/value instead of crashing the UI", () => {
+    const normalized = normalizeItemDoc(snapOf({ ...validItemDoc, name: 42, notes: null, value: "abc" }));
+    expect(normalized.name).toBe("Untitled item");
+    expect(normalized.notes).toBe("");
+    expect(normalized.value).toBeNull();
+  });
 });
 
 describe("createItemsBatch", () => {

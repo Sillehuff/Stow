@@ -18,7 +18,8 @@ import {
   where,
   writeBatch,
   type DocumentData,
-  type QuerySnapshot
+  type QuerySnapshot,
+  type WriteBatch
 } from "firebase/firestore";
 import type { Unsubscribe } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
@@ -75,6 +76,21 @@ function mapSnapshot<T>(snap: QuerySnapshot<DocumentData>): SnapshotState<T> {
   };
 }
 
+/**
+ * Like mapSnapshot, but drops docs that lack a string `name`. This guards malformed
+ * docs from crashing the UI AND filters out the position-only stubs that reorderSpaces/
+ * reorderAreas' set+merge can recreate after a concurrent delete (Task 4.11).
+ */
+function mapNamedSnapshot<T extends { name: string }>(snap: QuerySnapshot<DocumentData>): SnapshotState<T> {
+  return {
+    data: snap.docs
+      .filter((docSnap) => typeof docSnap.data().name === "string")
+      .map((docSnap) => mapDoc<T>(docSnap)),
+    fromCache: snap.metadata.fromCache,
+    hasPendingWrites: snap.metadata.hasPendingWrites
+  };
+}
+
 function mapMemberSnapshot(snap: QuerySnapshot<DocumentData>): SnapshotState<HouseholdMember> {
   return {
     data: snap.docs.map((docSnap) => ({
@@ -86,11 +102,15 @@ function mapMemberSnapshot(snap: QuerySnapshot<DocumentData>): SnapshotState<Hou
   };
 }
 
-function normalizeItemDoc(snap: { id: string; data(): DocumentData }): Item {
+export function normalizeItemDoc(snap: { id: string; data(): DocumentData }): Item {
   const data = snap.data() as Record<string, unknown>;
   return {
     id: snap.id,
     ...(data as Omit<Item, "id" | "photoStatus" | "entryMode" | "status">),
+    // Defensive read-boundary defaults: a malformed doc must not crash the UI.
+    name: typeof data.name === "string" && data.name.trim() ? data.name : "Untitled item",
+    notes: typeof data.notes === "string" ? data.notes : "",
+    value: typeof data.value === "number" && Number.isFinite(data.value) ? data.value : null,
     status: defaultItemStatus({ status: data.status, isPacked: data.isPacked }),
     photoStatus: defaultPhotoStatus({ photoStatus: data.photoStatus, image: data.image }),
     entryMode: defaultEntryMode({ entryMode: data.entryMode, vision: data.vision })
@@ -202,6 +222,13 @@ export function positionUpdatesFor(orderedIds: string[]): Array<{ id: string; po
   return orderedIds.map((id, index) => ({ id, position: index }));
 }
 
+/** Firestore batches cap at 500 ops; stay under it with headroom. */
+export function chunkOps<T>(ops: T[], size = 450): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < ops.length; i += size) chunks.push(ops.slice(i, i + size));
+  return chunks;
+}
+
 export const inventoryRepository = {
   createSpaceId(householdId: string) {
     return doc(collection(requireDb(), householdPaths.spaces(householdId))).id;
@@ -238,7 +265,7 @@ export const inventoryRepository = {
 
   subscribeSpaces(householdId: string, onData: (state: SnapshotState<Space>) => void, onError: (e: Error) => void): Unsubscribe {
     const q = query(collection(requireDb(), householdPaths.spaces(householdId)), orderBy("name"));
-    return onSnapshot(q, (snap) => onData(mapSnapshot<Space>(snap)), onError);
+    return onSnapshot(q, (snap) => onData(mapNamedSnapshot<Space>(snap)), onError);
   },
 
   subscribeAreas(householdId: string, onData: (state: SnapshotState<Area>) => void, onError: (e: Error) => void): Unsubscribe {
@@ -247,7 +274,7 @@ export const inventoryRepository = {
       where("householdId", "==", householdId),
       orderBy("name")
     );
-    return onSnapshot(q, (snap) => onData(mapSnapshot<Area>(snap)), onError);
+    return onSnapshot(q, (snap) => onData(mapNamedSnapshot<Area>(snap)), onError);
   },
 
   subscribeItems(householdId: string, onData: (state: SnapshotState<Item>) => void, onError: (e: Error) => void): Unsubscribe {
@@ -412,10 +439,13 @@ export const inventoryRepository = {
     const database = requireDb();
     const batch = writeBatch(database);
     for (const { id, position } of positionUpdatesFor(input.orderedIds)) {
-      batch.update(doc(database, householdPaths.space(input.householdId, id)), {
-        position,
-        updatedAt: serverTimestamp()
-      });
+      // set+merge (not update): update rejects the whole batch if any id was deleted
+      // on another device mid-drag; set+merge still writes positions for the survivors.
+      batch.set(
+        doc(database, householdPaths.space(input.householdId, id)),
+        { position, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
     }
     await batch.commit();
   },
@@ -424,10 +454,12 @@ export const inventoryRepository = {
     const database = requireDb();
     const batch = writeBatch(database);
     for (const { id, position } of positionUpdatesFor(input.orderedIds)) {
-      batch.update(doc(database, householdPaths.area(input.householdId, input.spaceId, id)), {
-        position,
-        updatedAt: serverTimestamp()
-      });
+      // set+merge (not update): tolerate a concurrent delete of any area mid-drag.
+      batch.set(
+        doc(database, householdPaths.area(input.householdId, input.spaceId, id)),
+        { position, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
     }
     await batch.commit();
   },
@@ -485,24 +517,36 @@ export const inventoryRepository = {
       throw new Error("Space contains items. Choose a destination space/area first.");
     }
 
-    const batch = writeBatch(database);
+    // Build the write set as ordered closures, then commit in <=450-op chunks so a
+    // space with hundreds of items/areas survives Firestore's 500-op batch limit.
+    // Order is load-bearing: item reassigns → area deletes → space delete LAST, so a
+    // mid-way failure never leaves a deleted space with orphaned children.
+    const ops: Array<(batch: WriteBatch) => void> = [];
     if (input.reassignTo) {
+      const reassignTo = input.reassignTo;
       for (const itemDoc of itemsSnap.docs) {
-        batch.update(itemDoc.ref, {
-          spaceId: input.reassignTo.spaceId,
-          areaId: input.reassignTo.areaId,
-          areaNameSnapshot: input.reassignTo.areaNameSnapshot,
-          updatedAt: serverTimestamp(),
-          updatedBy: input.userId
-        });
+        ops.push((batch) =>
+          batch.update(itemDoc.ref, {
+            spaceId: reassignTo.spaceId,
+            areaId: reassignTo.areaId,
+            areaNameSnapshot: reassignTo.areaNameSnapshot,
+            updatedAt: serverTimestamp(),
+            updatedBy: input.userId
+          })
+        );
       }
     }
 
     for (const areaDoc of areasSnap.docs) {
-      batch.delete(areaDoc.ref);
+      ops.push((batch) => batch.delete(areaDoc.ref));
     }
-    batch.delete(doc(database, householdPaths.space(input.householdId, input.spaceId)));
-    await batch.commit();
+    ops.push((batch) => batch.delete(doc(database, householdPaths.space(input.householdId, input.spaceId))));
+
+    for (const chunk of chunkOps(ops)) {
+      const batch = writeBatch(database);
+      chunk.forEach((apply) => apply(batch));
+      await batch.commit();
+    }
   },
 
   async createItem(input: {
@@ -890,9 +934,9 @@ export const inventoryRepository = {
     });
   },
 
-  async clearItemLoan(input: { householdId: string; itemId: string; userId: string }) {
+  async clearItemLoan(input: { householdId: string; itemId: string; userId: string; nextStatus?: ItemStatus }) {
     await updateDoc(doc(requireDb(), householdPaths.item(input.householdId, input.itemId)), {
-      status: "home",
+      status: input.nextStatus ?? "home",
       loan: deleteField(),
       updatedAt: serverTimestamp(),
       updatedBy: input.userId

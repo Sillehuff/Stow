@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus } from "@/features/stow/ui/mobile/theme/icons";
 import { Button } from "@/features/stow/ui/mobile/components/Button";
 import { Field } from "@/features/stow/ui/mobile/components/Field";
@@ -17,6 +17,15 @@ export function AddSpaceSheet(props: AddSpaceSheetProps) {
   const { open, spaceCount, onClose, onCreate } = props;
   const [name, setName] = useState("");
   const [areas, setAreas] = useState("");
+  const wasOpen = useRef(false);
+
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      setName("");
+      setAreas("");
+    }
+    wasOpen.current = open;
+  }, [open]);
 
   function submit() {
     if (!name.trim()) return;

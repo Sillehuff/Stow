@@ -29,7 +29,7 @@ import {
 import { completeWrite } from "@/lib/firebase/completeWrite";
 import { visionDetectShelfItems } from "@/lib/firebase/functions";
 import { storagePaths } from "@/lib/firebase/paths";
-import { uploadFileToStorage } from "@/lib/firebase/storage";
+import { bestEffortDeleteImage, uploadFileToStorage } from "@/lib/firebase/storage";
 
 export interface QuickCaptureProps {
   householdId: string;
@@ -154,6 +154,10 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
   } = props;
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const analyzedAttemptRef = useRef<number | null>(null);
+  // The analyzed frame is uploaded to _shelf/ for detection but no committed item ever
+  // references it, so we track the latest upload and delete it once we're done (commit or
+  // cancel) to avoid leaking an orphaned storage object per scan.
+  const uploadedFrameRef = useRef<ImageRef | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -188,6 +192,17 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
     closeButtonRef.current?.focus();
   }, []);
 
+  // Release the orphaned shelf frame on unmount. Both onCommitted (after a successful
+  // commit) and onClose (cancel) unmount this component, so this covers every exit path.
+  useEffect(() => {
+    return () => {
+      if (uploadedFrameRef.current) {
+        void bestEffortDeleteImage(uploadedFrameRef.current);
+        uploadedFrameRef.current = null;
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (state.destination.spaceId && state.destination.areaId) return;
     const next = resolveInitialDest(spaces, spaceId, areaId);
@@ -203,7 +218,9 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
     async function analyze() {
       setAnalyzeError(null);
       try {
+        if (uploadedFrameRef.current) void bestEffortDeleteImage(uploadedFrameRef.current);
         const image = await upload(capturedBlob);
+        uploadedFrameRef.current = image;
         if (!image.storagePath) throw new Error("Uploaded frame has no storage path");
         const response: VisionDetectShelfResponse = await detectShelfItems({
           householdId,
