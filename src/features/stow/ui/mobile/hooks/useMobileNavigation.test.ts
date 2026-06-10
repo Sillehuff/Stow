@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMobileRoute, buildMobilePath, isActivityPath } from "@/features/stow/ui/mobile/hooks/useMobileNavigation";
+import { parseMobileRoute, buildMobilePath, isActivityPath, resolveBack } from "@/features/stow/ui/mobile/hooks/useMobileNavigation";
 
 const sp = (s = "") => new URLSearchParams(s);
 
@@ -85,5 +85,24 @@ describe("isActivityPath", () => {
   it("is prefix-aware for cutover with an empty base", () => {
     expect(isActivityPath("/activity", "")).toBe(true);
     expect(isActivityPath("/", "")).toBe(false);
+  });
+});
+
+describe("resolveBack", () => {
+  it("falls back to the spaces root when there is no in-app history (idx 0)", () => {
+    expect(resolveBack({ idx: 0 }, "/app")).toEqual({ kind: "path", path: "/app/spaces" });
+  });
+
+  it("falls back when history state is missing entirely", () => {
+    expect(resolveBack(null, "/app")).toEqual({ kind: "path", path: "/app/spaces" });
+    expect(resolveBack({}, "/app")).toEqual({ kind: "path", path: "/app/spaces" });
+  });
+
+  it("uses in-app history when it exists (idx > 0)", () => {
+    expect(resolveBack({ idx: 2 }, "/app")).toEqual({ kind: "back" });
+  });
+
+  it("builds the fallback under a collapsed base for cutover", () => {
+    expect(resolveBack({ idx: 0 }, "")).toEqual({ kind: "path", path: "/spaces" });
   });
 });

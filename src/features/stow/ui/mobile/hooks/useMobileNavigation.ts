@@ -92,6 +92,21 @@ export function buildMobilePath(
   return `${b}/${route.tab ?? "spaces"}`;
 }
 
+/**
+ * Decide what `back()` should do given the current `window.history.state`.
+ * React Router tracks `idx` (0 for the first entry in this session). Deep-link
+ * and PWA-launch entries land at idx 0, where `navigate(-1)` is a no-op — so we
+ * fall back to the spaces root instead of leaving the back button dead.
+ */
+export function resolveBack(
+  historyState: { idx?: number } | null | undefined,
+  basePath: string
+): { kind: "back" } | { kind: "path"; path: string } {
+  const idx = historyState?.idx ?? 0;
+  if (idx > 0) return { kind: "back" };
+  return { kind: "path", path: buildMobilePath(basePath, {}) };
+}
+
 export function useMobileNavigation(householdId: string, basePath = "/app") {
   const navigate = useNavigate();
   const location = useLocation();
@@ -130,7 +145,12 @@ export function useMobileNavigation(householdId: string, basePath = "/app") {
   }
 
   function back() {
-    navigate(-1);
+    const decision = resolveBack(window.history.state as { idx?: number } | null, basePath);
+    if (decision.kind === "back") {
+      navigate(-1);
+      return;
+    }
+    navigate(decision.path);
   }
 
   function openOverlay(kind: OverlayKind, payload?: Record<string, unknown>) {
