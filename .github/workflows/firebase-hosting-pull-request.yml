@@ -20,6 +20,11 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             functions/package-lock.json
+      # firebase-tools 15.x emulators require JDK 21+; the runner default is older.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
       - run: npm ci
       - run: npm --prefix functions ci
       - run: npx playwright install --with-deps chromium
