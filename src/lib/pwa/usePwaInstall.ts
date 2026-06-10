@@ -6,11 +6,16 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 
+// One app-lifetime poller: the hook remounts on every route change, and each
+// remount re-fires onRegisteredSW, so guard at module scope to avoid stacking intervals.
+let updatePollStarted = false;
+
 export function usePwaInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const { needRefresh, updateServiceWorker } = useRegisterSW({
     onRegisteredSW(_swUrl, registration) {
-      if (!registration) return;
+      if (!registration || updatePollStarted) return;
+      updatePollStarted = true;
       // Long-lived installed PWAs never re-navigate; poll hourly so deploys actually reach users.
       setInterval(() => {
         void registration.update();
