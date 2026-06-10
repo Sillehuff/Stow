@@ -24,10 +24,11 @@ export interface PackingScreenProps {
   onFlash: (msg: string) => void;
 }
 
-function packingProgress(list: PackingList) {
+export function packingProgress(list: PackingList, existingItemIds: Set<string>) {
+  const ids = list.itemIds.filter((id) => existingItemIds.has(id));
   const packed = new Set(list.packedItemIds);
-  const done = list.itemIds.filter((id) => packed.has(id)).length;
-  const total = list.itemIds.length;
+  const done = ids.filter((id) => packed.has(id)).length;
+  const total = ids.length;
   const pct = total ? Math.round((done / total) * 100) : 0;
 
   return { done, total, pct };
@@ -75,6 +76,7 @@ export function PackingScreen(props: PackingScreenProps) {
   const activeList = useMemo(() => packingLists.find((list) => list.id === activeListId) ?? null, [packingLists, activeListId]);
   const menuList = useMemo(() => packingLists.find((list) => list.id === menuListId) ?? null, [packingLists, menuListId]);
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
+  const existingItemIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
   const spaceNameById = useMemo(() => new Map(spaces.map((space) => [space.id, space.name])), [spaces]);
 
   const activeItems = useMemo(() => {
@@ -212,7 +214,7 @@ export function PackingScreen(props: PackingScreenProps) {
         <div style={{ flex: 1, overflowY: "auto", padding: "12px 24px 150px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {packingLists.map((list) => {
-              const { done, total, pct } = packingProgress(list);
+              const { done, total, pct } = packingProgress(list, existingItemIds);
               const isRenaming = renamingListId === list.id;
 
               return (
@@ -377,7 +379,7 @@ export function PackingScreen(props: PackingScreenProps) {
     );
   }
 
-  const { done, total, pct } = packingProgress(activeList);
+  const { done, total, pct } = packingProgress(activeList, existingItemIds);
   const packedIds = new Set(activeList.packedItemIds);
 
   return (
