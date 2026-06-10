@@ -21,6 +21,9 @@ const tx = {
   update: vi.fn(),
   delete: vi.fn()
 };
+// Default: invoke the callback once (the admin SDK only retries on contention).
+// Individual tests override this to simulate retries.
+const runTransaction = vi.fn(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx));
 const inviteQueryGet = vi.fn();
 const inviteCollection = {
   doc: vi.fn(() => inviteRef),
@@ -47,7 +50,7 @@ vi.mock("../src/shared/firestore.js", () => ({
       return inviteRef;
     }),
     batch: vi.fn(() => batch),
-    runTransaction: vi.fn(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx))
+    runTransaction
   },
   paths: {
     invites: (householdId: string) => `households/${householdId}/invites`,
@@ -71,6 +74,7 @@ describe("invite handlers", () => {
     inviteQueryGet.mockResolvedValue({ empty: true, docs: [] });
     inviteRef.get.mockResolvedValue({ exists: true });
     batch.commit.mockResolvedValue(undefined);
+    runTransaction.mockImplementation(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx));
     tx.get.mockResolvedValue({
       exists: true,
       data: () => ({ role: "MEMBER" }),
@@ -204,6 +208,109 @@ describe("invite handlers", () => {
 
     expect(tx.set).toHaveBeenCalledTimes(2); // member + user
     expect(tx.update).toHaveBeenCalledTimes(1); // invite acceptedAt
+  });
+
+  it("does not double-write when the admin SDK retries a losing transaction", async () => {
+    const inviteDoc = {
+      ref: { path: "households/h1/invites/invite-123" },
+      data: () => ({ role: "MEMBER" }),
+      get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+    };
+    inviteQueryGet.mockResolvedValue({
+      empty: false,
+      docs: [inviteDoc]
+    });
+
+    // First read sees a pending invite; the contended retry re-reads an invite that a
+    // concurrent accept already marked. Records the per-invocation tx-write counts.
+    tx.get
+      .mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ role: "MEMBER" }),
+        get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+      })
+      .mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ role: "MEMBER", acceptedAt: "already" }),
+        get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+      });
+
+    const writesPerInvocation: number[] = [];
+    runTransaction.mockImplementation(async (fn: (t: typeof tx) => Promise<unknown>) => {
+      // Invocation 1: the SDK runs the callback, then discards it on a write conflict.
+      tx.set.mockClear();
+      tx.update.mockClear();
+      await fn(tx).catch(() => undefined);
+      writesPerInvocation.push(tx.set.mock.calls.length + tx.update.mock.calls.length);
+
+      // Invocation 2: the SDK retries the same callback against the now-accepted invite.
+      // It must throw cleanly without writing; surface that throw to the handler.
+      tx.set.mockClear();
+      tx.update.mockClear();
+      try {
+        return await fn(tx);
+      } finally {
+        writesPerInvocation.push(tx.set.mock.calls.length + tx.update.mock.calls.length);
+      }
+    });
+
+    await expect(
+      acceptHouseholdInviteHandler(
+        { householdId: "h1", token: "a".repeat(32) },
+        { uid: "u2", token: { email: "u2@example.com" } }
+      )
+    ).rejects.toMatchObject({ code: "already-exists" });
+
+    // First invocation wrote (member+user+invite); the retried invocation wrote nothing.
+    expect(writesPerInvocation).toEqual([3, 0]);
+  });
+
+  it("rejects acceptance when the invite was revoked between query and transaction", async () => {
+    const inviteDoc = {
+      ref: { path: "households/h1/invites/invite-123" },
+      data: () => ({ role: "MEMBER" }),
+      get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+    };
+    inviteQueryGet.mockResolvedValue({
+      empty: false,
+      docs: [inviteDoc]
+    });
+    tx.get.mockResolvedValue({ exists: false });
+
+    await expect(
+      acceptHouseholdInviteHandler(
+        { householdId: "h1", token: "a".repeat(32) },
+        { uid: "u2", token: { email: "u2@example.com" } }
+      )
+    ).rejects.toMatchObject({ code: "not-found" });
+    expect(tx.set).not.toHaveBeenCalled();
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects acceptance when the invite has expired at transaction time", async () => {
+    const inviteDoc = {
+      ref: { path: "households/h1/invites/invite-123" },
+      data: () => ({ role: "MEMBER" }),
+      get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+    };
+    inviteQueryGet.mockResolvedValue({
+      empty: false,
+      docs: [inviteDoc]
+    });
+    tx.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ role: "MEMBER", expiresAt: { toDate: () => new Date(Date.now() - 1000) } }),
+      get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+    });
+
+    await expect(
+      acceptHouseholdInviteHandler(
+        { householdId: "h1", token: "a".repeat(32) },
+        { uid: "u2", token: { email: "u2@example.com" } }
+      )
+    ).rejects.toMatchObject({ code: "deadline-exceeded" });
+    expect(tx.set).not.toHaveBeenCalled();
+    expect(tx.update).not.toHaveBeenCalled();
   });
 
   it("revokes invites through the backend handler", async () => {

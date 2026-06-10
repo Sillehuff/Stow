@@ -60,6 +60,8 @@ export async function acceptHouseholdInviteHandler(raw: unknown, requestAuth: { 
   const userRef = db.doc(paths.user(uid));
 
   await db.runTransaction(async (tx) => {
+    // Registers inviteRef in the transaction's read set; this arms the version check
+    // that enforces single-use. Must precede the writes below — do not refactor away.
     const snap = await tx.get(inviteRef);
     if (!snap.exists) throw new HttpsError("not-found", "Invite not found or invalid");
     const inviteData = snap.data() as {
