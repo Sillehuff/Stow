@@ -220,3 +220,28 @@ export function normalizeSeedForHousehold(householdId: string) {
 
   return { spaces, areas, items, seededAt: now };
 }
+
+/** Starter layout for a brand-new household: spaces + areas only — no demo items, no external images. */
+export function buildStarterSpaces(householdId: string): {
+  spaces: Array<Omit<Space, "createdAt" | "updatedAt" | "image">>;
+  areas: Array<Omit<Area, "createdAt" | "updatedAt" | "image">>;
+} {
+  const spaces = seedSpaceTemplates.map((space, index) => ({
+    id: space.id,
+    householdId,
+    name: space.name,
+    icon: space.icon,
+    color: space.color,
+    position: index
+  }));
+  const areas = seedSpaceTemplates.flatMap((space) =>
+    space.areas.map((area, index) => ({
+      id: area.id,
+      householdId,
+      spaceId: space.id,
+      name: area.name,
+      position: index
+    }))
+  );
+  return { spaces, areas };
+}

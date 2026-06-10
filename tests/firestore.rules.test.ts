@@ -179,6 +179,58 @@ describe("firestore rules", () => {
     await assertSucceeds(batch.commit());
   });
 
+  it("allows the bootstrap transaction to seed spaces and areas in one batch", async () => {
+    const bootstrapDb = testEnv.authenticatedContext("seed-user").firestore();
+    const newHouseholdId = "seed-household";
+    const batch = writeBatch(bootstrapDb);
+
+    batch.set(doc(bootstrapDb, "households", newHouseholdId), {
+      name: "Seed Household",
+      createdBy: "seed-user"
+    });
+    batch.set(doc(bootstrapDb, "households", newHouseholdId, "members", "seed-user"), {
+      uid: "seed-user",
+      role: "OWNER",
+      createdBy: "seed-user"
+    });
+    batch.set(doc(bootstrapDb, "households", newHouseholdId, "spaces", "space-1"), {
+      householdId: newHouseholdId,
+      name: "Living Room",
+      icon: "home",
+      color: "#E8652B",
+      position: 0,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    batch.set(doc(bootstrapDb, "households", newHouseholdId, "spaces", "space-1", "areas", "area-1"), {
+      householdId: newHouseholdId,
+      spaceId: "space-1",
+      name: "Console Drawer",
+      position: 0,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    await assertSucceeds(batch.commit());
+  });
+
+  it("denies a non-member creating a space in an existing household", async () => {
+    await seedHousehold();
+    const outsiderDb = testEnv.authenticatedContext("outsider-1").firestore();
+
+    await assertFails(
+      setDoc(doc(outsiderDb, "households", HOUSEHOLD_ID, "spaces", "space-99"), {
+        householdId: HOUSEHOLD_ID,
+        name: "Trespasser",
+        icon: "box",
+        color: "#000",
+        position: 99,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+    );
+  });
+
   it("keeps normal member reads and writes limited to allowed inventory paths", async () => {
     await seedHousehold();
     const memberDb = testEnv.authenticatedContext("member-1").firestore();
