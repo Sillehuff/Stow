@@ -14,8 +14,12 @@ service firebase.storage {
       allow read: if isMember(householdId);
       // create/update must be image-only and bounded; delete is split out so it
       // is not blocked by size/contentType checks (request.resource is null on delete).
+      // Boundary <= matches vision.ts (> MAX_IMAGE_BYTES), so exactly 10 MB is allowed
+      // by both guards. contentType here is the CLIENT-declared metadata, not sniffed
+      // content — vision.ts re-reads stored metadata server-side before any model call,
+      // so don't treat this rule as proof the bytes are really an image.
       allow create, update: if isMember(householdId)
-        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.size <= 10 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow delete: if isMember(householdId);
     }

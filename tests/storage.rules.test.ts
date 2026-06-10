@@ -7,7 +7,7 @@ import {
   type RulesTestEnvironment
 } from "@firebase/rules-unit-testing";
 import { setDoc, doc } from "firebase/firestore";
-import { deleteObject, ref, uploadBytes } from "firebase/storage";
+import { deleteObject, getBytes, ref, uploadBytes } from "firebase/storage";
 
 // Must match the project the emulators are launched with (`--project demo-stow`):
 // the Storage emulator resolves `firestore.exists()` against that project's
@@ -76,6 +76,21 @@ describe("storage rules", () => {
     const storage = testEnv.authenticatedContext("member-1").storage();
     const big = new Uint8Array(10 * 1024 * 1024 + 1);
     await assertFails(uploadBytes(ref(storage, IMAGE_PATH), big, { contentType: "image/jpeg" }));
+  });
+
+  it("lets members overwrite an existing object", async () => {
+    const storage = testEnv.authenticatedContext("member-1").storage();
+    await assertSucceeds(uploadBytes(ref(storage, IMAGE_PATH), smallJpeg, { contentType: "image/jpeg" }));
+    // Second upload to the same path exercises the `update` verb, not `create`.
+    await assertSucceeds(uploadBytes(ref(storage, IMAGE_PATH), smallJpeg, { contentType: "image/png" }));
+  });
+
+  it("denies non-members reading a member-uploaded object", async () => {
+    const memberStorage = testEnv.authenticatedContext("member-1").storage();
+    await assertSucceeds(uploadBytes(ref(memberStorage, IMAGE_PATH), smallJpeg, { contentType: "image/jpeg" }));
+
+    const strangerStorage = testEnv.authenticatedContext("stranger").storage();
+    await assertFails(getBytes(ref(strangerStorage, IMAGE_PATH)));
   });
 
   it("still lets members delete objects", async () => {
