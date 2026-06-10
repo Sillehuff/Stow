@@ -15,6 +15,12 @@ const batch = {
   update: vi.fn(),
   commit: vi.fn()
 };
+const tx = {
+  get: vi.fn(),
+  set: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn()
+};
 const inviteQueryGet = vi.fn();
 const inviteCollection = {
   doc: vi.fn(() => inviteRef),
@@ -40,7 +46,8 @@ vi.mock("../src/shared/firestore.js", () => ({
       if (path.startsWith("users/")) return userRef;
       return inviteRef;
     }),
-    batch: vi.fn(() => batch)
+    batch: vi.fn(() => batch),
+    runTransaction: vi.fn(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx))
   },
   paths: {
     invites: (householdId: string) => `households/${householdId}/invites`,
@@ -64,6 +71,11 @@ describe("invite handlers", () => {
     inviteQueryGet.mockResolvedValue({ empty: true, docs: [] });
     inviteRef.get.mockResolvedValue({ exists: true });
     batch.commit.mockResolvedValue(undefined);
+    tx.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ role: "MEMBER" }),
+      get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+    });
   });
 
   it("creates invites with hashed tokens only", async () => {
@@ -101,6 +113,14 @@ describe("invite handlers", () => {
       empty: false,
       docs: [inviteDoc]
     });
+    tx.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        role: "ADMIN",
+        expiresAt: new Date(Date.now() + 60_000)
+      }),
+      get: (field: string) => (field === "createdBy" ? "owner-1" : undefined)
+    });
 
     await acceptHouseholdInviteHandler(
       { householdId: "h1", token: "plaintext-token-long-enough" },
@@ -108,7 +128,8 @@ describe("invite handlers", () => {
     );
 
     expect(inviteCollection.where).toHaveBeenCalledWith("tokenHash", "==", hashInviteToken("plaintext-token-long-enough"));
-    expect(batch.set).toHaveBeenCalledWith(
+    expect(tx.get).toHaveBeenCalledWith(inviteDoc.ref);
+    expect(tx.set).toHaveBeenCalledWith(
       memberRef,
       expect.objectContaining({
         uid: "u2",
@@ -118,20 +139,71 @@ describe("invite handlers", () => {
       }),
       { merge: true }
     );
-    expect(batch.set).toHaveBeenCalledWith(
+    expect(tx.set).toHaveBeenCalledWith(
       userRef,
       expect.objectContaining({
         currentHouseholdId: "h1"
       }),
       { merge: true }
     );
-    expect(batch.update).toHaveBeenCalledWith(
+    expect(tx.update).toHaveBeenCalledWith(
       inviteDoc.ref,
       expect.objectContaining({
         acceptedBy: "u2"
       })
     );
-    expect(batch.commit).toHaveBeenCalledTimes(1);
+    expect(batch.commit).not.toHaveBeenCalled();
+  });
+
+  it("rejects acceptance when the invite was already accepted at transaction time", async () => {
+    const inviteDoc = {
+      ref: { path: "households/h1/invites/invite-123" },
+      data: () => ({ role: "MEMBER" }),
+      get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+    };
+    inviteQueryGet.mockResolvedValue({
+      empty: false,
+      docs: [inviteDoc]
+    });
+    // Query (outside tx) returns a pending invite; the transactional re-read sees acceptedAt set.
+    tx.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ role: "MEMBER", acceptedAt: "already" }),
+      get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+    });
+
+    await expect(
+      acceptHouseholdInviteHandler(
+        { householdId: "h1", token: "a".repeat(32) },
+        { uid: "u2", token: { email: "u2@example.com" } }
+      )
+    ).rejects.toMatchObject({ code: "already-exists" });
+    expect(tx.set).not.toHaveBeenCalled();
+  });
+
+  it("writes member, user, and invite updates inside the transaction on success", async () => {
+    const inviteDoc = {
+      ref: { path: "households/h1/invites/invite-123" },
+      data: () => ({ role: "MEMBER" }),
+      get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+    };
+    inviteQueryGet.mockResolvedValue({
+      empty: false,
+      docs: [inviteDoc]
+    });
+    tx.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ role: "MEMBER" }),
+      get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+    });
+
+    await acceptHouseholdInviteHandler(
+      { householdId: "h1", token: "a".repeat(32) },
+      { uid: "u2", token: { email: "u2@example.com" } }
+    );
+
+    expect(tx.set).toHaveBeenCalledTimes(2); // member + user
+    expect(tx.update).toHaveBeenCalledTimes(1); // invite acceptedAt
   });
 
   it("revokes invites through the backend handler", async () => {

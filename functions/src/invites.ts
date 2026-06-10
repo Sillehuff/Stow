@@ -55,45 +55,45 @@ export async function acceptHouseholdInviteHandler(raw: unknown, requestAuth: { 
     throw new HttpsError("not-found", "Invite not found or invalid");
   }
 
-  const inviteDoc = inviteQuery.docs[0];
-  const inviteData = inviteDoc.data() as {
-    role: string;
-    expiresAt?: { toDate?: () => Date } | Date;
-    acceptedAt?: unknown;
-  };
-
-  if (inviteData.acceptedAt) {
-    throw new HttpsError("already-exists", "Invite has already been used");
-  }
-
-  const expiresDate =
-    inviteData.expiresAt instanceof Date
-      ? inviteData.expiresAt
-      : inviteData.expiresAt?.toDate?.();
-  if (expiresDate && expiresDate.getTime() < Date.now()) {
-    throw new HttpsError("deadline-exceeded", "Invite has expired");
-  }
-
+  const inviteRef = inviteQuery.docs[0].ref;
   const memberRef = db.doc(paths.member(input.householdId, uid));
   const userRef = db.doc(paths.user(uid));
-  const batch = db.batch();
-  batch.set(
-    memberRef,
-    {
-      uid,
-      role: inviteData.role,
-      email: requestAuth?.token?.email ?? null,
-      createdAt: FieldValue.serverTimestamp(),
-      createdBy: inviteDoc.get("createdBy") ?? null
-    },
-    { merge: true }
-  );
-  batch.set(userRef, { currentHouseholdId: input.householdId, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-  batch.update(inviteDoc.ref, {
-    acceptedAt: FieldValue.serverTimestamp(),
-    acceptedBy: uid
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(inviteRef);
+    if (!snap.exists) throw new HttpsError("not-found", "Invite not found or invalid");
+    const inviteData = snap.data() as {
+      role: string;
+      expiresAt?: { toDate?: () => Date } | Date;
+      acceptedAt?: unknown;
+    };
+
+    if (inviteData.acceptedAt) throw new HttpsError("already-exists", "Invite has already been used");
+
+    const expiresDate =
+      inviteData.expiresAt instanceof Date ? inviteData.expiresAt : inviteData.expiresAt?.toDate?.();
+    if (expiresDate && expiresDate.getTime() < Date.now()) {
+      throw new HttpsError("deadline-exceeded", "Invite has expired");
+    }
+
+    tx.set(
+      memberRef,
+      {
+        uid,
+        role: inviteData.role,
+        email: requestAuth?.token?.email ?? null,
+        createdAt: FieldValue.serverTimestamp(),
+        createdBy: snap.get("createdBy") ?? null
+      },
+      { merge: true }
+    );
+    tx.set(
+      userRef,
+      { currentHouseholdId: input.householdId, updatedAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    );
+    tx.update(inviteRef, { acceptedAt: FieldValue.serverTimestamp(), acceptedBy: uid });
   });
-  await batch.commit();
   return { ok: true as const };
 }
 
