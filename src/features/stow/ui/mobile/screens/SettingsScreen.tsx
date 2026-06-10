@@ -583,6 +583,9 @@ export function SettingsScreen(props: SettingsScreenProps) {
                   onChange={setInviteEmail}
                   placeholder="name@example.com"
                 />
+                <div style={{ fontSize: 13, lineHeight: 1.45, color: "var(--stow-warm)", fontWeight: 600, marginTop: 6 }}>
+                  Must exactly match the email they sign in with.
+                </div>
               </div>
               <div
                 style={{

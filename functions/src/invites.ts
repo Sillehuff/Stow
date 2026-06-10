@@ -83,6 +83,9 @@ export async function acceptHouseholdInviteHandler(raw: unknown, requestAuth: { 
     if (inviteData.invitedEmail) {
       const callerEmail = (requestAuth?.token?.email ?? "").trim().toLowerCase();
       if (callerEmail !== inviteData.invitedEmail) {
+        // permission-denied (not not-found) is deliberate: the valid token already proves the
+        // invite exists, the message names no email, and the specific copy lets a legitimate
+        // invitee who signed in with the wrong account understand they need to switch accounts.
         throw new HttpsError("permission-denied", "This invite was issued to a different email address");
       }
     }
