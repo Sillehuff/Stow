@@ -381,11 +381,9 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
               })();
             }}
             onChangeStatus={async (next: ItemStatus) => {
+              if (next === selectedItem.status) return; // re-tapping "lent" must not wipe the loan
               if (selectedItem.status === "lent") {
-                await data.actions.clearItemLoan({ householdId, itemId: selectedItem.id, userId });
-                if (next !== "home") {
-                  await data.actions.setItemStatus({ householdId, itemId: selectedItem.id, userId, status: next });
-                }
+                await data.actions.clearItemLoan({ householdId, itemId: selectedItem.id, userId, nextStatus: next });
               } else {
                 await data.actions.setItemStatus({ householdId, itemId: selectedItem.id, userId, status: next });
               }

@@ -890,9 +890,9 @@ export const inventoryRepository = {
     });
   },
 
-  async clearItemLoan(input: { householdId: string; itemId: string; userId: string }) {
+  async clearItemLoan(input: { householdId: string; itemId: string; userId: string; nextStatus?: ItemStatus }) {
     await updateDoc(doc(requireDb(), householdPaths.item(input.householdId, input.itemId)), {
-      status: "home",
+      status: input.nextStatus ?? "home",
       loan: deleteField(),
       updatedAt: serverTimestamp(),
       updatedBy: input.userId
