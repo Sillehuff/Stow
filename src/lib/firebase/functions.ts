@@ -58,7 +58,7 @@ export async function removeHouseholdMember(input: {
 
 export async function saveHouseholdLlmConfig(input: {
   householdId: string;
-  config: HouseholdLlmConfig;
+  config: Omit<HouseholdLlmConfig, "lastValidatedAt" | "lastValidatedBy">;
 }): Promise<void> {
   await callFunction<typeof input, { ok: true }>("saveHouseholdLlmConfig", input);
 }
