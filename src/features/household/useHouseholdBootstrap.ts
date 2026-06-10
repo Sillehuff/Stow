@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { DocumentData, DocumentSnapshot, Firestore } from "firebase/firestore";
 import { deleteField, doc, getDoc, getDocFromServer, runTransaction, serverTimestamp, writeBatch } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { db } from "@/lib/firebase/client";
@@ -12,52 +13,69 @@ type BootstrapState = {
   error: string | null;
 };
 
+/**
+ * Validate a candidate household for this user: returns the id if the household and member
+ * docs both exist (repairing a stale member doc in place), or null if invalid — in which case
+ * the stale `currentHouseholdId` pointer is cleared so the caller can create a fresh household.
+ */
+async function validateExistingHousehold(
+  firestore: Firestore,
+  user: User,
+  householdId: string
+): Promise<string | null> {
+  const userRef = doc(firestore, "users", user.uid);
+  const householdRef = doc(firestore, householdPaths.root(householdId));
+  const memberRef = doc(firestore, householdPaths.member(householdId, user.uid));
+  const [householdSnap, memberSnap] = await Promise.all([getDoc(householdRef), getDoc(memberRef)]);
+
+  if (householdSnap.exists() && memberSnap.exists()) {
+    if (memberSnap.data().uid !== user.uid) {
+      const repairBatch = writeBatch(firestore);
+      repairBatch.set(
+        memberRef,
+        {
+          uid: user.uid,
+          email: user.email ?? null,
+          displayName: user.displayName ?? null,
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+      await repairBatch.commit();
+    }
+    return householdId;
+  }
+
+  const repairBatch = writeBatch(firestore);
+  repairBatch.set(
+    userRef,
+    {
+      currentHouseholdId: deleteField(),
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+  await repairBatch.commit();
+  return null;
+}
+
 async function ensureBootstrap(user: User): Promise<string> {
   if (!db) throw new Error("Firestore is not configured");
   // Bind a non-null reference so the transaction closure keeps the narrowing.
   const firestore = db;
 
   const userRef = doc(firestore, "users", user.uid);
-  let userSnap;
+  let userSnap: DocumentSnapshot<DocumentData>;
   try {
     userSnap = await getDocFromServer(userRef);
-  } catch {
+  } catch (error) {
+    console.warn("Server read of user doc failed; using cache", error);
     userSnap = await getDoc(userRef); // offline: cached doc keeps returning users working
   }
   const existingHouseholdId = userSnap.exists() ? (userSnap.data().currentHouseholdId as string | undefined) : undefined;
   if (existingHouseholdId) {
-    const householdRef = doc(firestore, householdPaths.root(existingHouseholdId));
-    const memberRef = doc(firestore, householdPaths.member(existingHouseholdId, user.uid));
-    const [householdSnap, memberSnap] = await Promise.all([getDoc(householdRef), getDoc(memberRef)]);
-
-    if (householdSnap.exists() && memberSnap.exists()) {
-      if (memberSnap.data().uid !== user.uid) {
-        const repairBatch = writeBatch(firestore);
-        repairBatch.set(
-          memberRef,
-          {
-            uid: user.uid,
-            email: user.email ?? null,
-            displayName: user.displayName ?? null,
-            updatedAt: serverTimestamp()
-          },
-          { merge: true }
-        );
-        await repairBatch.commit();
-      }
-      return existingHouseholdId;
-    }
-
-    const repairBatch = writeBatch(firestore);
-    repairBatch.set(
-      userRef,
-      {
-        currentHouseholdId: deleteField(),
-        updatedAt: serverTimestamp()
-      },
-      { merge: true }
-    );
-    await repairBatch.commit();
+    const validated = await validateExistingHousehold(firestore, user, existingHouseholdId);
+    if (validated) return validated;
   }
 
   const householdId = crypto.randomUUID();
@@ -117,7 +135,11 @@ async function ensureBootstrap(user: User): Promise<string> {
   });
 
   if (winnerHouseholdId !== householdId) {
-    // Lost the race — validate the winning household the same way the top of this function does.
+    // Lost the race: validate the winner's id (known authoritatively from the transaction's
+    // tx.get) instead of restarting blind, which could re-read a stale cache and create a
+    // second household. Only fall through to a fresh create if the winner is genuinely invalid.
+    const validated = await validateExistingHousehold(firestore, user, winnerHouseholdId);
+    if (validated) return validated;
     return ensureBootstrap(user);
   }
   return householdId;

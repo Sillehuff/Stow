@@ -231,6 +231,22 @@ describe("firestore rules", () => {
     );
   });
 
+  it("denies a non-member creating an area in an existing household", async () => {
+    await seedHousehold();
+    const outsiderDb = testEnv.authenticatedContext("outsider-1").firestore();
+
+    await assertFails(
+      setDoc(doc(outsiderDb, "households", HOUSEHOLD_ID, "spaces", "space-1", "areas", "area-99"), {
+        householdId: HOUSEHOLD_ID,
+        spaceId: "space-1",
+        name: "Trespasser Shelf",
+        position: 99,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+    );
+  });
+
   it("keeps normal member reads and writes limited to allowed inventory paths", async () => {
     await seedHousehold();
     const memberDb = testEnv.authenticatedContext("member-1").firestore();

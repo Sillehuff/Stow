@@ -14,6 +14,7 @@ describe("buildStarterSpaces", () => {
 
   it("produces areas linked to their space with per-space positions", () => {
     const { areas } = buildStarterSpaces("h1");
+    expect(areas).toHaveLength(12);
     const livingRoomAreas = areas.filter((area) => area.spaceId === "r1");
     expect(livingRoomAreas.map((area) => area.position)).toEqual([0, 1, 2]);
     areas.forEach((area) => expect(area.householdId).toBe("h1"));
