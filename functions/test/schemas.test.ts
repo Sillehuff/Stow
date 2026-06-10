@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createInviteInputSchema,
   llmConfigSchema,
+  saveLlmConfigInputSchema,
   shelfDetectionSchema,
   visionCategorizeInputSchema,
   visionDetectShelfInputSchema,
@@ -29,6 +30,34 @@ describe("shared schemas", () => {
         maxTokens: 300
       })
     ).not.toThrow();
+  });
+
+  it("accepts a save-config input without validation/audit fields", () => {
+    const result = saveLlmConfigInputSchema.safeParse({
+      householdId: "h1",
+      config: {
+        enabled: true,
+        providerType: "gemini",
+        model: "gemini-2.5-flash",
+        promptProfile: "default_inventory"
+      }
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects client-supplied validation/audit fields in saveLlmConfig input", () => {
+    const result = saveLlmConfigInputSchema.safeParse({
+      householdId: "h1",
+      config: {
+        enabled: true,
+        providerType: "gemini",
+        model: "gemini-2.5-flash",
+        promptProfile: "default_inventory",
+        lastValidatedAt: new Date(),
+        lastValidatedBy: "forged"
+      }
+    });
+    expect(result.success).toBe(false);
   });
 
   it("validates vision requests", () => {

@@ -65,7 +65,10 @@ export const removeMemberInputSchema = z.object({
 
 export const saveLlmConfigInputSchema = z.object({
   householdId: z.string().min(1),
-  config: llmConfigSchema
+  // Validation/audit state is written only by validateHouseholdLlmConfigHandler.
+  // .strict() turns a client-forged lastValidatedAt/lastValidatedBy into a parse
+  // error instead of silently stripping it.
+  config: llmConfigSchema.omit({ lastValidatedAt: true, lastValidatedBy: true }).strict()
 });
 
 export const setLlmSecretInputSchema = z.object({
