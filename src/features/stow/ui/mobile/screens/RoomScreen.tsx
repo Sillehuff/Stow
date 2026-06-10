@@ -15,7 +15,6 @@ export interface RoomScreenProps {
   onAddArea: () => void;
   onAddItem: (areaId: string | null) => void;
   onOpenSpaceQr: () => void;
-  onComingSoon: (label: string) => void;
 }
 
 function Label({ children }: { children: ReactNode }) {
@@ -72,8 +71,7 @@ export function RoomScreen(props: RoomScreenProps) {
     onOpenItem,
     onAddArea,
     onAddItem,
-    onOpenSpaceQr,
-    onComingSoon
+    onOpenSpaceQr
   } = props;
   const selectedArea = selectedAreaId ? space.areas.find((area) => area.id === selectedAreaId) ?? null : null;
   const isInArea = selectedArea != null;
@@ -139,7 +137,7 @@ export function RoomScreen(props: RoomScreenProps) {
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 2 }}>
-          <IconButton label="Camera" onClick={() => onComingSoon("Camera arrives in P2")}>
+          <IconButton label="Camera" onClick={() => onAddItem(isInArea ? selectedArea.id : null)}>
             <Camera size={18} color="var(--stow-ink-muted)" />
           </IconButton>
           <IconButton label="Space QR" onClick={onOpenSpaceQr}>

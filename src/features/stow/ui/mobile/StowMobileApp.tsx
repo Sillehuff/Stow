@@ -244,7 +244,6 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
         onAddArea={() => nav.openOverlay("addArea", { spaceId: selectedSpace.id })}
         onAddItem={(areaId) => nav.openOverlay("captureFirst", { spaceId: selectedSpace.id, areaId })}
         onOpenSpaceQr={() => nav.openOverlay("spaceQr", { spaceId: selectedSpace.id })}
-        onComingSoon={flash}
       />
     ) : (
       <HomeScreen
