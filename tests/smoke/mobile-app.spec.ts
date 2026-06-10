@@ -248,16 +248,17 @@ test.describe("mobile /app core parity", () => {
     test.setTimeout(120_000);
     await signIn(page);
 
-    await addSpace(page, "Garage", "Shelf A, Toolbox");
-    await addSpace(page, "Office", "Desk, Cabinet");
+    // Use names that don't collide with the seeded starter spaces (Living Room, Kitchen, Office, Garage).
+    await addSpace(page, "Workshop", "Shelf A, Toolbox");
+    await addSpace(page, "Annex", "Desk, Cabinet");
 
-    await longPressDragAbove(page, "Office", "Garage");
+    await longPressDragAbove(page, "Annex", "Workshop");
     await page.reload();
     await expect(page.getByText("Your Spaces")).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText("Office", { exact: true })).toBeVisible();
-    await expect(page.getByText("Garage", { exact: true })).toBeVisible();
+    await expect(page.getByText("Annex", { exact: true })).toBeVisible();
+    await expect(page.getByText("Workshop", { exact: true })).toBeVisible();
 
-    await openSpaceActions(page, "Office");
+    await openSpaceActions(page, "Annex");
     await page.getByRole("menuitem", { name: "Edit space" }).click();
     const renameDialog = page.getByRole("dialog", { name: "Edit Space" });
     await renameDialog.getByPlaceholder("Space name").fill("Studio");
@@ -265,8 +266,8 @@ test.describe("mobile /app core parity", () => {
     await expect(page.getByText("Space updated")).toBeVisible();
     await expect(page.getByText("Studio", { exact: true })).toBeVisible();
 
-    const garage = await findSpace(page, "Garage");
-    await page.goto(`/spaces/${garage.id}`);
+    const workshop = await findSpace(page, "Workshop");
+    await page.goto(`/spaces/${workshop.id}`);
     await expect(page.getByText("Shelf A", { exact: true })).toBeVisible();
     await clickAndExpectUrl(page, page.getByText("Shelf A", { exact: true }).first(), /\/spaces\/[^/]+\/areas\/[^/]+$/);
     await expect(page.getByText("Shelf A", { exact: true })).toBeVisible();

@@ -33,6 +33,7 @@ import { SpaceActionSheet } from "@/features/stow/ui/mobile/spaces/SpaceActionSh
 import { BottomNav } from "@/features/stow/ui/mobile/shell/BottomNav";
 import { Confirm } from "@/features/stow/ui/mobile/shell/Confirm";
 import { Toast } from "@/features/stow/ui/mobile/shell/Toast";
+import { completeWrite } from "@/lib/firebase/completeWrite";
 import { visionCategorizeItemImage } from "@/lib/firebase/functions";
 import { storagePaths } from "@/lib/firebase/paths";
 import { bestEffortDeleteImage, uploadFileToStorage } from "@/lib/firebase/storage";
@@ -487,9 +488,9 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
           open={nav.overlay.kind === "addSpace"}
           spaceCount={data.spaces.length}
           onClose={() => nav.closeOverlay()}
-          onCreate={(input) => {
-            void (async () => {
-              const spaceId = await data.actions.createSpace({
+          onCreate={async (input) => {
+            const write = data.actions
+              .createSpace({
                 householdId,
                 userId,
                 name: input.name,
@@ -497,19 +498,25 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
                 color: input.color,
                 position: input.position,
                 areas: input.areas
+              })
+              .then((spaceId) => {
+                // Best-effort: an activity-log failure must not look like a failed save.
+                data.actions
+                  .logActivity({
+                    householdId,
+                    entry: buildActivityEntry({
+                      type: "space_added",
+                      actorUid: userId,
+                      actorName,
+                      spaceName: input.name,
+                      spaceId
+                    })
+                  })
+                  .catch((error) => console.error("Activity log failed", error));
+                return spaceId;
               });
-              await data.actions.logActivity({
-                householdId,
-                entry: buildActivityEntry({
-                  type: "space_added",
-                  actorUid: userId,
-                  actorName,
-                  spaceName: input.name,
-                  spaceId
-                })
-              });
-              flash("Space created");
-            })();
+            const committed = await completeWrite(write, () => online);
+            flash(committed ? "Space created" : "Space saved — will sync when you’re online");
             nav.closeOverlay();
           }}
         />
@@ -518,16 +525,18 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
           open={nav.overlay.kind === "addArea" && addAreaSpace != null}
           areaCount={addAreaSpace?.areas.length ?? 0}
           onClose={() => nav.closeOverlay()}
-          onCreate={(input) => {
+          onCreate={async (input) => {
             if (addAreaSpace) {
-              void data.actions
-                .createArea({
+              const committed = await completeWrite(
+                data.actions.createArea({
                   householdId,
                   spaceId: addAreaSpace.id,
                   name: input.name,
                   position: input.position
-                })
-                .then(() => flash("Area added"));
+                }),
+                () => online
+              );
+              flash(committed ? "Area added" : "Area saved — will sync when you’re online");
             }
             nav.closeOverlay();
           }}
@@ -543,34 +552,42 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
           onClose={() => nav.closeOverlay()}
           onCreate={async (input) => {
             const destinationSpace = data.spaces.find((space) => space.id === input.spaceId) ?? null;
-            const itemId = await data.actions.createItem({
-              householdId,
-              userId,
-              name: input.name,
-              spaceId: input.spaceId,
-              areaId: input.areaId,
-              areaNameSnapshot: input.areaNameSnapshot,
-              value: input.value ?? undefined,
-              tags: input.tags,
-              notes: input.notes,
-              image: input.image ?? undefined,
-              entryMode: input.entryMode
-            });
-            await data.actions.logActivity({
-              householdId,
-              entry: buildActivityEntry({
-                type: "item_added",
-                actorUid: userId,
-                actorName,
-                itemName: input.name,
-                spaceName: destinationSpace?.name,
-                areaName: input.areaNameSnapshot,
+            const write = data.actions
+              .createItem({
+                householdId,
+                userId,
+                name: input.name,
                 spaceId: input.spaceId,
                 areaId: input.areaId,
-                itemId
+                areaNameSnapshot: input.areaNameSnapshot,
+                value: input.value ?? undefined,
+                tags: input.tags,
+                notes: input.notes,
+                image: input.image ?? undefined,
+                entryMode: input.entryMode
               })
-            });
-            flash("Item added");
+              .then((itemId) => {
+                // Best-effort: an activity-log failure must not look like a failed save (it caused duplicate items on retry).
+                data.actions
+                  .logActivity({
+                    householdId,
+                    entry: buildActivityEntry({
+                      type: "item_added",
+                      actorUid: userId,
+                      actorName,
+                      itemName: input.name,
+                      spaceName: destinationSpace?.name,
+                      areaName: input.areaNameSnapshot,
+                      spaceId: input.spaceId,
+                      areaId: input.areaId,
+                      itemId
+                    })
+                  })
+                  .catch((error) => console.error("Activity log failed", error));
+                return itemId;
+              });
+            const committed = await completeWrite(write, () => online);
+            flash(committed ? "Item added" : "Item saved — will sync when you’re online");
             nav.closeOverlay();
           }}
         />
@@ -611,10 +628,15 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
             logActivity={data.actions.logActivity}
             capturedBlob={shelfCapture.blob}
             capturedPreviewUrl={shelfCapture.previewUrl}
+            isOnline={() => online}
             onClose={clearShelfCapture}
-            onCommitted={(count) => {
+            onCommitted={(count, committed) => {
               clearShelfCapture();
-              flash(`Added ${count} item${count !== 1 ? "s" : ""}`);
+              flash(
+                committed
+                  ? `Added ${count} item${count !== 1 ? "s" : ""}`
+                  : "Saved — will sync when you’re online"
+              );
             }}
           />
         ) : null}

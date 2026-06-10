@@ -62,11 +62,13 @@ service cloud.firestore {
 
       match /spaces/{spaceId} {
         allow read: if isHouseholdMember(householdId);
-        allow create, update, delete: if isHouseholdMember(householdId);
+        // create permits the bootstrap transaction, where the member doc isn't yet committed.
+        allow create: if isHouseholdMember(householdId) || isHouseholdBeingCreatedBySelf(householdId);
+        allow update, delete: if isHouseholdMember(householdId);
 
         match /areas/{areaId} {
           allow read: if isHouseholdMember(householdId);
-          allow create: if request.resource.data.householdId == householdId && isHouseholdMember(request.resource.data.householdId);
+          allow create: if request.resource.data.householdId == householdId && (isHouseholdMember(householdId) || isHouseholdBeingCreatedBySelf(householdId));
           allow update: if request.resource.data.householdId == householdId && isHouseholdMember(request.resource.data.householdId);
           allow delete: if resource.data.householdId == householdId && isHouseholdMember(resource.data.householdId);
         }

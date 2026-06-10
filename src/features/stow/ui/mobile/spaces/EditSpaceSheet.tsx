@@ -492,7 +492,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                 color: "var(--stow-warm)"
               }}
             >
-              Areas \u00b7 drag to reorder
+              Areas {"\u00b7"} drag to reorder
             </span>
             <button
               type="button"
@@ -526,7 +526,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
           >
             {areas.length === 0 ? (
               <div style={{ padding: 16, textAlign: "center", fontSize: 13, fontWeight: 600, color: "var(--stow-warm)" }}>
-                No areas yet \u2014 tap Add.
+                No areas yet {"\u2014"} tap Add.
               </div>
             ) : (
               orderedAreas.map((area) => {
@@ -748,7 +748,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
               {itemCount > 0 ? (
                 <>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "var(--stow-ink)", marginBottom: 10 }}>
-                    This space has {itemCount} items \u2014 choose where they go:
+                    This space has {itemCount} items {"\u2014"} choose where they go:
                   </div>
                   <select
                     value={destSpaceId}
