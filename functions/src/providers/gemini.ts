@@ -1,4 +1,4 @@
-import { extractJsonObject, normalizeSuggestion, requireOk } from "./common.js";
+import { extractJsonObject, normalizeSuggestion, providerFetch, requireOk } from "./common.js";
 import { shelfDetectionSchema, type ShelfDetection } from "../shared/schemas.js";
 import type { ProviderContext, ShelfDetectContext, VisionProviderAdapter } from "./types.js";
 
@@ -104,7 +104,7 @@ export function shelfDetectionPrompt(extraContext?: { areaName?: string }) {
 export const geminiAdapter: VisionProviderAdapter = {
   async classifyImage({ apiKey, config, prompt, image }: ProviderContext) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const response = await fetch(url, {
+    const response = await providerFetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -138,14 +138,14 @@ export const geminiAdapter: VisionProviderAdapter = {
 
   async validate({ apiKey, config }) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}?key=${encodeURIComponent(apiKey)}`;
-    const response = await fetch(url);
+    const response = await providerFetch(url, {});
     if (!response.ok) return { ok: false, message: `Model lookup failed (${response.status})` };
     return { ok: true, message: "Connection successful" };
   },
 
   async detectShelfItems({ apiKey, config, prompt, image }: ShelfDetectContext) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const response = await fetch(url, {
+    const response = await providerFetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
