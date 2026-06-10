@@ -76,6 +76,21 @@ function mapSnapshot<T>(snap: QuerySnapshot<DocumentData>): SnapshotState<T> {
   };
 }
 
+/**
+ * Like mapSnapshot, but drops docs that lack a string `name`. This guards malformed
+ * docs from crashing the UI AND filters out the position-only stubs that reorderSpaces/
+ * reorderAreas' set+merge can recreate after a concurrent delete (Task 4.11).
+ */
+function mapNamedSnapshot<T extends { name: string }>(snap: QuerySnapshot<DocumentData>): SnapshotState<T> {
+  return {
+    data: snap.docs
+      .filter((docSnap) => typeof docSnap.data().name === "string")
+      .map((docSnap) => mapDoc<T>(docSnap)),
+    fromCache: snap.metadata.fromCache,
+    hasPendingWrites: snap.metadata.hasPendingWrites
+  };
+}
+
 function mapMemberSnapshot(snap: QuerySnapshot<DocumentData>): SnapshotState<HouseholdMember> {
   return {
     data: snap.docs.map((docSnap) => ({
@@ -87,11 +102,15 @@ function mapMemberSnapshot(snap: QuerySnapshot<DocumentData>): SnapshotState<Hou
   };
 }
 
-function normalizeItemDoc(snap: { id: string; data(): DocumentData }): Item {
+export function normalizeItemDoc(snap: { id: string; data(): DocumentData }): Item {
   const data = snap.data() as Record<string, unknown>;
   return {
     id: snap.id,
     ...(data as Omit<Item, "id" | "photoStatus" | "entryMode" | "status">),
+    // Defensive read-boundary defaults: a malformed doc must not crash the UI.
+    name: typeof data.name === "string" && data.name.trim() ? data.name : "Untitled item",
+    notes: typeof data.notes === "string" ? data.notes : "",
+    value: typeof data.value === "number" && Number.isFinite(data.value) ? data.value : null,
     status: defaultItemStatus({ status: data.status, isPacked: data.isPacked }),
     photoStatus: defaultPhotoStatus({ photoStatus: data.photoStatus, image: data.image }),
     entryMode: defaultEntryMode({ entryMode: data.entryMode, vision: data.vision })
@@ -246,7 +265,7 @@ export const inventoryRepository = {
 
   subscribeSpaces(householdId: string, onData: (state: SnapshotState<Space>) => void, onError: (e: Error) => void): Unsubscribe {
     const q = query(collection(requireDb(), householdPaths.spaces(householdId)), orderBy("name"));
-    return onSnapshot(q, (snap) => onData(mapSnapshot<Space>(snap)), onError);
+    return onSnapshot(q, (snap) => onData(mapNamedSnapshot<Space>(snap)), onError);
   },
 
   subscribeAreas(householdId: string, onData: (state: SnapshotState<Area>) => void, onError: (e: Error) => void): Unsubscribe {
@@ -255,7 +274,7 @@ export const inventoryRepository = {
       where("householdId", "==", householdId),
       orderBy("name")
     );
-    return onSnapshot(q, (snap) => onData(mapSnapshot<Area>(snap)), onError);
+    return onSnapshot(q, (snap) => onData(mapNamedSnapshot<Area>(snap)), onError);
   },
 
   subscribeItems(householdId: string, onData: (state: SnapshotState<Item>) => void, onError: (e: Error) => void): Unsubscribe {
