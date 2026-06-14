@@ -23,6 +23,15 @@ const DEFAULT_SPACE_KEY = "stow:mobile:default-space";
 const ROLES: Role[] = ["OWNER", "ADMIN", "MEMBER"];
 const PROVIDERS: ProviderType[] = ["gemini", "openai_compatible", "anthropic"];
 
+// Sensible vision-capable default model per provider. Switching providers swaps the
+// model to the matching default so users aren't left with another provider's id.
+const DEFAULT_MODELS: Record<ProviderType, string> = {
+  gemini: "gemini-2.5-flash",
+  openai_compatible: "gpt-4o-mini",
+  anthropic: "claude-haiku-4-5-20251001"
+};
+const DEFAULT_MODEL_VALUES = new Set(Object.values(DEFAULT_MODELS));
+
 export interface SettingsScreenProps {
   householdId: string;
   householdName: string;
@@ -555,7 +564,7 @@ export function SettingsScreen(props: SettingsScreenProps) {
                   </div>
                   {canManage ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
-                      <select value={member.role} onChange={(event) => changeRole(member, event.target.value as Role)} style={selectStyle()}>
+                      <select aria-label={`Role for ${member.displayName ?? member.email ?? "member"}`} value={member.role} onChange={(event) => changeRole(member, event.target.value as Role)} style={selectStyle()}>
                         {ROLES.map((role) => (
                           <option key={role} value={role}>
                             {role}
@@ -600,7 +609,7 @@ export function SettingsScreen(props: SettingsScreenProps) {
               >
                 <Users size={16} color="var(--stow-accent)" />
                 <span style={{ flex: 1 }}>Invite Member</span>
-                <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as Role)} style={selectStyle({ flexShrink: 0 })}>
+                <select aria-label="Invite role" value={inviteRole} onChange={(event) => setInviteRole(event.target.value as Role)} style={selectStyle({ flexShrink: 0 })}>
                   {ROLES.map((role) => (
                     <option key={role} value={role}>
                       {role}
@@ -724,7 +733,20 @@ export function SettingsScreen(props: SettingsScreenProps) {
               >
                 Provider
               </div>
-              <select value={provider} onChange={(event) => setProvider(event.target.value as ProviderType)} disabled={!canManage} style={selectStyle({ width: "100%" })}>
+              <select
+                value={provider}
+                aria-label="AI provider"
+                onChange={(event) => {
+                  const next = event.target.value as ProviderType;
+                  setProvider(next);
+                  // Swap in the new provider's default model unless the user typed a custom one.
+                  setModel((current) =>
+                    current.trim() === "" || DEFAULT_MODEL_VALUES.has(current.trim()) ? DEFAULT_MODELS[next] : current
+                  );
+                }}
+                disabled={!canManage}
+                style={selectStyle({ width: "100%" })}
+              >
                 {PROVIDERS.map((nextProvider) => (
                   <option key={nextProvider} value={nextProvider}>
                     {nextProvider}
@@ -733,7 +755,7 @@ export function SettingsScreen(props: SettingsScreenProps) {
               </select>
             </div>
 
-            <Field label="Model" value={model} onChange={setModel} placeholder="gemini-1.5-flash" />
+            <Field label="Model" value={model} onChange={setModel} placeholder={DEFAULT_MODELS[provider]} />
             {provider === "openai_compatible" ? <Field label="Base URL" value={baseUrl} onChange={setBaseUrl} placeholder="https://api.example.com/v1" /> : null}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <Field label="Temperature" type="number" value={temperature} onChange={setTemperature} />
@@ -763,7 +785,7 @@ export function SettingsScreen(props: SettingsScreenProps) {
         <div style={{ ...cardStyle, overflow: "hidden", marginBottom: 22 }}>
           <PreferenceRow label="Offline mode" value={online ? "Online" : "Offline"} />
           <PreferenceRow label="Default space">
-            <select value={defaultSpaceId} onChange={(event) => updateDefaultSpace(event.target.value)} style={selectStyle({ maxWidth: 180 })}>
+            <select aria-label="Default space" value={defaultSpaceId} onChange={(event) => updateDefaultSpace(event.target.value)} style={selectStyle({ maxWidth: 180 })}>
               {spaces.length === 0 ? <option value="">No spaces</option> : null}
               {spaces.map((space) => (
                 <option key={space.id} value={space.id}>

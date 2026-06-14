@@ -188,6 +188,11 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
   const lowCount = state.detections.filter(lowConfidence).length;
   const hasDestination = Boolean(state.destination.spaceId && state.destination.areaId);
 
+  // Detection uses the destination only as optional context; read it via a ref so a
+  // late-loading destination doesn't re-trigger the analyze effect (duplicate upload + Vision call).
+  const destinationRef = useRef(state.destination);
+  destinationRef.current = state.destination;
+
   useEffect(() => {
     closeButtonRef.current?.focus();
   }, []);
@@ -222,12 +227,13 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
         const image = await upload(capturedBlob);
         uploadedFrameRef.current = image;
         if (!image.storagePath) throw new Error("Uploaded frame has no storage path");
+        const dest = destinationRef.current;
         const response: VisionDetectShelfResponse = await detectShelfItems({
           householdId,
           imageRef: { storagePath: image.storagePath },
-          spaceId: state.destination.spaceId ?? undefined,
-          areaId: state.destination.areaId ?? undefined,
-          areaName: state.destination.areaNameSnapshot || undefined
+          spaceId: dest.spaceId ?? undefined,
+          areaId: dest.areaId ?? undefined,
+          areaName: dest.areaNameSnapshot || undefined
         });
         if (!cancelled) dispatch({ type: "detected", detections: response.detections });
       } catch {
@@ -240,7 +246,7 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
       cancelled = true;
       if (analyzedAttemptRef.current === retryKey) analyzedAttemptRef.current = null;
     };
-  }, [capturedBlob, detectShelfItems, householdId, retryKey, state.destination, state.phase, upload]);
+  }, [capturedBlob, detectShelfItems, householdId, retryKey, state.phase, upload]);
 
   useEffect(() => {
     if (state.phase === "review" && state.cursor >= state.order.length) {
@@ -708,7 +714,7 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
                   boxShadow: "0 10px 24px color-mix(in srgb, var(--stow-accent) 33%, transparent)"
                 }}
               >
-                Review {state.detections.length} items <ArrowRight size={17} color="#fff" />
+                Review {state.detections.length} item{state.detections.length !== 1 ? "s" : ""} <ArrowRight size={17} color="#fff" />
               </button>
             </div>
           ) : null}
@@ -770,7 +776,7 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
               whiteSpace: "nowrap"
             }}
           >
-            Review {state.order.length} items
+            Review {state.order.length} item{state.order.length !== 1 ? "s" : ""}
           </span>
           <div style={{ width: 34, flexShrink: 0 }} />
         </div>
@@ -997,6 +1003,15 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
     const destinationUnavailable = !hasDestination && namedKeptCount > 0;
     return (
       <div role="dialog" aria-modal="true" aria-label="Shelf capture complete" style={lightOverlayStyle}>
+        <button
+          ref={closeButtonRef}
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          style={{ ...roundHeaderButtonStyle, position: "absolute", top: 54, left: 22, zIndex: 3 }}
+        >
+          <X size={16} color="var(--stow-ink-muted)" />
+        </button>
         <div style={{ flex: 1, overflowY: "auto", padding: "62px 24px 0" }}>
           <div style={{ textAlign: "center", marginTop: 14, marginBottom: 22 }}>
             <div

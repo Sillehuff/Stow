@@ -47,6 +47,7 @@ export function CaptureFirst({
   const frozenUrlRef = useRef<string | null>(null);
   const mountedRef = useRef(false);
   const cancelledRef = useRef(false);
+  const processingRef = useRef(false);
   const [mode, setMode] = useState<"photo" | "ai">("photo");
   const [phase, setPhase] = useState<Phase>("live");
   const [frozenUrl, setFrozenUrl] = useState<string | null>(null);
@@ -124,6 +125,10 @@ export function CaptureFirst({
   }
 
   async function handleBlob(blob: Blob) {
+    // Guard against a fast double-tap on "Use Photo"/"Use and Identify" (or the file
+    // picker) firing two uploads + two vision calls before `phase` re-renders.
+    if (processingRef.current) return;
+    processingRef.current = true;
     setError(null);
     setPhase("uploading");
     const name = nextFileName();
@@ -135,35 +140,35 @@ export function CaptureFirst({
         contentType: file.type
       });
     } catch {
+      processingRef.current = false;
       if (!mountedRef.current || cancelledRef.current) return;
       setError("Upload failed. Check your connection and try again.");
       setPhase(frozenBlobRef.current ? "frozen" : "live");
       return;
     }
 
-    if (mode === "photo") {
-      await handOff(image);
-      return;
-    }
-
-    if (!image.storagePath) {
-      await handOff(image);
-      return;
-    }
-
-    setPhase("identifying");
     try {
-      const response = await visionCategorizeItemImage({
-        householdId,
-        imageRef: { storagePath: image.storagePath },
-        context: {
-          spaceId: spaceId ?? undefined,
-          areaId: areaId ?? undefined
-        }
-      });
-      await handOff(image, response.suggestion);
-    } catch {
-      await handOff(image);
+      if (mode === "photo" || !image.storagePath) {
+        await handOff(image);
+        return;
+      }
+
+      setPhase("identifying");
+      try {
+        const response = await visionCategorizeItemImage({
+          householdId,
+          imageRef: { storagePath: image.storagePath },
+          context: {
+            spaceId: spaceId ?? undefined,
+            areaId: areaId ?? undefined
+          }
+        });
+        await handOff(image, response.suggestion);
+      } catch {
+        await handOff(image);
+      }
+    } finally {
+      processingRef.current = false;
     }
   }
 

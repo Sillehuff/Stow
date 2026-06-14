@@ -25,7 +25,7 @@ export function SpaceActionSheet({
     <ActionSheet
       open={open}
       onClose={onClose}
-      title={`${space.name} \u00b7 ${space.areas.length} areas \u00b7 ${itemCount} item${itemCount !== 1 ? "s" : ""}`}
+      title={`${space.name} \u00b7 ${space.areas.length} area${space.areas.length !== 1 ? "s" : ""} \u00b7 ${itemCount} item${itemCount !== 1 ? "s" : ""}`}
       actions={[
         { label: "Edit space", icon: Settings, onSelect: onEdit },
         { label: "Rename", icon: Pencil, onSelect: onRename },

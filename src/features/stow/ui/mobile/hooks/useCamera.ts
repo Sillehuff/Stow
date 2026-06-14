@@ -83,6 +83,10 @@ const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
 };
 
 export function createCameraController(deps: CameraControllerDeps): InternalCameraController {
+  // Guards against a getUserMedia promise that resolves after stop()/unmount —
+  // without this the late stream is assigned but never released (camera stays on).
+  let stopped = false;
+
   function stopTracks() {
     const stream = deps.getStream();
     if (stream) {
@@ -96,9 +100,15 @@ export function createCameraController(deps: CameraControllerDeps): InternalCame
       deps.setState({ status: "unsupported", error: null });
       return;
     }
+    stopped = false;
     deps.setState({ status: "starting", error: null });
     try {
       const stream = await deps.requestStream(CAMERA_CONSTRAINTS);
+      if (stopped) {
+        // Acquired after the caller stopped/unmounted — release immediately.
+        for (const track of stream.getTracks()) track.stop();
+        return;
+      }
       deps.setStream(stream);
       const video = deps.getVideoEl();
       if (video) {
@@ -117,6 +127,7 @@ export function createCameraController(deps: CameraControllerDeps): InternalCame
   }
 
   function stop(): void {
+    stopped = true;
     stopTracks();
     deps.setState({ status: "idle", error: null });
   }

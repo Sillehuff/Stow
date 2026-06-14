@@ -106,6 +106,11 @@ export function AddItemSheet(props: AddItemSheetProps) {
   const scanRequestIdRef = useRef(0);
   const acceptingImageChangesRef = useRef(false);
   const consumedOpenRef = useRef(false);
+  // Mirrors the held draft image so we can release it if the sheet is dismissed by
+  // something other than Cancel/Submit (e.g. another overlay opening, a route change).
+  // Cancel and a successful Submit both null `image` first, so this only ever holds an
+  // un-committed upload — every other exit path would otherwise orphan it in storage.
+  const liveImageRef = useRef<ImageRef | null>(null);
 
   const seededLocation = useMemo(() => {
     const requestedSpaceId = initial?.spaceId ?? initialLocation.spaceId;
@@ -123,6 +128,12 @@ export function AddItemSheet(props: AddItemSheetProps) {
   useEffect(() => {
     if (!open) {
       consumedOpenRef.current = false;
+      // Dismissed without Cancel/Submit (another overlay, route change): the uploaded
+      // draft image would otherwise be orphaned in storage.
+      if (liveImageRef.current) {
+        void bestEffortDeleteImage(liveImageRef.current);
+        liveImageRef.current = null;
+      }
       return;
     }
     if (consumedOpenRef.current) return;
@@ -144,6 +155,7 @@ export function AddItemSheet(props: AddItemSheetProps) {
     setSpaceId(seededLocation.spaceId);
     setAreaId(seededLocation.areaId);
     setImage(initial?.image ?? null);
+    liveImageRef.current = initial?.image ?? null;
     setPhotoFieldKey((current) => current + 1);
     setAiFilled(Boolean(initial?.aiFilled || initial?.suggestion));
     setScanning(false);
@@ -232,6 +244,7 @@ export function AddItemSheet(props: AddItemSheetProps) {
       setScanning(false);
     }
     setImage(next);
+    liveImageRef.current = next;
     setScanError(null);
   }
 
@@ -245,6 +258,7 @@ export function AddItemSheet(props: AddItemSheetProps) {
     setSpaceId(initialLocation.spaceId);
     setAreaId(initialLocation.areaId);
     setImage(null);
+    liveImageRef.current = null;
     setAiFilled(false);
     setScanning(false);
     setSubmitting(false);
@@ -257,6 +271,7 @@ export function AddItemSheet(props: AddItemSheetProps) {
     scanRequestIdRef.current += 1;
     if (image) void bestEffortDeleteImage(image);
     setImage(null);
+    liveImageRef.current = null;
     setAiFilled(false);
     setScanning(false);
     setSubmitting(false);
@@ -273,6 +288,8 @@ export function AddItemSheet(props: AddItemSheetProps) {
       setPhotoFieldKey((current) => current + 1);
       setImage(null);
     });
+    // The image is now owned by the item being created; don't let the close-cleanup delete it.
+    liveImageRef.current = null;
     setSubmitting(true);
     setScanError(null);
     try {
@@ -291,6 +308,7 @@ export function AddItemSheet(props: AddItemSheetProps) {
     } catch {
       acceptingImageChangesRef.current = true;
       setImage(imageToSave);
+      liveImageRef.current = imageToSave;
       setAiFilled(entryModeToSave === "ai_assisted");
       setScanError("Couldn't save item. Try again.");
       setSubmitting(false);
