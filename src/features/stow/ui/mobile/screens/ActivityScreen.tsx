@@ -109,7 +109,7 @@ export function ActivityScreen(props: ActivityScreenProps) {
         <div aria-hidden="true" />
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "18px 18px 150px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "18px 18px calc(env(safe-area-inset-bottom, 0px) + 88px)" }}>
         {activity.length === 0 ? (
           <div
             style={{

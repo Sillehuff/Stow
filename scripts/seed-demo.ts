@@ -17,6 +17,17 @@ async function main() {
   const uid = parseArg("uid") ?? "demo-owner";
   const householdId = parseArg("household") ?? crypto.randomUUID();
   const householdName = parseArg("name") ?? "Demo Household";
+  const ownerEmail = parseArg("email") ?? "demo-owner@example.com";
+
+  // When pointed at the Auth emulator, create the matching auth user so the seeded
+  // owner can actually sign in (email-link login resolves to this fixed uid).
+  if (process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+    try {
+      await admin.auth().updateUser(uid, { email: ownerEmail, emailVerified: true, displayName: "Demo Owner" });
+    } catch {
+      await admin.auth().createUser({ uid, email: ownerEmail, emailVerified: true, displayName: "Demo Owner" });
+    }
+  }
 
   const householdRef = db.doc(`households/${householdId}`);
   const memberRef = db.doc(`households/${householdId}/members/${uid}`);
@@ -31,16 +42,17 @@ async function main() {
     createdBy: uid
   });
   batch.set(memberRef, {
+    uid,
     role: "OWNER",
     displayName: "Demo Owner",
-    email: "demo-owner@example.com",
+    email: ownerEmail,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     createdBy: uid
   });
   batch.set(userRef, {
     currentHouseholdId: householdId,
     displayName: "Demo Owner",
-    email: "demo-owner@example.com",
+    email: ownerEmail,
     updatedAt: admin.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
   batch.set(llmRef, {

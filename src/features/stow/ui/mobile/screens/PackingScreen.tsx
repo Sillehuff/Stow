@@ -211,7 +211,7 @@ export function PackingScreen(props: PackingScreenProps) {
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "12px 24px 150px" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "12px 24px calc(env(safe-area-inset-bottom, 0px) + 88px)" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {packingLists.map((list) => {
               const { done, total, pct } = packingProgress(list, existingItemIds);
@@ -455,7 +455,7 @@ export function PackingScreen(props: PackingScreenProps) {
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 150px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px calc(env(safe-area-inset-bottom, 0px) + 88px)" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {activeItems.map((item) => {
             const packed = packedIds.has(item.id);

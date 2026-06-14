@@ -61,8 +61,10 @@
 
 .stow-mobile__screen {
   flex: 1;
+  /* Each screen owns its scroll + bottom clearance for the floating nav, so the
+     wrapper must not add its own padding (that produced a dead gray band). */
+  min-height: 0;
   overflow-y: auto;
-  padding-bottom: 150px;
   scrollbar-width: none;
 }
 

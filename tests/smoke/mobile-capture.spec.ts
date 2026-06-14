@@ -114,6 +114,7 @@ test.describe("mobile capture fallback", () => {
     await addSpace(page);
 
     await page.getByRole("button", { name: "Scan" }).click();
+    await page.getByRole("menuitem", { name: "AI Scan" }).click();
     const scanDialog = page.getByRole("dialog", { name: "AI Scan" });
     await expect(scanDialog.getByText("Camera unavailable")).toBeVisible();
     await expect(scanDialog.getByRole("button", { name: "Choose from library" })).toBeVisible();

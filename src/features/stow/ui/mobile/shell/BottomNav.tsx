@@ -24,7 +24,7 @@ export function BottomNav({ tab, onTab, onScan, packedCount = 0 }: BottomNavProp
         position: "absolute",
         left: 16,
         right: 16,
-        bottom: "max(18px, env(safe-area-inset-bottom))",
+        bottom: "env(safe-area-inset-bottom, 0px)",
         height: 72,
         zIndex: 30,
         display: "grid",
@@ -99,6 +99,7 @@ export function BottomNav({ tab, onTab, onScan, packedCount = 0 }: BottomNavProp
         onClick={onScan}
         style={{
           gridColumn: 3,
+          gridRow: 1,
           justifySelf: "center",
           alignSelf: "center",
           width: 58,
@@ -110,8 +111,7 @@ export function BottomNav({ tab, onTab, onScan, packedCount = 0 }: BottomNavProp
           display: "grid",
           placeItems: "center",
           boxShadow: "0 14px 32px color-mix(in srgb, var(--stow-accent) 42%, transparent)",
-          cursor: "pointer",
-          transform: "translateY(-18px)"
+          cursor: "pointer"
         }}
       >
         <ScanLine size={25} strokeWidth={2.4} />
