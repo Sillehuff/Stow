@@ -10,6 +10,7 @@ import { buildActivityEntry, inventoryRepository } from "@/features/stow/service
 import { isActivityPath, useMobileNavigation } from "@/features/stow/ui/mobile/hooks/useMobileNavigation";
 import type { MobileTab } from "@/features/stow/ui/mobile/hooks/useMobileNavigation";
 import { applyPalette, makePalette } from "@/features/stow/ui/mobile/theme/palette";
+import { Pencil, QrCode, ScanLine } from "@/features/stow/ui/mobile/theme/icons";
 import { AddAreaSheet } from "@/features/stow/ui/mobile/add/AddAreaSheet";
 import { AddItemSheet } from "@/features/stow/ui/mobile/add/AddItemSheet";
 import type { AddItemInitial } from "@/features/stow/ui/mobile/add/AddItemSheet";
@@ -20,7 +21,7 @@ import { CaptureFirst } from "@/features/stow/ui/mobile/capture/CaptureFirst";
 import { PhotoSource } from "@/features/stow/ui/mobile/capture/PhotoSource";
 import { QuickCapture } from "@/features/stow/ui/mobile/capture/QuickCapture";
 import { ScanOverlay } from "@/features/stow/ui/mobile/capture/ScanOverlay";
-import { ScanQrSheet } from "@/features/stow/ui/mobile/capture/ScanQrSheet";
+import { QrScanOverlay } from "@/features/stow/ui/mobile/capture/QrScanOverlay";
 import { HomeScreen } from "@/features/stow/ui/mobile/screens/HomeScreen";
 import { ItemDetail } from "@/features/stow/ui/mobile/screens/ItemDetail";
 import { PackingScreen } from "@/features/stow/ui/mobile/screens/PackingScreen";
@@ -31,6 +32,7 @@ import type { SpacesListProps } from "@/features/stow/ui/mobile/screens/SpacesLi
 import { EditSpaceSheet } from "@/features/stow/ui/mobile/spaces/EditSpaceSheet";
 import { SpaceQrSheet } from "@/features/stow/ui/mobile/spaces/SpaceQrSheet";
 import { SpaceActionSheet } from "@/features/stow/ui/mobile/spaces/SpaceActionSheet";
+import { ActionSheet } from "@/features/stow/ui/mobile/shell/ActionSheet";
 import { BottomNav } from "@/features/stow/ui/mobile/shell/BottomNav";
 import { Confirm } from "@/features/stow/ui/mobile/shell/Confirm";
 import { Toast } from "@/features/stow/ui/mobile/shell/Toast";
@@ -61,6 +63,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
   const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
   const [deleteSaving, setDeleteSaving] = useState(false);
   const [shelfCapture, setShelfCapture] = useState<{ blob: Blob; previewUrl: string } | null>(null);
+  const [scanMenuOpen, setScanMenuOpen] = useState(false);
 
   const flash = (message: string) => setToast(message);
 
@@ -428,10 +431,41 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
           <BottomNav
             tab={nav.tab}
             onTab={(tab: MobileTab) => nav.navigateToTab(tab)}
-            onScan={() => nav.openOverlay("scan")}
+            onScan={() => setScanMenuOpen(true)}
             packedCount={packedCount}
           />
         ) : null}
+
+        <ActionSheet
+          open={scanMenuOpen}
+          onClose={() => setScanMenuOpen(false)}
+          actions={[
+            {
+              label: "AI Scan",
+              icon: ScanLine,
+              onSelect: () => {
+                setScanMenuOpen(false);
+                nav.openOverlay("scan");
+              }
+            },
+            {
+              label: "Scan QR label",
+              icon: QrCode,
+              onSelect: () => {
+                setScanMenuOpen(false);
+                nav.openOverlay("scanQr");
+              }
+            },
+            {
+              label: "Add manually",
+              icon: Pencil,
+              onSelect: () => {
+                setScanMenuOpen(false);
+                nav.openOverlay("addItem");
+              }
+            }
+          ]}
+        />
 
         <SpaceActionSheet
           space={menuSpace}
@@ -611,10 +645,6 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
             onClose={nav.closeOverlay}
             onCaptureSingle={(blob) => void handleScanSingle(blob)}
             onCaptureShelf={handleScanShelf}
-            onScanQr={() => {
-              nav.closeOverlay();
-              nav.openOverlay("scanQr");
-            }}
           />
         ) : null}
 
@@ -623,7 +653,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
         ) : null}
 
         {nav.overlay.kind === "scanQr" ? (
-          <ScanQrSheet open onClose={nav.closeOverlay} onOpenPath={nav.openPath} onFlash={flash} />
+          <QrScanOverlay onClose={nav.closeOverlay} onOpenPath={nav.openPath} onFlash={flash} />
         ) : null}
 
         {shelfCapture ? (

@@ -176,7 +176,7 @@ export function HomeScreen({ spaces, items, members, householdName, onOpenItem, 
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "18px 24px 150px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "14px 24px calc(env(safe-area-inset-bottom, 0px) + 88px)" }}>
         {searching ? (
           results.length === 0 ? (
             <div style={{ textAlign: "center", padding: "52px 20px", color: "var(--stow-warm)" }}>
@@ -212,7 +212,7 @@ export function HomeScreen({ spaces, items, members, householdName, onOpenItem, 
 
             {recent.length > 0 ? (
               <>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, marginLeft: 2 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, marginLeft: 2 }}>
               <Clock size={13} color="var(--stow-warm)" strokeWidth={2.2} />
               <span
                 style={{
@@ -232,9 +232,9 @@ export function HomeScreen({ spaces, items, members, householdName, onOpenItem, 
                 display: "flex",
                 gap: 12,
                 overflowX: "auto",
-                padding: "2px 24px 14px",
+                padding: "2px 24px 10px",
                 margin: "0 -24px",
-                marginBottom: 12
+                marginBottom: 6
               }}
             >
               {recent.map((item) => (
@@ -244,7 +244,7 @@ export function HomeScreen({ spaces, items, members, householdName, onOpenItem, 
                   onClick={() => onOpenItem(item.id)}
                   style={{
                     ...cardStyle,
-                    width: 132,
+                    width: 120,
                     flexShrink: 0,
                     borderRadius: "var(--stow-radius-input)",
                     overflow: "hidden",
@@ -256,7 +256,7 @@ export function HomeScreen({ spaces, items, members, householdName, onOpenItem, 
                 >
                   <div
                     style={{
-                      height: 94,
+                      height: 60,
                       background: "var(--stow-canvas)",
                       display: "flex",
                       alignItems: "center",
@@ -271,7 +271,7 @@ export function HomeScreen({ spaces, items, members, householdName, onOpenItem, 
                       <Inbox size={26} color="var(--stow-border)" />
                     )}
                   </div>
-                  <div style={{ padding: "9px 11px 11px" }}>
+                  <div style={{ padding: "8px 10px 10px" }}>
                     <div
                       style={{
                         fontSize: 13,

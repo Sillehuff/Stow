@@ -210,7 +210,7 @@ export function SearchScreen(props: SearchScreenProps) {
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 150px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px calc(env(safe-area-inset-bottom, 0px) + 88px)" }}>
         {!trimmedQuery ? (
           <>
             {recent.length > 0 ? (

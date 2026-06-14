@@ -82,6 +82,7 @@ test("@live-gemini configures Gemini, validates it, and saves a reviewed AI-scan
   // Run a single-item AI scan via the file-input fallback.
   await page.getByRole("button", { name: "Spaces" }).click();
   await page.getByRole("button", { name: "Scan" }).click();
+  await page.getByRole("menuitem", { name: "AI Scan" }).click();
   const scanDialog = page.getByRole("dialog", { name: "AI Scan" });
   await scanDialog.locator('input[type="file"]').setInputFiles(FIXTURE);
 

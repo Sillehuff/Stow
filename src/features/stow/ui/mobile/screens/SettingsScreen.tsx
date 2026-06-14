@@ -438,7 +438,7 @@ export function SettingsScreen(props: SettingsScreenProps) {
         </h1>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px 150px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px calc(env(safe-area-inset-bottom, 0px) + 88px)" }}>
         <div style={{ ...cardStyle, padding: 18, marginBottom: 22, display: "flex", alignItems: "center", gap: 14 }}>
           <div
             style={{

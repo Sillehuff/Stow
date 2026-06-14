@@ -8,12 +8,11 @@ export interface ScanOverlayProps {
   onClose: () => void;
   onCaptureSingle: (blob: Blob) => void;
   onCaptureShelf?: (blob: Blob) => void;
-  onScanQr?: () => void;
 }
 
 const DARK = "#0A0A12";
 
-export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf, onScanQr }: ScanOverlayProps) {
+export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf }: ScanOverlayProps) {
   const { capture, error, start, status, stop, videoRef } = useCamera();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -84,7 +83,7 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf, onScanQr
       <div
         style={{
           position: "absolute",
-          top: 52,
+          top: "max(16px, env(safe-area-inset-top))",
           left: 0,
           right: 0,
           display: "flex",
@@ -133,69 +132,94 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf, onScanQr
         <div style={{ width: 40 }} />
       </div>
 
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          position: "relative",
-          overflow: "hidden"
-        }}
-      >
-        {!unavailable ? (
-          <video
-            ref={videoRef}
-            playsInline
-            muted
-            autoPlay
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover"
-            }}
-          />
-        ) : null}
-        <div
+      {/* Full-bleed live camera: the entire frame is what gets captured. */}
+      {!unavailable ? (
+        <video
+          ref={videoRef}
+          playsInline
+          muted
+          autoPlay
           style={{
             position: "absolute",
             inset: 0,
-            background: "radial-gradient(circle at 50% 45%, rgba(40,40,60,0.6), #0A0A12 70%)"
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            zIndex: 0
           }}
         />
-        <div style={{ position: "relative", width: 250, height: 250, borderRadius: 28 }}>
-          <CornerBrackets color="var(--stow-accent)" />
-          {live ? (
-            <div
-              style={{
-                position: "absolute",
-                left: 8,
-                right: 8,
-                height: 3,
-                borderRadius: 99,
-                background: "var(--stow-accent)",
-                boxShadow: "0 0 16px var(--stow-accent)",
-                animation: "stowScan 1.4s ease-in-out infinite"
-              }}
-            />
-          ) : null}
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center"
-            }}
-          >
-            <ScanLine size={40} color="rgba(255,255,255,0.25)" />
+      ) : null}
+
+      {/* Legibility scrims at the top and bottom edges only — the scene itself stays clear. */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 150,
+          background: "linear-gradient(to bottom, rgba(10,10,18,0.6), transparent)",
+          zIndex: 1,
+          pointerEvents: "none"
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 340,
+          background: "linear-gradient(to top, rgba(10,10,18,0.92) 28%, rgba(10,10,18,0.5) 62%, transparent)",
+          zIndex: 1,
+          pointerEvents: "none"
+        }}
+      />
+
+      {/* Large viewfinder guide — frames the shot without cropping it (capture takes the whole frame). */}
+      {!unavailable ? (
+        <div
+          style={{
+            position: "absolute",
+            top: 112,
+            left: 24,
+            right: 24,
+            bottom: 300,
+            zIndex: 2,
+            pointerEvents: "none"
+          }}
+        >
+          <div style={{ position: "relative", width: "100%", height: "100%" }}>
+            <CornerBrackets color="var(--stow-accent)" />
+            {live ? (
+              <div
+                style={{
+                  position: "absolute",
+                  left: 8,
+                  right: 8,
+                  height: 3,
+                  borderRadius: 99,
+                  background: "var(--stow-accent)",
+                  boxShadow: "0 0 16px var(--stow-accent)",
+                  animation: "stowScan 1.4s ease-in-out infinite"
+                }}
+              />
+            ) : null}
           </div>
         </div>
-      </div>
+      ) : null}
 
-      <div style={{ padding: "0 24px 60px", textAlign: "center", position: "relative", zIndex: 3 }}>
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          padding: "0 24px max(28px, env(safe-area-inset-bottom))",
+          textAlign: "center",
+          zIndex: 3
+        }}
+      >
         <div style={{ color: "#fff", fontSize: 17, fontWeight: 800, marginBottom: 6 }}>
           {unavailable ? "Camera unavailable" : busy ? "Scanning photo" : shelfMode ? "Point at a shelf" : "Point at an item"}
         </div>
@@ -215,7 +239,7 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf, onScanQr
             borderRadius: 99,
             padding: 4,
             width: "fit-content",
-            margin: onScanQr ? "0 auto 10px" : "0 auto 22px"
+            margin: "0 auto 22px"
           }}
         >
           <button
@@ -266,26 +290,6 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf, onScanQr
             Whole shelf
           </button>
         </div>
-
-        {onScanQr ? (
-          <button
-            type="button"
-            onClick={onScanQr}
-            style={{
-              margin: "0 auto 22px",
-              background: "none",
-              border: "none",
-              color: "#fff",
-              opacity: 0.85,
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: "pointer",
-              fontFamily: "inherit"
-            }}
-          >
-            Scan a Stow QR label
-          </button>
-        ) : null}
 
         {unavailable ? (
           <button

@@ -67,8 +67,8 @@ export function AwayStrip({ items, members, onOpenItem }: AwayStripProps) {
   if (away.length === 0) return null;
 
   return (
-    <section data-testid="away-strip" style={{ marginBottom: 18 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "0 2px 10px" }}>
+    <section data-testid="away-strip" style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "0 2px 8px" }}>
         <div
           style={{
             fontSize: 11,
@@ -114,7 +114,7 @@ export function AwayStrip({ items, members, onOpenItem }: AwayStripProps) {
                 display: "flex",
                 alignItems: "center",
                 gap: 12,
-                padding: "12px 13px",
+                padding: "10px 13px",
                 border: "none",
                 borderBottom: index === away.length - 1 ? "none" : "1px solid var(--stow-border-l)",
                 background: "transparent",
