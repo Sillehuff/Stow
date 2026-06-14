@@ -1,5 +1,39 @@
 import { z } from "zod";
 
+// SSRF guard for the OpenAI-compatible `baseUrl`: an admin-supplied URL is
+// fetched server-side with the household's decrypted API key, so it must point
+// at a public https host — never the metadata server, loopback, or a private range.
+const BLOCKED_PROVIDER_HOSTS = new Set(["localhost", "metadata", "metadata.google.internal", "0.0.0.0"]);
+
+function isPrivateIpv4(host: string): boolean {
+  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (!match) return false;
+  const a = Number(match[1]);
+  const b = Number(match[2]);
+  if ([a, b, Number(match[3]), Number(match[4])].some((part) => part > 255)) return false;
+  if (a === 0 || a === 10 || a === 127) return true; // this-host, private, loopback
+  if (a === 169 && b === 254) return true; // link-local (incl. cloud metadata)
+  if (a === 172 && b >= 16 && b <= 31) return true; // private
+  if (a === 192 && b === 168) return true; // private
+  return false;
+}
+
+export function isPublicHttpsUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") return false;
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (!host || BLOCKED_PROVIDER_HOSTS.has(host) || host.endsWith(".localhost")) return false;
+  if (isPrivateIpv4(host)) return false;
+  // IPv6 loopback / link-local (fe80::) / unique-local (fc00::/7).
+  if (host === "::1" || host === "::" || host.startsWith("fe80:") || host.startsWith("fc") || host.startsWith("fd")) return false;
+  return true;
+}
+
 // Bounded primitives for callable inputs. Without an upper bound, a client can
 // send a multi-megabyte string that flows into Firestore paths or provider
 // prompts (cost amplification). `.strict()` on input objects (below) rejects
@@ -17,7 +51,12 @@ export const llmConfigSchema = z.object({
   enabled: z.boolean(),
   providerType: providerTypeSchema,
   model: z.string().min(1).max(200),
-  baseUrl: z.string().url().max(500).optional(),
+  baseUrl: z
+    .string()
+    .url()
+    .max(500)
+    .refine(isPublicHttpsUrl, "baseUrl must be an https URL pointing to a public host")
+    .optional(),
   promptProfile: z.literal("default_inventory"),
   maxTokens: z.number().int().positive().max(4096).optional(),
   temperature: z.number().min(0).max(2).optional(),
@@ -147,7 +186,12 @@ export type VisionDetectShelfInput = z.infer<typeof visionDetectShelfInputSchema
 export const shelfDetectionSchema = z.object({
   label: z.string().min(1),
   confidence: z.number().min(0).max(1),
-  bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+  bbox: z.tuple([
+    z.number().min(0).max(1),
+    z.number().min(0).max(1),
+    z.number().min(0).max(1),
+    z.number().min(0).max(1)
+  ]),
   suggestedValue: z.number().nonnegative().optional(),
   tags: z.array(z.string().min(1)).max(15).optional()
 });

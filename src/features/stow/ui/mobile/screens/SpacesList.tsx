@@ -179,7 +179,7 @@ export function SpacesList({
                           whiteSpace: "nowrap"
                         }}
                       >
-                        {space.areas.length} areas {"\u00b7"} {itemCount} item{itemCount !== 1 ? "s" : ""}
+                        {space.areas.length} area{space.areas.length !== 1 ? "s" : ""} {"\u00b7"} {itemCount} item{itemCount !== 1 ? "s" : ""}
                       </div>
                     </>
                   )}

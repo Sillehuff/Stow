@@ -528,7 +528,7 @@ export function ItemDetail(props: ItemDetailProps) {
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "var(--stow-ink)" }}>Move Item</h2>
             <div>
               <FieldLabel>Space</FieldLabel>
-              <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {spaces.map((candidate) => {
                   const selected = candidate.id === moveSpaceId;
                   return (

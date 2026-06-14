@@ -46,7 +46,9 @@ export const acceptHouseholdInvite = onCall(async (request) => {
   try {
     return await acceptHouseholdInviteHandler(
       request.data,
-      request.auth ? { uid: request.auth.uid, token: request.auth.token as { email?: string } } : undefined
+      request.auth
+        ? { uid: request.auth.uid, token: request.auth.token as { email?: string; email_verified?: boolean } }
+        : undefined
     );
   } catch (error) {
     throw mapError(error);

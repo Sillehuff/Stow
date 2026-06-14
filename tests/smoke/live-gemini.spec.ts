@@ -1,11 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
+import { fileURLToPath } from "node:url";
 
 const PROJECT_ID = "demo-stow";
 const APP_BASE_URL = "http://127.0.0.1:4273";
-const PNG_BYTES = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
-  "base64"
-);
+const FIXTURE = fileURLToPath(new URL("./fixtures/sample-item.png", import.meta.url));
 
 type OobCodeRecord = {
   email?: string;
@@ -51,45 +49,54 @@ async function signIn(page: Page) {
     await page.getByPlaceholder("you@example.com").fill(email);
     await finishSignInButton.click();
   }
+  await expect(page).toHaveURL(/\/spaces/);
   await expect(page.getByText("Your Spaces")).toBeVisible({ timeout: 20_000 });
 }
 
-test("@live-gemini saves a reviewed Gemini-assisted item when credentials are present", async ({ page }) => {
+// Exercises the real Gemini path end-to-end against the current mobile UI:
+// configure + enable AI in Settings, validate the live connection, then run a
+// single-item AI scan (via the file-input fallback) and save the reviewed item.
+test("@live-gemini configures Gemini, validates it, and saves a reviewed AI-scanned item", async ({ page }) => {
   test.skip(!process.env.GEMINI_API_KEY, "GEMINI_API_KEY not provided");
   test.setTimeout(180_000);
 
+  // Force the library/file-input fallback so the scan is deterministic in headless CI.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "mediaDevices", { value: undefined, configurable: true });
+  });
+
   await signIn(page);
 
-  await page.getByRole("button", { name: /^Add$/ }).click();
-  const addSpaceDialog = page.getByRole("dialog", { name: "New Space" });
-  await addSpaceDialog.getByLabel("Space name *").fill("Gemini Closet");
-  await addSpaceDialog.getByRole("button", { name: "Create Space" }).click();
-  await expect(page.getByRole("heading", { name: "Gemini Closet" })).toBeVisible();
-
+  // Configure AI in Settings.
   await page.getByRole("button", { name: "Settings" }).click();
-  await page.getByLabel("Provider").selectOption("gemini");
-  await page.getByLabel("Model").fill("gemini-2.5-flash");
-  await page.getByLabel("API Key (stored encrypted)").fill(process.env.GEMINI_API_KEY ?? "");
-  await page.getByRole("button", { name: "Save AI Settings" }).click();
-  await expect(page.getByText("LLM settings saved")).toBeVisible({ timeout: 20_000 });
-  await page.getByRole("button", { name: "Test Connection" }).click();
+  await page.getByLabel("Toggle AI Vision").click();
+  await page.getByLabel("AI provider").selectOption("gemini");
+  await page.getByPlaceholder("gemini-2.5-flash").fill("gemini-2.5-flash");
+  await page.getByPlaceholder("Paste to update").fill(process.env.GEMINI_API_KEY ?? "");
+  await page.getByRole("button", { name: "Save AI settings" }).click();
+  await expect(page.getByText("AI settings saved")).toBeVisible({ timeout: 20_000 });
+
+  await page.getByRole("button", { name: "Test connection" }).click();
   await expect(page.getByText("Connection successful")).toBeVisible({ timeout: 30_000 });
 
+  // Run a single-item AI scan via the file-input fallback.
   await page.getByRole("button", { name: "Spaces" }).click();
-  await page.getByRole("button", { name: /Scan or photograph/i }).click();
-  const aiDialog = page.getByRole("dialog", { name: "AI Photo Assist" });
-  await aiDialog.locator('input[type="file"]').setInputFiles({
-    name: "known-live-gemini-image.png",
-    mimeType: "image/png",
-    buffer: PNG_BYTES
-  });
-  await aiDialog.getByRole("button", { name: "Categorize Photo" }).click();
-  await expect(aiDialog.getByText("Review Draft")).toBeVisible({ timeout: 60_000 });
-  await aiDialog.getByLabel("Suggested name").fill("Live Gemini Reviewed Item");
-  await aiDialog.getByRole("button", { name: "Save Item" }).click();
+  await page.getByRole("button", { name: "Scan" }).click();
+  const scanDialog = page.getByRole("dialog", { name: "AI Scan" });
+  await scanDialog.locator('input[type="file"]').setInputFiles(FIXTURE);
 
+  // The real Gemini suggestion lands in the Add Item sheet.
+  const addItemDialog = page.getByRole("dialog", { name: "Add Item" });
+  await expect(addItemDialog.getByText("AI filled")).toBeVisible({ timeout: 60_000 });
+
+  // Pin a deterministic name so the assertion doesn't depend on the model's wording.
+  await addItemDialog.getByPlaceholder("e.g. Wireless Charger").fill("Live Gemini Reviewed Item");
+  await addItemDialog.getByRole("button", { name: "Add Item" }).click();
+
+  await expect(page.getByText("Item added")).toBeVisible();
   await expect(page.getByText("Live Gemini Reviewed Item")).toBeVisible({ timeout: 20_000 });
+
   await page.getByRole("button", { name: "Search" }).click();
-  await page.getByPlaceholder("Items, tags, or spaces…").fill("Live Gemini");
+  await page.getByPlaceholder("Items, tags, or spaces...").fill("Live Gemini");
   await expect(page.getByText("Live Gemini Reviewed Item")).toBeVisible();
 });

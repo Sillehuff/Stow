@@ -86,7 +86,6 @@ async function resolveImage(householdId: string, imageRef: { storagePath: string
 export async function visionCategorizeItemImageHandler(raw: unknown, uid: string) {
   const input = visionCategorizeInputSchema.parse(raw);
   await requireHouseholdMember(input.householdId, uid);
-  await consumeVisionQuota(input.householdId);
   const { config, apiKey } = await loadConfigAndSecret(input.householdId);
   if (!config.enabled) throw new HttpsError("failed-precondition", "Vision categorization is disabled for this household");
 
@@ -94,6 +93,9 @@ export async function visionCategorizeItemImageHandler(raw: unknown, uid: string
   const adapter = getVisionAdapter(config.providerType);
   const prompt = inventoryVisionPrompt({ areaName: input.context?.areaName });
 
+  // Reserve quota only once the request is valid and we're committed to a provider
+  // call — disabled config or a missing/invalid image must not burn the daily limit.
+  await consumeVisionQuota(input.householdId);
   const startedAt = Date.now();
   const suggestion = await adapter.classifyImage({
     apiKey,
@@ -127,7 +129,6 @@ export async function visionCategorizeItemImageHandler(raw: unknown, uid: string
 export async function visionDetectShelfItemsHandler(raw: unknown, uid: string) {
   const input = visionDetectShelfInputSchema.parse(raw);
   await requireHouseholdMember(input.householdId, uid);
-  await consumeVisionQuota(input.householdId);
   const { config, apiKey } = await loadConfigAndSecret(input.householdId);
   if (!config.enabled) throw new HttpsError("failed-precondition", "Vision categorization is disabled for this household");
 
@@ -138,6 +139,9 @@ export async function visionDetectShelfItemsHandler(raw: unknown, uid: string) {
   }
   const prompt = shelfDetectionPrompt({ areaName: input.areaName });
 
+  // Reserve quota only once the request is valid and we're committed to a provider
+  // call — disabled config, missing image, or unsupported provider must not burn quota.
+  await consumeVisionQuota(input.householdId);
   const startedAt = Date.now();
   const detections = await adapter.detectShelfItems({ apiKey, config, prompt, image });
   const latencyMs = Date.now() - startedAt;

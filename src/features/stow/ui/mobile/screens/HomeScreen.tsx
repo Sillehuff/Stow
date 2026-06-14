@@ -99,7 +99,7 @@ export function HomeScreen({ spaces, items, members, householdName, onOpenItem, 
               Stow<span style={{ color: "var(--stow-accent)" }}>.</span>
             </h1>
             <p style={{ margin: "4px 0 0", fontSize: 12.5, fontWeight: 600, color: "var(--stow-warm)" }}>
-              {items.length} items {"\u00b7"} {spaces.length} spaces
+              {items.length} item{items.length !== 1 ? "s" : ""} {"\u00b7"} {spaces.length} space{spaces.length !== 1 ? "s" : ""}
             </p>
           </div>
           <button
@@ -210,6 +210,8 @@ export function HomeScreen({ spaces, items, members, householdName, onOpenItem, 
           <>
             <AwayStrip items={items} members={members} onOpenItem={onOpenItem} />
 
+            {recent.length > 0 ? (
+              <>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, marginLeft: 2 }}>
               <Clock size={13} color="var(--stow-warm)" strokeWidth={2.2} />
               <span
@@ -299,6 +301,8 @@ export function HomeScreen({ spaces, items, members, householdName, onOpenItem, 
                 </button>
               ))}
             </div>
+              </>
+            ) : null}
 
             <SpacesList spaces={spaces} itemCountForSpace={itemCountForSpace} {...spacesList} />
           </>

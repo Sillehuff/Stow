@@ -16,3 +16,9 @@ dist
 vite.config.js
 vite.config.d.ts
 *.tsbuildinfo
+
+# Playwright / browser-automation generated artifacts
+/test-results
+/playwright-report
+/output
+/.playwright-cli
