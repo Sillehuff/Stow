@@ -110,8 +110,13 @@ service cloud.firestore {
       }
 
       match /visionJobs/{jobId} {
+        // Audit records: the backend writes these via the Admin SDK (bypasses rules).
+        // Clients may only create their own record; they can never forge createdBy,
+        // edit, or delete another member's job history.
         allow read: if isHouseholdMember(householdId);
-        allow write: if isHouseholdMember(householdId);
+        allow create: if isHouseholdMember(householdId)
+          && request.resource.data.createdBy == request.auth.uid;
+        allow update, delete: if false;
       }
     }
 

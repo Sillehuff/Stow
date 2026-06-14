@@ -1,3 +1,5 @@
+import { HttpsError } from "firebase-functions/v2/https";
+import { isPublicHttpsUrl } from "../shared/schemas.js";
 import { extractJsonObject, normalizeSuggestion, providerFetch, requireOk } from "./common.js";
 import type { ProviderContext, VisionProviderAdapter } from "./types.js";
 
@@ -5,9 +7,20 @@ function toDataUrl(mimeType: string, bytes: Buffer) {
   return `data:${mimeType};base64,${bytes.toString("base64")}`;
 }
 
+// Defense-in-depth: re-validate the configured baseUrl at call time so a config
+// persisted before SSRF validation (or any non-https/private host) cannot turn
+// the function into an SSRF pivot carrying the household's API key.
+function resolveBaseUrl(baseUrl?: string): string {
+  if (!baseUrl) return "https://api.openai.com/v1";
+  if (!isPublicHttpsUrl(baseUrl)) {
+    throw new HttpsError("invalid-argument", "AI provider baseUrl must be an https URL to a public host");
+  }
+  return baseUrl.replace(/\/+$/, "");
+}
+
 export const openaiCompatibleAdapter: VisionProviderAdapter = {
   async classifyImage({ apiKey, config, prompt, image }: ProviderContext) {
-    const baseUrl = (config.baseUrl ?? "https://api.openai.com/v1").replace(/\/+$/, "");
+    const baseUrl = resolveBaseUrl(config.baseUrl);
     const response = await providerFetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
@@ -48,7 +61,7 @@ export const openaiCompatibleAdapter: VisionProviderAdapter = {
   },
 
   async validate({ apiKey, config }) {
-    const baseUrl = (config.baseUrl ?? "https://api.openai.com/v1").replace(/\/+$/, "");
+    const baseUrl = resolveBaseUrl(config.baseUrl);
     const response = await providerFetch(`${baseUrl}/models`, {
       headers: { Authorization: `Bearer ${apiKey}` }
     });

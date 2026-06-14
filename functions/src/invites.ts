@@ -48,7 +48,10 @@ export async function createHouseholdInviteHandler(raw: unknown, requestAuth: { 
   };
 }
 
-export async function acceptHouseholdInviteHandler(raw: unknown, requestAuth: { uid?: string; token?: { email?: string } } | undefined) {
+export async function acceptHouseholdInviteHandler(
+  raw: unknown,
+  requestAuth: { uid?: string; token?: { email?: string; email_verified?: boolean } } | undefined
+) {
   const uid = requestAuth?.uid ?? (() => {
     throw new HttpsError("unauthenticated", "Authentication required");
   })();
@@ -90,8 +93,11 @@ export async function acceptHouseholdInviteHandler(raw: unknown, requestAuth: { 
     }
 
     if (inviteData.invitedEmail) {
+      // An unverified email claim is treated as no match: otherwise a provider that
+      // lets users set an arbitrary unverified email could accept someone else's invite.
+      const emailVerified = requestAuth?.token?.email_verified === true;
       const callerEmail = (requestAuth?.token?.email ?? "").trim().toLowerCase();
-      if (callerEmail !== inviteData.invitedEmail) {
+      if (!emailVerified || callerEmail !== inviteData.invitedEmail) {
         // permission-denied (not not-found) is deliberate: the valid token already proves the
         // invite exists, the message names no email, and the specific copy lets a legitimate
         // invitee who signed in with the wrong account understand they need to switch accounts.

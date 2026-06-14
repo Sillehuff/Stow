@@ -12,7 +12,9 @@ export async function providerFetch(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    // redirect: "error" prevents a provider host from redirecting the request
+    // (and the Bearer key) to an internal address — SSRF defense-in-depth.
+    return await fetch(url, { redirect: "error", ...init, signal: controller.signal });
   } catch (error) {
     if (controller.signal.aborted) {
       throw new HttpsError("deadline-exceeded", "AI provider request timed out");
