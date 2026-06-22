@@ -11,6 +11,9 @@ export default function AuthFinishPage() {
   const [returnTo] = useState(() => getPendingEmailLinkReturnTo(currentUrl));
   const [emailInput, setEmailInput] = useState(initialEmail);
   const [submittedEmail, setSubmittedEmail] = useState(initialEmail);
+  // Bumped on every manual submit so re-attempting with the SAME email still re-runs the effect
+  // (a plain setSubmittedEmail to an identical value is a no-op and would otherwise hang on "working").
+  const [retryNonce, setRetryNonce] = useState(0);
   const completionKeyRef = useRef<string | null>(null);
   const completionPromiseRef = useRef<Promise<void> | null>(null);
   const [status, setStatus] = useState<"idle" | "working" | "done" | "error" | "invalid">(
@@ -26,7 +29,7 @@ export default function AuthFinishPage() {
 
   useEffect(() => {
     if (!validLink || !submittedEmail) return;
-    const completionKey = `${currentUrl}::${submittedEmail}`;
+    const completionKey = `${currentUrl}::${submittedEmail}::${retryNonce}`;
     if (completionKeyRef.current !== completionKey) {
       completionKeyRef.current = completionKey;
       completionPromiseRef.current = completeEmailLinkSignIn(currentUrl, submittedEmail).then(() => undefined);
@@ -46,14 +49,21 @@ export default function AuthFinishPage() {
       })
       .catch((error) => {
         if (cancelled) return;
+        // Firebase returns auth/invalid-action-code for BOTH a used/expired link AND a wrong
+        // email (there is no distinct mismatch code), so we can't tell them apart by code. Show
+        // the mapped error AND keep the email form open so the user can either correct the email
+        // and retry in place, or take the "Back to sign-in" escape for a genuinely dead link.
         setStatus("error");
-        setMessage(toLoggedUserErrorMessage(error, "Unable to complete sign-in"));
+        setMessage(toLoggedUserErrorMessage(error, "Couldn't finish sign-in. Re-enter your email and try again, or request a fresh link."));
       });
 
     return () => {
       cancelled = true;
     };
-  }, [currentUrl, navigate, returnTo, submittedEmail, validLink]);
+  }, [currentUrl, navigate, retryNonce, returnTo, submittedEmail, validLink]);
+
+  const showForm = validLink && (status === "idle" || status === "error");
+  const showBackToSignIn = status === "error" || status === "invalid";
 
   return (
     <div className="center-shell">
@@ -61,7 +71,7 @@ export default function AuthFinishPage() {
         <h1>Stow</h1>
         {status === "working" || status === "done" ? <div className="auth-progress" aria-hidden="true"><span /></div> : null}
         <p>{message}</p>
-        {status === "idle" ? (
+        {showForm ? (
           <form
             className="stack"
             onSubmit={(event) => {
@@ -72,6 +82,7 @@ export default function AuthFinishPage() {
                 return;
               }
               setSubmittedEmail(emailInput.trim());
+              setRetryNonce((nonce) => nonce + 1);
               setStatus("working");
             }}
           >
@@ -89,7 +100,7 @@ export default function AuthFinishPage() {
             </button>
           </form>
         ) : null}
-        {status === "error" || status === "invalid" ? (
+        {showBackToSignIn ? (
           <button className="btn" onClick={() => navigate(returnTo, { replace: true })}>
             Back to sign-in
           </button>

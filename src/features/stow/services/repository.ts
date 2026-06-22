@@ -602,36 +602,46 @@ export const inventoryRepository = {
   }): Promise<string[]> {
     if (input.items.length === 0) return [];
     const database = requireDb();
-    const batch = writeBatch(database);
+    // Pre-generate refs (keeps the returned id list complete/ordered), then commit in
+    // <=450-op chunks so a batch of 500+ items survives Firestore's 500-op limit instead
+    // of throwing. Mirrors deleteSpace's chunked pattern. Writes are no longer atomic across
+    // chunks, but that is strictly better than today's all-or-nothing throw.
     const ids: string[] = [];
+    const ops: Array<(batch: WriteBatch) => void> = [];
     for (const item of input.items) {
       const itemRef = doc(collection(database, householdPaths.items(input.householdId)));
       ids.push(itemRef.id);
       // Mirrors createItem defaults. P4 will wire items_added_batch activity at the QuickCapture call site.
-      batch.set(itemRef, {
-        householdId: input.householdId,
-        spaceId: item.spaceId,
-        areaId: item.areaId,
-        areaNameSnapshot: item.areaNameSnapshot,
-        name: item.name,
-        kind: "item",
-        image: item.image ?? null,
-        value: item.value ?? null,
-        isPriceless: false,
-        tags: item.tags ?? [],
-        notes: item.notes ?? "",
-        isPacked: false,
-        status: "home",
-        photoStatus: defaultPhotoStatus({ image: item.image }),
-        entryMode: defaultEntryMode({ vision: item.vision }),
-        vision: item.vision ?? null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        createdBy: input.userId,
-        updatedBy: input.userId
-      });
+      ops.push((batch) =>
+        batch.set(itemRef, {
+          householdId: input.householdId,
+          spaceId: item.spaceId,
+          areaId: item.areaId,
+          areaNameSnapshot: item.areaNameSnapshot,
+          name: item.name,
+          kind: "item",
+          image: item.image ?? null,
+          value: item.value ?? null,
+          isPriceless: false,
+          tags: item.tags ?? [],
+          notes: item.notes ?? "",
+          isPacked: false,
+          status: "home",
+          photoStatus: defaultPhotoStatus({ image: item.image }),
+          entryMode: defaultEntryMode({ vision: item.vision }),
+          vision: item.vision ?? null,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          createdBy: input.userId,
+          updatedBy: input.userId
+        })
+      );
     }
-    await batch.commit();
+    for (const chunk of chunkOps(ops)) {
+      const batch = writeBatch(database);
+      chunk.forEach((apply) => apply(batch));
+      await batch.commit();
+    }
     return ids;
   },
 

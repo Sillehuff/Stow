@@ -40,6 +40,8 @@ export interface QuickCaptureProps {
   isOnline?: () => boolean;
   onClose: () => void;
   onCommitted: (count: number, committed: boolean) => void;
+  // Surfaced when an offline batch is later denied server-side (optimistic items rolled back).
+  onQueuedWriteRejected?: (error: unknown) => void;
 }
 
 export interface QuickCaptureData {
@@ -141,6 +143,7 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
     isOnline,
     onClose,
     onCommitted,
+    onQueuedWriteRejected,
     spaces,
     userId,
     actorName,
@@ -317,7 +320,9 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
         }).catch((error) => console.error("Activity log failed", error));
         return itemIds;
       });
-      const committed = isOnline ? await completeWrite(write, isOnline) : await completeWrite(write);
+      const committed = isOnline
+        ? await completeWrite(write, isOnline, onQueuedWriteRejected)
+        : await completeWrite(write, undefined, onQueuedWriteRejected);
       onCommitted(commitItems.length, committed);
     } catch {
       setCommitError("Couldn't file these items. Try again.");
@@ -510,7 +515,7 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
         <div
           style={{
             position: "absolute",
-            top: 54,
+            top: "max(16px, env(safe-area-inset-top))",
             left: 0,
             right: 0,
             display: "flex",
@@ -1008,11 +1013,11 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
           type="button"
           aria-label="Close"
           onClick={onClose}
-          style={{ ...roundHeaderButtonStyle, position: "absolute", top: 54, left: 22, zIndex: 3 }}
+          style={{ ...roundHeaderButtonStyle, position: "absolute", top: "max(16px, env(safe-area-inset-top))", left: 22, zIndex: 3 }}
         >
           <X size={16} color="var(--stow-ink-muted)" />
         </button>
-        <div style={{ flex: 1, overflowY: "auto", padding: "62px 24px 0" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "max(62px, calc(env(safe-area-inset-top) + 24px)) 24px 0" }}>
           <div style={{ textAlign: "center", marginTop: 14, marginBottom: 22 }}>
             <div
               style={{
@@ -1062,9 +1067,10 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {commitItems.map((item) => (
+            {commitItems.map((item, index) => (
               <div
-                key={`${item.spaceId}-${item.areaId}-${item.name}`}
+                // Index key: the static done-summary can contain duplicate same-named items.
+                key={index}
                 style={{
                   display: "flex",
                   alignItems: "center",

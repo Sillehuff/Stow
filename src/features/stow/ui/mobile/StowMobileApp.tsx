@@ -36,6 +36,7 @@ import { ActionSheet } from "@/features/stow/ui/mobile/shell/ActionSheet";
 import { BottomNav } from "@/features/stow/ui/mobile/shell/BottomNav";
 import { Confirm } from "@/features/stow/ui/mobile/shell/Confirm";
 import { Toast } from "@/features/stow/ui/mobile/shell/Toast";
+import { readDefaultSpaceId } from "@/features/stow/ui/mobile/preferences";
 import { completeWrite } from "@/lib/firebase/completeWrite";
 import { visionCategorizeItemImage } from "@/lib/firebase/functions";
 import { storagePaths } from "@/lib/firebase/paths";
@@ -53,6 +54,9 @@ interface StowMobileAppProps {
 export function StowMobileApp({ householdId, user, onSignOut, online, basePath = "" }: StowMobileAppProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const shelfPreviewUrlRef = useRef<string | null>(null);
+  // Tracks an item the user is deleting from its own detail view, so the live-subscription
+  // "that item was removed" effect doesn't clobber the success toast / yank them to Spaces.
+  const selfDeletingIdRef = useRef<string | null>(null);
   const location = useLocation();
   const nav = useMobileNavigation(householdId, basePath);
   const data = useWorkspaceData(householdId, user);
@@ -89,6 +93,12 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
     return member?.displayName ?? member?.email ?? "Someone";
   }, [data.members, userId]);
   const allTags = useMemo(() => Array.from(new Set(data.items.flatMap((item) => item.tags || []))), [data.items]);
+  // The persisted "Default space" preference, but only when it still resolves to a live space.
+  // Read fresh each render (not memoized): there's no change event when the Settings select
+  // writes localStorage, so a stale memo would ignore a freshly-chosen default until spaces change.
+  const savedDefaultSpaceId = readDefaultSpaceId();
+  const preferredDefaultSpaceId =
+    savedDefaultSpaceId && data.spaces.some((space) => space.id === savedDefaultSpaceId) ? savedDefaultSpaceId : null;
 
   const packedCount = data.packingLists.reduce(
     (sum, list) => sum + Math.max(0, list.itemIds.length - list.packedItemIds.length),
@@ -115,6 +125,8 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
 
   useEffect(() => {
     if (nav.selectedItemId && data.items.length > 0 && !selectedItem) {
+      // A self-initiated delete handles its own toast + back-navigation; don't double-fire.
+      if (nav.selectedItemId === selfDeletingIdRef.current) return;
       flash("That item was removed");
       nav.navigateToTab("spaces");
     }
@@ -230,6 +242,15 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
     setShelfCapture({ blob, previewUrl });
   }
 
+  // Full-screen capture overlays declare aria-modal but render as siblings over the still-mounted
+  // app. Marking the background inert while one is open keeps keyboard/AT focus inside the overlay.
+  const captureOverlayActive =
+    nav.overlay.kind === "scan" ||
+    nav.overlay.kind === "photo" ||
+    nav.overlay.kind === "scanQr" ||
+    nav.overlay.kind === "captureFirst" ||
+    Boolean(shelfCapture);
+
   let screen: ReactNode = null;
 
   if (nav.tab === "spaces") {
@@ -296,8 +317,8 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
         onClearPacked={(listId) => {
           void data.actions.clearPackingListPacked({ householdId, listId, userId });
         }}
-        onSetItems={(listId, itemIds) => {
-          void data.actions.updatePackingList({ householdId, listId, userId, patch: { itemIds } });
+        onSetItems={(listId, itemIds, packedItemIds) => {
+          void data.actions.updatePackingList({ householdId, listId, userId, patch: { itemIds, packedItemIds } });
         }}
         onFlash={flash}
       />
@@ -326,7 +347,9 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
   return (
     <div className="stow-mobile" ref={rootRef}>
       <div className="stow-mobile__viewport">
-        <div className="stow-mobile__screen">{screen}</div>
+        <div className="stow-mobile__screen" inert={captureOverlayActive || undefined}>
+          {screen}
+        </div>
 
         {activityOpen ? (
           <ActivityScreen
@@ -428,12 +451,14 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
         ) : null}
 
         {!selectedItem ? (
-          <BottomNav
-            tab={nav.tab}
-            onTab={(tab: MobileTab) => nav.navigateToTab(tab)}
-            onScan={() => setScanMenuOpen(true)}
-            packedCount={packedCount}
-          />
+          <div inert={captureOverlayActive || undefined} style={{ display: "contents" }}>
+            <BottomNav
+              tab={nav.tab}
+              onTab={(tab: MobileTab) => nav.navigateToTab(tab)}
+              onScan={() => setScanMenuOpen(true)}
+              packedCount={packedCount}
+            />
+          </div>
         ) : null}
 
         <ActionSheet
@@ -559,7 +584,9 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
                   .catch((error) => console.error("Activity log failed", error));
                 return spaceId;
               });
-            const committed = await completeWrite(write, () => online);
+            const committed = await completeWrite(write, () => online, () =>
+              flash("A space you added offline couldn’t be saved")
+            );
             flash(committed ? "Space created" : "Space saved — will sync when you’re online");
             nav.closeOverlay();
           }}
@@ -578,7 +605,8 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
                   name: input.name,
                   position: input.position
                 }),
-                () => online
+                () => online,
+                () => flash("An area you added offline couldn’t be saved")
               );
               flash(committed ? "Area added" : "Area saved — will sync when you’re online");
             }
@@ -591,7 +619,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
           householdId={householdId}
           spaces={data.spaces}
           initial={addItemInitial}
-          defaultSpaceId={addItemInitial?.spaceId ?? nav.selectedSpaceId}
+          defaultSpaceId={addItemInitial?.spaceId ?? nav.selectedSpaceId ?? preferredDefaultSpaceId}
           defaultAreaId={addItemInitial?.areaId ?? nav.selectedAreaId}
           onClose={() => nav.closeOverlay()}
           onCreate={async (input) => {
@@ -630,7 +658,9 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
                   .catch((error) => console.error("Activity log failed", error));
                 return itemId;
               });
-            const committed = await completeWrite(write, () => online);
+            const committed = await completeWrite(write, () => online, () =>
+              flash("An item you added offline couldn’t be saved")
+            );
             flash(committed ? "Item added" : "Item saved — will sync when you’re online");
             nav.closeOverlay();
           }}
@@ -669,6 +699,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
             capturedBlob={shelfCapture.blob}
             capturedPreviewUrl={shelfCapture.previewUrl}
             isOnline={() => online}
+            onQueuedWriteRejected={() => flash("Some items added offline couldn’t be saved")}
             onClose={clearShelfCapture}
             onCommitted={(count, committed) => {
               clearShelfCapture();
@@ -710,6 +741,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
             const itemToDelete = data.items.find((item) => item.id === itemIdToDelete);
             const imageToClean = itemToDelete?.image;
             const shouldReturn = nav.selectedItemId === itemIdToDelete;
+            if (shouldReturn) selfDeletingIdRef.current = itemIdToDelete;
             setDeleteSaving(true);
             setDeleteItemId(null);
             void (async () => {
@@ -729,6 +761,13 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
                 flash("Couldn't delete item");
               } finally {
                 setDeleteSaving(false);
+                // Clear after the subscription has had a tick to drop the item, so the
+                // "removed" effect stays suppressed for this self-delete but re-arms for
+                // any genuine remote removal afterward.
+                const clearedId = itemIdToDelete;
+                setTimeout(() => {
+                  if (selfDeletingIdRef.current === clearedId) selfDeletingIdRef.current = null;
+                }, 1500);
               }
             })();
           }}

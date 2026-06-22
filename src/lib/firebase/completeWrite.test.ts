@@ -23,4 +23,15 @@ describe("completeWrite", () => {
   it("propagates rejection when online", async () => {
     await expect(completeWrite(Promise.reject(new Error("boom")), () => true)).rejects.toThrow("boom");
   });
+
+  it("notifies onQueuedWriteRejected when an offline write is later denied", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const onRejected = vi.fn();
+    const failing = Promise.reject(new Error("denied"));
+    await expect(completeWrite(failing, () => false, onRejected)).resolves.toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onRejected).toHaveBeenCalledTimes(1);
+    expect(onRejected.mock.calls[0][0]).toBeInstanceOf(Error);
+    spy.mockRestore();
+  });
 });

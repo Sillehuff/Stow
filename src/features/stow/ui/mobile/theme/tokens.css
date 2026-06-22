@@ -3,13 +3,14 @@
   --stow-ink: #1a1a2e;
   --stow-ink-soft: #2d2d44;
   --stow-ink-muted: #6b6b80;
-  --stow-warm: #9595a8;
+  --stow-warm: #6e6e84;
   --stow-border: #e8e8ee;
   --stow-border-l: #f0f0f5;
   --stow-surface: #ffffff;
   --stow-canvas: #f7f7fa;
   --stow-accent: #e8652b;
   --stow-accent-soft: color-mix(in srgb, #e8652b 12%, #ffffff);
+  --stow-accent-text: #b5470f;
   --stow-success: #2d9f6f;
   --stow-success-soft: #eafaf2;
   --stow-danger: #e04545;

@@ -59,7 +59,7 @@ export default function AcceptInvitePage() {
           <div className="stack">
             <button
               className="btn primary"
-              disabled={!user || missingParams || state.status === "working"}
+              disabled={!user || missingParams || state.status === "working" || state.status === "success"}
               onClick={async () => {
                 setState({ status: "working", message: "" });
                 try {

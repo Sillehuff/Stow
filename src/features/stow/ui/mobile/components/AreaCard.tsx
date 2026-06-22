@@ -14,14 +14,23 @@ export function AreaCard({
 }) {
   const accent = color ?? "var(--stow-accent)";
 
+  // Render an accessible <button> when interactive so keyboard/AT users can open the area.
+  const interactive = Boolean(onClick);
+  const Tag = interactive ? "button" : "div";
+
   return (
-    <div
+    <Tag
+      type={interactive ? "button" : undefined}
+      aria-label={interactive ? `Open ${name}` : undefined}
       onClick={onClick}
       style={{
         ...cardStyle,
         borderRadius: "var(--stow-radius-input)",
         padding: 16,
-        cursor: onClick ? "pointer" : "default",
+        width: "100%",
+        textAlign: "left",
+        font: "inherit",
+        cursor: interactive ? "pointer" : "default",
         display: "flex",
         flexDirection: "column",
         gap: 10,
@@ -47,6 +56,6 @@ export function AreaCard({
           {count} item{count !== 1 ? "s" : ""}
         </div>
       </div>
-    </div>
+    </Tag>
   );
 }

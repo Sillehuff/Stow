@@ -20,7 +20,7 @@ export interface PackingScreenProps {
   onDeleteList: (listId: string) => void;
   onToggleItem: (listId: string, itemId: string, packed: boolean) => void;
   onClearPacked: (listId: string) => void;
-  onSetItems: (listId: string, itemIds: string[]) => void;
+  onSetItems: (listId: string, itemIds: string[], packedItemIds: string[]) => void;
   onFlash: (msg: string) => void;
 }
 
@@ -151,7 +151,12 @@ export function PackingScreen(props: PackingScreenProps) {
 
   function commitPicker() {
     if (activeList) {
-      onSetItems(activeList.id, [...pickerSelected]);
+      const ids = [...pickerSelected];
+      const idsSet = new Set(ids);
+      // Keep the invariant packedItemIds ⊆ itemIds: drop packed ids for items removed in the
+      // picker, so a later re-add doesn't resurface them as pre-checked.
+      const nextPacked = activeList.packedItemIds.filter((id) => idsSet.has(id));
+      onSetItems(activeList.id, ids, nextPacked);
       onFlash("Packing list updated");
     }
     setPickerOpen(false);

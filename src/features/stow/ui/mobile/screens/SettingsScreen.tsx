@@ -9,6 +9,7 @@ import { Button } from "@/features/stow/ui/mobile/components/Button";
 import { RoleBadge } from "@/features/stow/ui/mobile/components/RoleBadge";
 import { Confirm } from "@/features/stow/ui/mobile/shell/Confirm";
 import { downloadInventoryCsv } from "@/features/stow/ui/mobile/screens/inventoryCsv";
+import { readDefaultSpaceId, writeDefaultSpaceId } from "@/features/stow/ui/mobile/preferences";
 import {
   createHouseholdInvite,
   removeHouseholdMember,
@@ -19,7 +20,6 @@ import {
   validateHouseholdLlmConfig
 } from "@/lib/firebase/functions";
 
-const DEFAULT_SPACE_KEY = "stow:mobile:default-space";
 const ROLES: Role[] = ["OWNER", "ADMIN", "MEMBER"];
 const PROVIDERS: ProviderType[] = ["gemini", "openai_compatible", "anthropic"];
 
@@ -55,20 +55,14 @@ type ConfirmState = {
   action: () => Promise<void>;
 };
 
-function readDefaultSpaceId() {
+/** Best-effort clipboard write; resolves false if unsupported or blocked (never throws). */
+async function copyToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return false;
   try {
-    if (typeof window === "undefined") return "";
-    return window.localStorage.getItem(DEFAULT_SPACE_KEY) ?? "";
+    await navigator.clipboard.writeText(text);
+    return true;
   } catch {
-    return "";
-  }
-}
-
-function writeDefaultSpaceId(spaceId: string) {
-  try {
-    window.localStorage.setItem(DEFAULT_SPACE_KEY, spaceId);
-  } catch {
-    // Storage can be unavailable in private mode; the in-session select value still works.
+    return false;
   }
 }
 
@@ -167,8 +161,13 @@ function PreferenceRow({
   onClick?: () => void;
   children?: ReactNode;
 }) {
+  // Interactive rows (Export CSV, Sign out) render as a real <button> for keyboard/AT access;
+  // informational rows (Offline mode, Default space) stay plain <div>s.
+  const interactive = Boolean(onClick);
+  const Tag = interactive ? "button" : "div";
   return (
-    <div
+    <Tag
+      type={interactive ? "button" : undefined}
       onClick={onClick}
       style={{
         display: "flex",
@@ -176,8 +175,13 @@ function PreferenceRow({
         justifyContent: "space-between",
         gap: 12,
         padding: "14px 18px",
+        width: interactive ? "100%" : undefined,
+        textAlign: "left",
+        font: "inherit",
+        border: "none",
+        background: "transparent",
         borderBottom: "1px solid var(--stow-border-l)",
-        cursor: onClick ? "pointer" : "default"
+        cursor: interactive ? "pointer" : "default"
       }}
     >
       <span style={{ fontSize: 15, fontWeight: 700, color: danger ? "var(--stow-danger)" : "var(--stow-ink)" }}>
@@ -187,7 +191,7 @@ function PreferenceRow({
         {children ?? (value ? <span style={{ fontSize: 14, fontWeight: 700 }}>{value}</span> : null)}
         {onClick ? <ChevronRight size={15} color="var(--stow-border)" /> : null}
       </div>
-    </div>
+    </Tag>
   );
 }
 
@@ -365,12 +369,10 @@ export function SettingsScreen(props: SettingsScreenProps) {
         email: inviteEmail.trim() || undefined
       });
       setInviteEmail("");
-      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(invite.inviteUrl);
-        onFlash("Invite created and copied");
-      } else {
-        onFlash("Invite created");
-      }
+      // Clipboard write can reject (NotAllowedError) after the awaited round-trip consumes the
+      // user-activation. Isolate it so a copy failure never masks the successful invite creation.
+      const copied = await copyToClipboard(invite.inviteUrl);
+      onFlash(copied ? "Invite created and copied" : "Invite created");
     } catch (error) {
       onFlash(error instanceof Error ? error.message : "Could not create invite");
     }
@@ -400,9 +402,8 @@ export function SettingsScreen(props: SettingsScreenProps) {
       action: async () => {
         await revokeHouseholdInvite({ householdId, inviteId: invite.id });
         const nextInvite = await createHouseholdInvite({ householdId, role: invite.role });
-        if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(nextInvite.inviteUrl);
-        }
+        // Best-effort copy; a clipboard rejection must not surface as a regenerate failure.
+        await copyToClipboard(nextInvite.inviteUrl);
         onFlash("Invite regenerated");
       }
     });
@@ -432,7 +433,7 @@ export function SettingsScreen(props: SettingsScreenProps) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--stow-canvas)" }}>
-      <div style={{ padding: "56px 24px 8px" }}>
+      <div style={{ padding: "calc(env(safe-area-inset-top) + 24px) 24px 8px" }}>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900, color: "var(--stow-ink)", fontFamily: "var(--stow-display)" }}>
           Settings
         </h1>

@@ -15,6 +15,7 @@ export interface Palette {
   canvas: string;
   accent: string;
   accentSoft: string;
+  accentText: string;
   success: string;
   successSoft: string;
   danger: string;
@@ -45,6 +46,8 @@ export function makePalette(input: PaletteInput = {}): Palette {
         surface: "#181822",
         canvas: "#101019",
         accentSoft: `color-mix(in srgb, ${accent} 22%, #181822)`,
+        // Accent text reads on the dark accent-soft tint; the accent itself clears AA there.
+        accentText: accent,
         success: "#34C088",
         successSoft: "color-mix(in srgb, #34C088 18%, #181822)",
         danger: "#F26060",
@@ -56,12 +59,15 @@ export function makePalette(input: PaletteInput = {}): Palette {
         ink: "#1A1A2E",
         inkSoft: "#2D2D44",
         inkMuted: "#6B6B80",
-        warm: "#9595A8",
+        // Darkened from #9595A8 (2.75:1) to clear WCAG AA (4.5:1) for small secondary text on canvas.
+        warm: "#6E6E84",
         border: "#E8E8EE",
         borderL: "#F0F0F5",
         surface: "#FFFFFF",
         canvas: "#F7F7FA",
         accentSoft: `color-mix(in srgb, ${accent} 12%, #FFFFFF)`,
+        // Darker accent shade that clears AA (4.5:1) as text on the accent-soft tint.
+        accentText: "#B5470F",
         success: "#2D9F6F",
         successSoft: "#EAFAF2",
         danger: "#E04545",
@@ -91,6 +97,7 @@ const VAR_MAP: Record<keyof Palette, string> = {
   canvas: "--stow-canvas",
   accent: "--stow-accent",
   accentSoft: "--stow-accent-soft",
+  accentText: "--stow-accent-text",
   success: "--stow-success",
   successSoft: "--stow-success-soft",
   danger: "--stow-danger",

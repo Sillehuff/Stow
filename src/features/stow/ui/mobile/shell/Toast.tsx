@@ -1,12 +1,19 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Check } from "@/features/stow/ui/mobile/theme/icons";
 
 export function Toast({ message, onDone }: { message: string | null; onDone: () => void }) {
+  // Keep onDone in a ref so the auto-dismiss window starts once per message and is not
+  // restarted every time the parent re-renders (which it does on every live-data tick).
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
+
   useEffect(() => {
     if (!message) return;
-    const timer = window.setTimeout(onDone, 2000);
+    const timer = window.setTimeout(() => onDoneRef.current(), 2000);
     return () => window.clearTimeout(timer);
-  }, [message, onDone]);
+  }, [message]);
 
   if (!message) return null;
   return (

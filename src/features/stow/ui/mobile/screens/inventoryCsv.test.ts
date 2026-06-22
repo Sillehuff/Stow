@@ -5,7 +5,7 @@ import type { Item, SpaceWithAreas } from "@/types/domain";
 const space = { id: "s1", name: "Garage", areas: [] } as unknown as SpaceWithAreas;
 const baseItem = {
   id: "i1", spaceId: "s1", areaNameSnapshot: "Shelf A", name: "Drill",
-  tags: ["Tools"], value: 90, notes: "DeWalt", isPacked: false, isPriceless: false, kind: "item",
+  tags: ["Tools"], value: 90, notes: "DeWalt", status: "home", isPriceless: false, kind: "item",
 } as unknown as Item;
 
 describe("buildInventoryCsv", () => {
@@ -23,7 +23,7 @@ describe("buildInventoryCsv", () => {
     expect(row).toContain('"line1\nline2"');
   });
   it("joins multiple tags with a semicolon and marks priceless/packed", () => {
-    const multi = { ...baseItem, tags: ["A", "B"], isPriceless: true, isPacked: true, value: undefined } as unknown as Item;
+    const multi = { ...baseItem, tags: ["A", "B"], isPriceless: true, status: "packed", value: undefined } as unknown as Item;
     const csv = buildInventoryCsv([multi], [space]);
     expect(csv.split("\n")[1]).toBe("Drill,Garage,Shelf A,A;B,,Yes,Yes,DeWalt");
   });
