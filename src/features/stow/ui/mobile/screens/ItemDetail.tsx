@@ -840,7 +840,7 @@ export function ItemDetail(props: ItemDetailProps) {
                     borderRadius: 14,
                     fontSize: 13,
                     fontWeight: 700,
-                    color: "var(--stow-accent)",
+                    color: "var(--stow-accent-text)",
                     border: "1.5px dashed color-mix(in srgb, var(--stow-accent) 33%, transparent)",
                     background: "var(--stow-accent-soft)",
                     cursor: "pointer",
@@ -858,11 +858,11 @@ export function ItemDetail(props: ItemDetailProps) {
                 onClick={startEdit}
                 style={{
                   background: "var(--stow-accent-soft)",
-                  color: "var(--stow-accent)",
+                  color: "var(--stow-accent-text)",
                   border: "1px solid color-mix(in srgb, var(--stow-accent) 15%, transparent)"
                 }}
               >
-                <Pencil size={15} color="var(--stow-accent)" />
+                <Pencil size={15} color="var(--stow-accent-text)" />
                 Edit Item
               </Button>
               <Button variant="neutral" onClick={openMove}>

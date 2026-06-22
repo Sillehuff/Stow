@@ -215,21 +215,32 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
 
   function confirmAreaDelete() {
     if (!areaDelete) return;
-    const affectedCount = itemCountForArea(areaDelete.id);
+    const removedId = areaDelete.id;
+    const affectedCount = itemCountForArea(removedId);
+    let ownReassign: AreaReassignmentDraft | null = null;
     if (affectedCount > 0) {
-      const reassignTo = areaDestinationFor(areaDestSpaceId, areaDestAreaId, areaDestinationSpaces(areaDelete.id));
+      const reassignTo = areaDestinationFor(areaDestSpaceId, areaDestAreaId, areaDestinationSpaces(removedId));
       if (!reassignTo) return;
-      setAreaReassignments((previous) => ({
-        ...previous,
-        [areaDelete.id]: { spaceId: reassignTo.spaceId, areaId: reassignTo.areaId }
-      }));
-    } else {
-      setAreaReassignments((previous) => {
-        const next = { ...previous };
-        delete next[areaDelete.id];
-        return next;
-      });
+      ownReassign = { spaceId: reassignTo.spaceId, areaId: reassignTo.areaId };
     }
+    // A fallback destination that excludes the area we're removing (and already-reassigned ones).
+    const fallback = firstAreaDestination(removedId);
+    setAreaReassignments((previous) => {
+      const next = { ...previous };
+      if (ownReassign) next[removedId] = ownReassign;
+      else delete next[removedId];
+      // Re-point any OTHER source whose chosen destination was this just-removed area; that
+      // target won't exist at save time, so resolve it to a still-valid area (or drop it if
+      // none remain). This prevents a mid-save throw that left a partially-applied edit.
+      for (const [sourceId, dest] of Object.entries(next)) {
+        if (sourceId === removedId) continue;
+        if (dest.spaceId === space.id && dest.areaId === removedId) {
+          if (fallback) next[sourceId] = { spaceId: fallback.spaceId, areaId: fallback.areaId };
+          else delete next[sourceId];
+        }
+      }
+      return next;
+    });
     removeAreaFromDraft(areaDelete.key);
     setAreaDelete(null);
   }
@@ -246,21 +257,33 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
 
       const draftIds = new Set(areas.filter((area) => area.id).map((area) => area.id));
       const finalDestinationSpaces = finalAreaDestinationSpaces();
-      for (const original of space.areas) {
-        if (!draftIds.has(original.id)) {
-          const reassignment = areaReassignments[original.id];
-          const reassignTo = reassignment
-            ? (areaDestinationFor(reassignment.spaceId, reassignment.areaId, finalDestinationSpaces) ?? undefined)
-            : undefined;
 
-          await actions.deleteArea({
-            householdId,
-            spaceId: space.id,
-            areaId: original.id,
-            userId,
-            reassignTo
-          });
+      // Resolve + validate every deletion up front. If an area with items has no resolvable
+      // destination (e.g. its chosen destination was also deleted this session), abort BEFORE
+      // any write so we never delete some areas and then throw mid-loop (a partial edit).
+      const deletions: Array<{ areaId: string; reassignTo?: { spaceId: string; areaId: string; areaNameSnapshot: string } }> = [];
+      for (const original of space.areas) {
+        if (draftIds.has(original.id)) continue;
+        const reassignment = areaReassignments[original.id];
+        const reassignTo = reassignment
+          ? (areaDestinationFor(reassignment.spaceId, reassignment.areaId, finalDestinationSpaces) ?? undefined)
+          : undefined;
+        if (itemCountForArea(original.id) > 0 && !reassignTo) {
+          onError("Choose a destination for items in a deleted area before saving.");
+          setSaving(false);
+          return;
         }
+        deletions.push({ areaId: original.id, reassignTo });
+      }
+
+      for (const deletion of deletions) {
+        await actions.deleteArea({
+          householdId,
+          spaceId: space.id,
+          areaId: deletion.areaId,
+          userId,
+          reassignTo: deletion.reassignTo
+        });
       }
 
       const resolvedIds: string[] = [];

@@ -51,7 +51,7 @@ export function IconPicker({ value, color, onChange }: { value: string; color: s
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search icons\u2026"
+            placeholder={"Search icons…"}
             style={{
               width: "100%",
               boxSizing: "border-box",

@@ -54,7 +54,7 @@ export function BottomNav({ tab, onTab, onScan, packedCount = 0 }: BottomNavProp
               border: 0,
               borderRadius: 18,
               background: active ? "var(--stow-accent-soft)" : "transparent",
-              color: active ? "var(--stow-accent)" : "var(--stow-ink-muted)",
+              color: active ? "var(--stow-accent-text)" : "var(--stow-ink-muted)",
               display: "grid",
               placeItems: "center",
               gap: 2,

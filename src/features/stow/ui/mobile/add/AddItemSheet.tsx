@@ -336,14 +336,14 @@ export function AddItemSheet(props: AddItemSheetProps) {
                   fontWeight: 800,
                   letterSpacing: 0.5,
                   textTransform: "uppercase",
-                  color: "var(--stow-accent)",
+                  color: "var(--stow-accent-text)",
                   background: "var(--stow-accent-soft)",
                   padding: "3px 8px",
                   borderRadius: 99,
                   marginBottom: 6
                 }}
               >
-                <Sparkles size={10} color="var(--stow-accent)" /> AI filled
+                <Sparkles size={10} color="var(--stow-accent-text)" /> AI filled
               </span>
             ) : null}
           </div>

@@ -16,17 +16,27 @@ export function ItemRow({
 }) {
   const subtitle = [spaceName, item.areaNameSnapshot].filter(Boolean).join(" · ");
 
+  // Render an accessible <button> when interactive so keyboard/AT users can open the item;
+  // fall back to a plain <div> for decorative (non-clickable) rows.
+  const interactive = Boolean(onClick);
+  const Tag = interactive ? "button" : "div";
+
   return (
-    <div
+    <Tag
+      type={interactive ? "button" : undefined}
+      aria-label={interactive ? `Open ${item.name}` : undefined}
       onClick={onClick}
       style={{
         ...cardStyle,
         borderRadius: "var(--stow-radius-input)",
         padding: 10,
+        width: "100%",
+        textAlign: "left",
+        font: "inherit",
         display: "flex",
         alignItems: "center",
         gap: 12,
-        cursor: onClick ? "pointer" : "default"
+        cursor: interactive ? "pointer" : "default"
       }}
     >
       {item.image?.downloadUrl ? (
@@ -89,6 +99,6 @@ export function ItemRow({
         ) : null}
       </div>
       {right ?? <ChevronRight size={15} color="var(--stow-border)" />}
-    </div>
+    </Tag>
   );
 }

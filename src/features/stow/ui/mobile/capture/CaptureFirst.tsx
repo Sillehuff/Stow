@@ -214,7 +214,7 @@ export function CaptureFirst({
       <div
         style={{
           position: "absolute",
-          top: 52,
+          top: "max(16px, env(safe-area-inset-top))",
           left: 0,
           right: 0,
           display: "flex",

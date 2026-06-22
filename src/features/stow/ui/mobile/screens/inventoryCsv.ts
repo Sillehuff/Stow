@@ -21,7 +21,8 @@ export function buildInventoryCsv(items: Item[], spaces: SpaceWithAreas[]): stri
       (item.tags ?? []).join(";"),
       item.value != null ? String(item.value) : "",
       item.isPriceless ? "Yes" : "No",
-      item.isPacked ? "Yes" : "No",
+      // `status` is the live packed signal (set by the ItemDetail toggle); `isPacked` is dead.
+      item.status === "packed" ? "Yes" : "No",
       item.notes ?? ""
     ]
       .map(csvCell)

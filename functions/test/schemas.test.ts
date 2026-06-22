@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   acceptInviteInputSchema,
   createInviteInputSchema,
+  isPublicHttpsUrl,
   llmConfigSchema,
   saveLlmConfigInputSchema,
   shelfDetectionSchema,
@@ -10,6 +11,37 @@ import {
   visionDetectShelfResultSchema,
   visionSuggestionSchema
 } from "../src/shared/schemas.js";
+
+describe("isPublicHttpsUrl (SSRF guard)", () => {
+  it("allows ordinary public https provider hosts", () => {
+    expect(isPublicHttpsUrl("https://api.openai.com/v1")).toBe(true);
+    expect(isPublicHttpsUrl("https://generativelanguage.googleapis.com")).toBe(true);
+    // DNS hostnames beginning with fc/fd must NOT be misread as IPv6 unique-local addresses.
+    expect(isPublicHttpsUrl("https://fcloud.mistral.ai/v1")).toBe(true);
+    expect(isPublicHttpsUrl("https://fd-east.api.provider.com/v1")).toBe(true);
+  });
+
+  it("rejects non-https and loopback/private IPv4 hosts", () => {
+    expect(isPublicHttpsUrl("http://api.openai.com")).toBe(false);
+    expect(isPublicHttpsUrl("https://localhost/v1")).toBe(false);
+    expect(isPublicHttpsUrl("https://127.0.0.1/v1")).toBe(false);
+    expect(isPublicHttpsUrl("https://10.0.0.5/v1")).toBe(false);
+    expect(isPublicHttpsUrl("https://169.254.169.254/latest/meta-data")).toBe(false);
+    expect(isPublicHttpsUrl("https://192.168.1.10/v1")).toBe(false);
+  });
+
+  it("rejects IPv6 loopback / unique-local / link-local literals", () => {
+    expect(isPublicHttpsUrl("https://[::1]/v1")).toBe(false);
+    expect(isPublicHttpsUrl("https://[fd00::1]/v1")).toBe(false);
+    expect(isPublicHttpsUrl("https://[fe80::1]/v1")).toBe(false);
+  });
+
+  it("rejects IPv4-mapped IPv6 literals that reach loopback/private/metadata hosts", () => {
+    expect(isPublicHttpsUrl("https://[::ffff:127.0.0.1]/v1")).toBe(false);
+    expect(isPublicHttpsUrl("https://[::ffff:169.254.169.254]/x")).toBe(false);
+    expect(isPublicHttpsUrl("https://[::ffff:10.0.0.5]/x")).toBe(false);
+  });
+});
 
 describe("shared schemas", () => {
   it("validates invite payloads", () => {

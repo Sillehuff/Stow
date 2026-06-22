@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import { z } from "zod";
 
 // SSRF guard for the OpenAI-compatible `baseUrl`: an admin-supplied URL is
@@ -18,6 +19,21 @@ function isPrivateIpv4(host: string): boolean {
   return false;
 }
 
+// Extract the embedded IPv4 from an IPv4-mapped/compatible IPv6 literal, in either the
+// dotted form (`::ffff:127.0.0.1`) or the hex-compressed form WHATWG URL emits
+// (`::ffff:7f00:1`). Returns null when there is no embedded IPv4.
+function embeddedIpv4FromIpv6(host: string): string | null {
+  const dotted = /:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(host);
+  if (dotted) return dotted[1];
+  const hex = /^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host);
+  if (hex) {
+    const hi = parseInt(hex[1], 16);
+    const lo = parseInt(hex[2], 16);
+    return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+  }
+  return null;
+}
+
 export function isPublicHttpsUrl(raw: string): boolean {
   let url: URL;
   try {
@@ -29,8 +45,17 @@ export function isPublicHttpsUrl(raw: string): boolean {
   const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (!host || BLOCKED_PROVIDER_HOSTS.has(host) || host.endsWith(".localhost")) return false;
   if (isPrivateIpv4(host)) return false;
-  // IPv6 loopback / link-local (fe80::) / unique-local (fc00::/7).
-  if (host === "::1" || host === "::" || host.startsWith("fe80:") || host.startsWith("fc") || host.startsWith("fd")) return false;
+  // IPv6-literal-only checks. Gating on isIP===6 prevents ordinary DNS hostnames that merely
+  // start with "fc"/"fd" (e.g. fcloud.mistral.ai) from being misread as unique-local addresses.
+  if (isIP(host) === 6) {
+    // IPv4-mapped/compatible literals (e.g. ::ffff:127.0.0.1) reach the embedded IPv4 via the
+    // OS stack, so validate that address against the private/loopback/link-local ranges.
+    const embedded = embeddedIpv4FromIpv6(host);
+    if (embedded && isPrivateIpv4(embedded)) return false;
+    if (host === "::1" || host === "::") return false; // loopback / unspecified
+    if (host.startsWith("fe8") || host.startsWith("fe9") || host.startsWith("fea") || host.startsWith("feb")) return false; // fe80::/10 link-local
+    if (host.startsWith("fc") || host.startsWith("fd")) return false; // fc00::/7 unique-local
+  }
   return true;
 }
 
