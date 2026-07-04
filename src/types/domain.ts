@@ -74,7 +74,9 @@ export interface Item {
   name: string;
   kind: "item" | "folder";
   image?: ImageRef;
-  value?: number;
+  // normalizeItemDoc always emits `null` (not undefined) when absent, and every writer
+  // persists `value ?? null`, so the stored/read shape is `number | null`.
+  value?: number | null;
   isPriceless?: boolean;
   tags: string[];
   notes?: string;

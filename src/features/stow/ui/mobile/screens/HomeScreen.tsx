@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { HouseholdMember, Item, SpaceWithAreas } from "@/types/domain";
 import { Bell, Clock, Folder, Inbox, Search, X } from "@/features/stow/ui/mobile/theme/icons";
 import { cardStyle } from "@/features/stow/ui/mobile/components/Card";
-import { ResultRow } from "@/features/stow/ui/mobile/components/ResultRow";
+import { ItemRow } from "@/features/stow/ui/mobile/components/ItemRow";
 import { AwayStrip } from "@/features/stow/ui/mobile/screens/AwayStrip";
 import { SpacesList } from "@/features/stow/ui/mobile/screens/SpacesList";
 import type { SpacesListProps } from "@/features/stow/ui/mobile/screens/SpacesList";
@@ -201,7 +201,7 @@ export function HomeScreen({ spaces, items, members, householdName, onOpenItem, 
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {results.map((item) => (
-                  <ResultRow key={item.id} item={item} spaceName={spaceName(item.spaceId)} onClick={() => onOpenItem(item.id)} />
+                  <ItemRow key={item.id} item={item} spaceName={spaceName(item.spaceId)} onClick={() => onOpenItem(item.id)} />
                 ))}
               </div>
             </div>

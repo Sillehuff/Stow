@@ -6,7 +6,18 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment
 } from "@firebase/rules-unit-testing";
-import { deleteDoc, doc, getDoc, setDoc, updateDoc, writeBatch } from "firebase/firestore";
+import {
+  collectionGroup,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  setDoc,
+  updateDoc,
+  where,
+  writeBatch
+} from "firebase/firestore";
 
 const PROJECT_ID = "stow-rules-test";
 const HOUSEHOLD_ID = "household-1";
@@ -244,6 +255,58 @@ describe("firestore rules", () => {
         createdAt: new Date(),
         updatedAt: new Date()
       })
+    );
+  });
+
+  it("denies cross-household area writes that smuggle a foreign householdId in the payload", async () => {
+    // Regression test for the collection-group rule: gating writes on the *incoming*
+    // payload's householdId would let a member of household-2 write to household-1's
+    // area path by setting householdId: "household-2" in the payload.
+    await seedHousehold();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "households", "household-2"), {
+        name: "Attacker Household",
+        createdBy: "attacker-1"
+      });
+      await setDoc(doc(db, "households", "household-2", "members", "attacker-1"), {
+        uid: "attacker-1",
+        role: "OWNER",
+        createdBy: "attacker-1"
+      });
+    });
+    const attackerDb = testEnv.authenticatedContext("attacker-1").firestore();
+
+    await assertFails(
+      updateDoc(doc(attackerDb, "households", HOUSEHOLD_ID, "spaces", "space-1", "areas", "area-1"), {
+        householdId: "household-2",
+        name: "hijacked"
+      })
+    );
+    await assertFails(
+      setDoc(doc(attackerDb, "households", HOUSEHOLD_ID, "spaces", "space-1", "areas", "area-injected"), {
+        householdId: "household-2",
+        spaceId: "space-1",
+        name: "injected",
+        position: 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+    );
+  });
+
+  it("allows members to run the areas collection-group query and denies outsiders", async () => {
+    // The app's subscribeAreas uses collectionGroup("areas") filtered by householdId,
+    // which is authorized by the recursive-wildcard read rule, not the path-scoped one.
+    await seedHousehold();
+    const memberDb = testEnv.authenticatedContext("member-1").firestore();
+    const outsiderDb = testEnv.authenticatedContext("outsider-1").firestore();
+
+    await assertSucceeds(
+      getDocs(query(collectionGroup(memberDb, "areas"), where("householdId", "==", HOUSEHOLD_ID)))
+    );
+    await assertFails(
+      getDocs(query(collectionGroup(outsiderDb, "areas"), where("householdId", "==", HOUSEHOLD_ID)))
     );
   });
 

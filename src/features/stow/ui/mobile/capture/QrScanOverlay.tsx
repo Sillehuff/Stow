@@ -85,6 +85,11 @@ export function QrScanOverlay({ onClose, onOpenPath, onFlash }: QrScanOverlayPro
     let busy = false;
     let handled = false;
     let lastFlash = 0;
+    let lastDecode = 0;
+    // A QR scan feels instant at ~10fps; decoding on every animation frame (~60fps)
+    // burns 3-6x the CPU/GPU on the jsQR fallback path (older iPhones) for the whole
+    // time the overlay is held open. Cap real decodes to ~10/sec.
+    const DECODE_INTERVAL_MS = 100;
 
     function navigate(raw: string) {
       const result = parseScannedStowTarget(raw, window.location.origin);
@@ -105,8 +110,11 @@ export function QrScanOverlay({ onClose, onOpenPath, onFlash }: QrScanOverlayPro
     function tick() {
       raf = requestAnimationFrame(tick);
       if (handled || busy) return;
+      const now = performance.now();
+      if (now - lastDecode < DECODE_INTERVAL_MS) return;
       const video = videoRef.current;
       if (!video || video.readyState < 2) return;
+      lastDecode = now;
       busy = true;
       decoder
         .decode(video)

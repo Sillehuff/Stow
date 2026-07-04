@@ -103,7 +103,7 @@ export const llmConfigSchema = z.object({
     ])
     .optional(),
   lastValidatedBy: z.string().optional()
-});
+}).strict();
 export type HouseholdLlmConfig = z.infer<typeof llmConfigSchema>;
 
 export const createInviteInputSchema = z
@@ -223,7 +223,7 @@ export const shelfDetectionSchema = z.object({
 export type ShelfDetection = z.infer<typeof shelfDetectionSchema>;
 
 export const visionDetectShelfResultSchema = z.object({
-  detections: z.array(shelfDetectionSchema),
+  detections: z.array(shelfDetectionSchema).max(50),
   provider: z.string().min(1),
   jobId: z.string().min(1)
 });

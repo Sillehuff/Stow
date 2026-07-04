@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { User } from "firebase/auth";
 import { serverTimestamp, Timestamp } from "firebase/firestore";
@@ -21,7 +21,11 @@ import { CaptureFirst } from "@/features/stow/ui/mobile/capture/CaptureFirst";
 import { PhotoSource } from "@/features/stow/ui/mobile/capture/PhotoSource";
 import { QuickCapture } from "@/features/stow/ui/mobile/capture/QuickCapture";
 import { ScanOverlay } from "@/features/stow/ui/mobile/capture/ScanOverlay";
-import { QrScanOverlay } from "@/features/stow/ui/mobile/capture/QrScanOverlay";
+// Lazy: QrScanOverlay pulls in the jsQR decoder (~15 kB), which only matters when the
+// user actually opens the QR scanner — keep it out of the main workspace chunk.
+const QrScanOverlay = lazy(() =>
+  import("@/features/stow/ui/mobile/capture/QrScanOverlay").then((module) => ({ default: module.QrScanOverlay }))
+);
 import { HomeScreen } from "@/features/stow/ui/mobile/screens/HomeScreen";
 import { ItemDetail } from "@/features/stow/ui/mobile/screens/ItemDetail";
 import { PackingScreen } from "@/features/stow/ui/mobile/screens/PackingScreen";
@@ -100,10 +104,15 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
   const preferredDefaultSpaceId =
     savedDefaultSpaceId && data.spaces.some((space) => space.id === savedDefaultSpaceId) ? savedDefaultSpaceId : null;
 
-  const packedCount = data.packingLists.reduce(
-    (sum, list) => sum + Math.max(0, list.itemIds.length - list.packedItemIds.length),
-    0
-  );
+  // Count only items that still exist. list.itemIds can retain ids of items deleted
+  // elsewhere; counting them raw leaves a phantom badge that never clears.
+  const packedCount = useMemo(() => {
+    const liveIds = new Set(data.items.map((item) => item.id));
+    return data.packingLists.reduce((sum, list) => {
+      const packed = new Set(list.packedItemIds);
+      return sum + list.itemIds.filter((id) => liveIds.has(id) && !packed.has(id)).length;
+    }, 0);
+  }, [data.packingLists, data.items]);
 
   const selectedSpace = nav.selectedSpaceId ? data.spaces.find((space) => space.id === nav.selectedSpaceId) ?? null : null;
   const selectedItem = nav.selectedItemId ? data.items.find((item) => item.id === nav.selectedItemId) ?? null : null;
@@ -683,7 +692,9 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
         ) : null}
 
         {nav.overlay.kind === "scanQr" ? (
-          <QrScanOverlay onClose={nav.closeOverlay} onOpenPath={nav.openPath} onFlash={flash} />
+          <Suspense fallback={null}>
+            <QrScanOverlay onClose={nav.closeOverlay} onOpenPath={nav.openPath} onFlash={flash} />
+          </Suspense>
         ) : null}
 
         {shelfCapture ? (

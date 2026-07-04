@@ -56,6 +56,18 @@ describe("provider common helpers", () => {
     expect(parsed).toMatchObject({ suggestedName: "Camera" });
   });
 
+  it("throws an HttpsError (not a raw SyntaxError) when the extracted block is still invalid json", () => {
+    expect(() => extractJsonObject("prefix {suggestedName: {broken} trailing garbage")).toThrowError(
+      /Provider response was not valid JSON/
+    );
+  });
+
+  it("throws an HttpsError when there is no json object at all", () => {
+    expect(() => extractJsonObject("absolutely no json here")).toThrowError(
+      /Provider response was not valid JSON/
+    );
+  });
+
   it("normalizes schema-compliant suggestions", () => {
     const suggestion = normalizeSuggestion({
       suggestedName: "Scissors",
