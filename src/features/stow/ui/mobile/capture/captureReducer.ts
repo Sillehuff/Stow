@@ -1,7 +1,7 @@
 import type { NewBatchItem } from "@/features/stow/services/repository";
 import type { ShelfDetection } from "@/types/llm";
 
-export type CapturePhase = "analyzing" | "detected" | "review" | "destination" | "done";
+export type CapturePhase = "analyzing" | "detected" | "review" | "done";
 
 export interface CaptureDraft {
   name: string;
@@ -31,8 +31,7 @@ export type CaptureAction =
   | { type: "rename"; index: number; name: string }
   | { type: "confirm"; index: number }
   | { type: "skip"; index: number }
-  | { type: "setDestination"; destination: CaptureDestination }
-  | { type: "commitReady" };
+  | { type: "setDestination"; destination: CaptureDestination };
 
 export function initialCaptureState(destination: CaptureDestination): CaptureState {
   return {
@@ -80,7 +79,9 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
         drafts: buildDrafts(action.detections)
       };
     case "startReview":
-      return { ...state, phase: "review", cursor: 0 };
+      // Nothing to review → straight to done (the confirm/skip transition below can
+      // never fire with an empty order).
+      return { ...state, phase: state.order.length === 0 ? "done" : "review", cursor: 0 };
     case "rename": {
       const existing = state.drafts[action.index];
       if (!existing) return state;
@@ -94,11 +95,17 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
     }
     case "confirm":
     case "skip": {
+      const nextCursor = advanceCursor(state);
+      // Move straight to "done" the moment the last draft is handled, so there's no
+      // intermediate render where phase is still "review" but the cursor is past the
+      // end (which flashed the "No detections to review" fallback for one frame).
+      const phase: CapturePhase = nextCursor >= state.order.length ? "done" : state.phase;
       const existing = state.drafts[action.index];
-      if (!existing) return { ...state, cursor: advanceCursor(state) };
+      if (!existing) return { ...state, phase, cursor: nextCursor };
       return {
         ...state,
-        cursor: advanceCursor(state),
+        phase,
+        cursor: nextCursor,
         drafts: {
           ...state.drafts,
           [action.index]: { ...existing, keep: action.type === "confirm" }
@@ -107,8 +114,6 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
     }
     case "setDestination":
       return { ...state, destination: action.destination };
-    case "commitReady":
-      return { ...state, phase: "done" };
     default:
       return state;
   }

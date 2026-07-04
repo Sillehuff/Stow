@@ -177,4 +177,25 @@ describe("vision categorization input guards", () => {
     expect(consumeVisionQuota).toHaveBeenCalledWith("h1");
     expect(detectShelfItems).toHaveBeenCalled();
   });
+
+  it("caps returned shelf detections at 50 even when the provider returns more", async () => {
+    fileGetMetadata.mockResolvedValue([{ contentType: "image/png", size: "1024" }]);
+    fileCreateReadStream.mockReturnValue(stubReadStream(Buffer.from("png-bytes")));
+    const flood = Array.from({ length: 73 }, (_unused, index) => ({
+      label: `Item ${index}`,
+      confidence: 0.5,
+      bbox: [0, 0, 0.1, 0.1] as [number, number, number, number]
+    }));
+    detectShelfItems.mockResolvedValue(flood);
+
+    const result = await visionDetectShelfItemsHandler(
+      {
+        householdId: "h1",
+        imageRef: { storagePath: "households/h1/items/item-1/file.png" }
+      },
+      "user-1"
+    );
+
+    expect((result as { detections: unknown[] }).detections).toHaveLength(50);
+  });
 });

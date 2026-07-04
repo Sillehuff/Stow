@@ -15,6 +15,7 @@ type ResolvedImage = {
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT_MS = 10_000;
+const MAX_SHELF_DETECTIONS = 50;
 
 async function downloadStorageFile(storagePath: string) {
   const bucket = storage.bucket();
@@ -143,7 +144,10 @@ export async function visionDetectShelfItemsHandler(raw: unknown, uid: string) {
   // call — disabled config, missing image, or unsupported provider must not burn quota.
   await consumeVisionQuota(input.householdId);
   const startedAt = Date.now();
-  const detections = await adapter.detectShelfItems({ apiKey, config, prompt, image });
+  const rawDetections = await adapter.detectShelfItems({ apiKey, config, prompt, image });
+  // Cap the array a (mis)behaving provider can return — the client reviews these
+  // one-by-one, and an unbounded list only bloats the response payload.
+  const detections = rawDetections.slice(0, MAX_SHELF_DETECTIONS);
   const latencyMs = Date.now() - startedAt;
 
   const visionJobRef = db.collection(paths.visionJobs(input.householdId)).doc();

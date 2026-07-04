@@ -3,6 +3,7 @@ import type { HouseholdMember } from "@/types/domain";
 import { Check, Users } from "@/features/stow/ui/mobile/theme/icons";
 import { Field } from "@/features/stow/ui/mobile/components/Field";
 import { Sheet } from "@/features/stow/ui/mobile/shell/Sheet";
+import { actorColor, initials } from "@/features/stow/ui/mobile/screens/avatar";
 
 export interface LendingSheetProps {
   open: boolean;
@@ -10,26 +11,6 @@ export interface LendingSheetProps {
   initial?: { to?: string; due?: string; note?: string };
   onCancel: () => void;
   onConfirm: (loan: { to: string; toUid?: string; dueMs?: number; note?: string }) => Promise<void> | void;
-}
-
-const SWATCHES = ["#E8652B", "#2D9F6F", "#5B6ABF", "#C4883A", "#B0479A", "#2A6FDB", "#D6336C"];
-
-function actorColor(uid: string): string {
-  let h = 0;
-  for (let i = 0; i < uid.length; i += 1) h = (h * 31 + uid.charCodeAt(i)) >>> 0;
-  return SWATCHES[h % SWATCHES.length] ?? "var(--stow-accent)";
-}
-
-function initials(name: string): string {
-  return (
-    name
-      .trim()
-      .split(/\s+/)
-      .map((word) => word[0] ?? "")
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() || "?"
-  );
 }
 
 function memberName(member: HouseholdMember): string {

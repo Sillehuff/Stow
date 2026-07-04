@@ -278,6 +278,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         membersState.fromCache ||
         invitesState.fromCache ||
         packingListsState.fromCache ||
+        activityState.fromCache ||
         llmConfigMeta.fromCache,
       hasPendingWrites:
         spacesState.hasPendingWrites ||
@@ -287,9 +288,10 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         membersState.hasPendingWrites ||
         invitesState.hasPendingWrites ||
         packingListsState.hasPendingWrites ||
+        activityState.hasPendingWrites ||
         llmConfigMeta.hasPendingWrites
     }),
-    [areasState, invitesState, itemDraftsState, itemsState, llmConfigMeta, membersState, packingListsState, spacesState]
+    [activityState, areasState, invitesState, itemDraftsState, itemsState, llmConfigMeta, membersState, packingListsState, spacesState]
   );
 
   const actions: WorkspaceActions = useMemo(

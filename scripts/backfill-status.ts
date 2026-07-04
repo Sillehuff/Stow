@@ -33,12 +33,21 @@ const BATCH_LIMIT = 450;
 async function main(): Promise<void> {
   if (admin.apps.length === 0) admin.initializeApp();
   const db = admin.firestore();
-  const dryRun = hasFlag("dry-run");
+  // Live writes require an explicit --apply; anything else is a dry run. Without a
+  // --household filter this script touches every household in the project, so a
+  // fat-fingered invocation must not default to mutating production.
+  const dryRun = !hasFlag("apply");
+  if (dryRun && !hasFlag("dry-run")) {
+    console.log("No --apply flag: running as a dry run. Pass --apply to write.");
+  }
   const onlyHousehold = parseArg("household");
 
   const householdRefs = onlyHousehold
     ? [db.doc(`households/${onlyHousehold}`)]
     : (await db.collection("households").get()).docs.map((d) => d.ref);
+  if (!dryRun) {
+    console.log(`Applying status backfill to ${householdRefs.length} household(s)...`);
+  }
 
   let itemWrites = 0;
 

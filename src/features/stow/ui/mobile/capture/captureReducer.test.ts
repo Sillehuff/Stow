@@ -122,10 +122,15 @@ describe("captureReducer destination and commit", () => {
     expect(s.phase).toBe("review");
   });
 
-  it("moves to done", () => {
-    const s = captureReducer(seeded(), { type: "commitReady" });
+  it("moves to done after the final draft is handled", () => {
+    let s = captureReducer(seeded(), { type: "startReview" });
+    s = captureReducer(s, { type: "confirm", index: 2 });
+    s = captureReducer(s, { type: "skip", index: 1 });
+    expect(s.phase).toBe("review");
 
+    s = captureReducer(s, { type: "confirm", index: 0 });
     expect(s.phase).toBe("done");
+    expect(s.cursor).toBe(3);
   });
 });
 

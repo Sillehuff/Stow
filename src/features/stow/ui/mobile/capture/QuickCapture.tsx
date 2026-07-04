@@ -251,12 +251,6 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
     };
   }, [capturedBlob, detectShelfItems, householdId, retryKey, state.phase, upload]);
 
-  useEffect(() => {
-    if (state.phase === "review" && state.cursor >= state.order.length) {
-      dispatch({ type: "commitReady" });
-    }
-  }, [state.cursor, state.order.length, state.phase]);
-
   function retryAnalyze() {
     analyzedAttemptRef.current = null;
     setRetryKey((key) => key + 1);

@@ -44,11 +44,17 @@ export function extractJsonObject(text: string): unknown {
   try {
     return JSON.parse(trimmed);
   } catch {
-    // Try extracting first JSON object block.
+    // Try extracting first JSON object block. The slice can still be invalid JSON
+    // (e.g. "{a: {b} garbage"), so guard the parse too — otherwise a raw SyntaxError
+    // escapes instead of the intended HttpsError.
     const start = trimmed.indexOf("{");
     const end = trimmed.lastIndexOf("}");
     if (start >= 0 && end > start) {
-      return JSON.parse(trimmed.slice(start, end + 1));
+      try {
+        return JSON.parse(trimmed.slice(start, end + 1));
+      } catch {
+        throw new HttpsError("internal", "Provider response was not valid JSON");
+      }
     }
     throw new HttpsError("internal", "Provider response was not valid JSON");
   }

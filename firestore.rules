@@ -121,11 +121,17 @@ service cloud.firestore {
     }
 
     // Collection-group queries on `areas` require a recursive wildcard match.
+    // READ ONLY: this block exists solely to authorize `collectionGroup("areas")`
+    // queries, which are scoped by `where("householdId", "==", ...)` and matched
+    // against the *stored* householdId. Writes must NOT be granted here — Firestore
+    // unions (ORs) matching rules, so gating a write on the *incoming* payload's
+    // householdId would let a member of household B write to household A's area
+    // path simply by putting householdId:"B" in the payload, bypassing the
+    // path-scoped rule. All legitimate area writes go through the path-scoped
+    // rules under /spaces/{spaceId}/areas above.
     match /{path=**}/areas/{areaId} {
       allow read: if isHouseholdMember(resource.data.householdId);
-      allow create: if isHouseholdMember(request.resource.data.householdId);
-      allow update: if isHouseholdMember(request.resource.data.householdId);
-      allow delete: if isHouseholdMember(resource.data.householdId);
+      allow create, update, delete: if false;
     }
   }
 }
