@@ -1,0 +1,822 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stow Capture Flow Mockup</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: oklch(22% 0.035 278);
+        --ink-soft: oklch(34% 0.032 278);
+        --muted: oklch(54% 0.025 278);
+        --warm: oklch(63% 0.028 65);
+        --paper: oklch(97.5% 0.009 67);
+        --surface: oklch(99% 0.006 67);
+        --wash: oklch(94% 0.013 67);
+        --line: oklch(88% 0.013 67);
+        --accent: oklch(61% 0.17 43);
+        --accent-dark: oklch(48% 0.15 43);
+        --green: oklch(58% 0.13 153);
+        --blue: oklch(55% 0.11 238);
+        --shadow: 0 20px 70px oklch(20% 0.03 278 / 0.14);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Avenir Next", Avenir, "Helvetica Neue", Arial, sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 18% 0%, oklch(88% 0.07 43 / 0.34), transparent 28rem),
+          linear-gradient(135deg, oklch(23% 0.04 278), oklch(33% 0.045 260));
+      }
+
+      button,
+      input,
+      textarea,
+      select {
+        font: inherit;
+      }
+
+      .page {
+        width: min(1280px, 100%);
+        margin: 0 auto;
+        padding: 32px;
+      }
+
+      .caption {
+        max-width: 860px;
+        color: oklch(94% 0.01 67);
+        margin-bottom: 24px;
+      }
+
+      .caption h1 {
+        margin: 0 0 8px;
+        font-size: 34px;
+        line-height: 1.05;
+        letter-spacing: 0;
+      }
+
+      .caption p {
+        margin: 0;
+        color: oklch(86% 0.018 67);
+        line-height: 1.55;
+      }
+
+      .mock-grid {
+        display: grid;
+        grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+        gap: 24px;
+        align-items: start;
+      }
+
+      .phone,
+      .desktop {
+        background: var(--paper);
+        border: 1px solid oklch(100% 0 0 / 0.45);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .phone {
+        border-radius: 36px;
+        min-height: 780px;
+      }
+
+      .desktop {
+        border-radius: 22px;
+        min-height: 780px;
+      }
+
+      .topbar,
+      .desktop-topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        padding: 20px;
+        border-bottom: 1px solid var(--line);
+        background: color-mix(in oklch, var(--surface), var(--paper) 35%);
+      }
+
+      .brand {
+        display: grid;
+        gap: 2px;
+      }
+
+      .brand strong {
+        font-size: 26px;
+        letter-spacing: 0;
+      }
+
+      .brand span,
+      .small {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 10px;
+        border: 1px solid color-mix(in oklch, var(--green), white 70%);
+        border-radius: 999px;
+        color: var(--green);
+        background: color-mix(in oklch, var(--green), white 91%);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .content {
+        padding: 18px;
+      }
+
+      .command-panel {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+
+      .action {
+        width: 100%;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--ink);
+        border-radius: 18px;
+        padding: 14px;
+        display: grid;
+        grid-template-columns: 42px 1fr auto;
+        gap: 12px;
+        align-items: center;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .action.primary {
+        background: var(--ink);
+        color: var(--surface);
+        border-color: var(--ink);
+      }
+
+      .action.manual {
+        border-color: color-mix(in oklch, var(--accent), white 68%);
+        background: color-mix(in oklch, var(--accent), white 92%);
+      }
+
+      .glyph {
+        width: 42px;
+        height: 42px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        border: 1px solid currentColor;
+        font-weight: 900;
+      }
+
+      .action-text {
+        display: grid;
+        gap: 3px;
+      }
+
+      .action-text strong {
+        font-size: 15px;
+      }
+
+      .action.primary .small {
+        color: oklch(84% 0.014 67);
+      }
+
+      .section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 22px 2px 10px;
+      }
+
+      .section-title h2 {
+        margin: 0;
+        font-size: 13px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .space-row,
+      .result-row,
+      .field-row {
+        display: grid;
+        grid-template-columns: 46px 1fr auto;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+      }
+
+      .space-row + .space-row,
+      .result-row + .result-row,
+      .field-row + .field-row {
+        border-top: 0;
+      }
+
+      .space-row:first-child,
+      .result-row:first-child,
+      .field-row:first-child {
+        border-radius: 16px 16px 0 0;
+      }
+
+      .space-row:last-child,
+      .result-row:last-child,
+      .field-row:last-child {
+        border-radius: 0 0 16px 16px;
+      }
+
+      .tile {
+        width: 46px;
+        height: 46px;
+        border-radius: 12px;
+        background: var(--wash);
+        display: grid;
+        place-items: center;
+        color: var(--accent);
+        font-weight: 900;
+      }
+
+      .stack {
+        display: grid;
+        gap: 4px;
+      }
+
+      .title {
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      .sheet {
+        margin: 18px -18px -18px;
+        padding: 16px 18px 22px;
+        background: var(--surface);
+        border-top: 1px solid var(--line);
+        border-radius: 26px 26px 0 0;
+      }
+
+      .handle {
+        width: 38px;
+        height: 5px;
+        border-radius: 999px;
+        background: var(--line);
+        margin: 0 auto 14px;
+      }
+
+      .choice-grid {
+        display: grid;
+        gap: 10px;
+      }
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .pill {
+        border: 1px solid var(--line);
+        background: var(--surface);
+        border-radius: 999px;
+        padding: 8px 11px;
+        color: var(--ink-soft);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .pill.active {
+        color: var(--surface);
+        background: var(--ink);
+        border-color: var(--ink);
+      }
+
+      .desktop-topbar {
+        padding: 18px 20px;
+      }
+
+      .desktop-layout {
+        display: grid;
+        grid-template-columns: 178px minmax(0, 1fr) 250px;
+        min-height: 720px;
+      }
+
+      .desktop-layout > * {
+        min-width: 0;
+      }
+
+      .rail,
+      .detail {
+        background: color-mix(in oklch, var(--surface), var(--paper) 28%);
+      }
+
+      .rail {
+        padding: 16px;
+        border-right: 1px solid var(--line);
+      }
+
+      .detail {
+        padding: 16px;
+        border-left: 1px solid var(--line);
+      }
+
+      .main {
+        padding: 16px;
+        min-width: 0;
+      }
+
+      .nav-item {
+        width: 100%;
+        border: 0;
+        background: transparent;
+        border-radius: 13px;
+        padding: 11px 12px;
+        text-align: left;
+        color: var(--ink-soft);
+        font-weight: 750;
+      }
+
+      .nav-item.active {
+        background: color-mix(in oklch, var(--accent), white 88%);
+        color: var(--accent-dark);
+      }
+
+      .entry-card {
+        border: 1px solid var(--line);
+        background: var(--surface);
+        border-radius: 18px;
+        padding: 16px;
+        display: grid;
+        gap: 14px;
+        min-width: 0;
+      }
+
+      .entry-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: 18px;
+        flex-wrap: wrap;
+      }
+
+      .entry-head h2,
+      .detail h2 {
+        margin: 0;
+        font-size: 23px;
+        letter-spacing: 0;
+      }
+
+      .mode-tabs {
+        display: flex;
+        gap: 6px;
+        border: 1px solid var(--line);
+        background: var(--wash);
+        border-radius: 999px;
+        padding: 4px;
+      }
+
+      .mode-tabs button {
+        border: 0;
+        border-radius: 999px;
+        padding: 8px 12px;
+        background: transparent;
+        color: var(--muted);
+        font-weight: 800;
+        font-size: 12px;
+      }
+
+      .mode-tabs .selected {
+        background: var(--surface);
+        color: var(--ink);
+        box-shadow: 0 2px 10px oklch(20% 0.03 278 / 0.08);
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .field {
+        display: grid;
+        gap: 6px;
+      }
+
+      .field label {
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 11px;
+        font-weight: 850;
+      }
+
+      .field input,
+      .field select,
+      .field textarea {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid var(--line);
+        background: var(--paper);
+        color: var(--ink);
+        border-radius: 12px;
+        padding: 10px 12px;
+      }
+
+      .field.wide {
+        grid-column: 1 / -1;
+      }
+
+      .photo-drop {
+        border: 1px dashed color-mix(in oklch, var(--accent), white 52%);
+        background: color-mix(in oklch, var(--accent), white 94%);
+        border-radius: 16px;
+        min-height: 120px;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        padding: 16px;
+      }
+
+      .helper-note {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .footer-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+
+      .btn {
+        border: 1px solid var(--line);
+        background: var(--surface);
+        border-radius: 12px;
+        padding: 11px 14px;
+        color: var(--ink);
+        font-weight: 850;
+      }
+
+      .btn.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+      }
+
+      .evidence {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .evidence-card {
+        min-height: 94px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 12px;
+        background: var(--surface);
+      }
+
+      .meter {
+        height: 8px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: var(--wash);
+        margin: 8px 0 10px;
+      }
+
+      .meter span {
+        display: block;
+        height: 100%;
+        width: 62%;
+        background: var(--green);
+      }
+
+      @media (max-width: 940px) {
+        .page {
+          padding: 16px;
+        }
+
+        .mock-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .desktop-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .rail,
+        .detail {
+          border: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="caption">
+        <h1>Capture-first Stow concept</h1>
+        <p>
+          The mockup shows AI as an optional helper, not a required gate. Manual entry, no-photo entry,
+          photo-only capture, and AI scan all lead to the same item record.
+        </p>
+      </section>
+
+      <section class="mock-grid" aria-label="Stow concept mockups">
+        <article class="phone" aria-label="Mobile command center and add item chooser">
+          <div class="topbar">
+            <div class="brand">
+              <strong>Stow.</strong>
+              <span>214 items across 8 spaces</span>
+            </div>
+            <span class="status">Live</span>
+          </div>
+
+          <div class="content">
+            <div class="command-panel">
+              <button class="action primary">
+                <span class="glyph">S</span>
+                <span class="action-text">
+                  <strong>Scan or photograph</strong>
+                  <span class="small">Use AI suggestions if you want them</span>
+                </span>
+                <span>Open</span>
+              </button>
+              <button class="action manual">
+                <span class="glyph">M</span>
+                <span class="action-text">
+                  <strong>Add manually</strong>
+                  <span class="small">No photo required</span>
+                </span>
+                <span>Start</span>
+              </button>
+              <button class="action">
+                <span class="glyph">Q</span>
+                <span class="action-text">
+                  <strong>Scan QR label</strong>
+                  <span class="small">Open a bin, shelf, area, or item</span>
+                </span>
+                <span>Find</span>
+              </button>
+            </div>
+
+            <div class="section-title">
+              <h2>Spaces</h2>
+              <span class="small">3 need labels</span>
+            </div>
+            <div>
+              <div class="space-row">
+                <div class="tile">G</div>
+                <div class="stack">
+                  <span class="title">Garage</span>
+                  <span class="small">42 items, 6 areas</span>
+                </div>
+                <span class="small">Open</span>
+              </div>
+              <div class="space-row">
+                <div class="tile">O</div>
+                <div class="stack">
+                  <span class="title">Office</span>
+                  <span class="small">31 items, 4 areas</span>
+                </div>
+                <span class="small">Open</span>
+              </div>
+              <div class="space-row">
+                <div class="tile">K</div>
+                <div class="stack">
+                  <span class="title">Kitchen</span>
+                  <span class="small">58 items, 5 areas</span>
+                </div>
+                <span class="small">Open</span>
+              </div>
+            </div>
+
+            <div class="sheet" aria-label="Add item choices">
+              <div class="handle"></div>
+              <div class="section-title" style="margin-top: 0">
+                <h2>Add item</h2>
+                <span class="small">Choose the least annoying path</span>
+              </div>
+              <div class="choice-grid">
+                <button class="action primary">
+                  <span class="glyph">AI</span>
+                  <span class="action-text">
+                    <strong>Photo with AI assist</strong>
+                    <span class="small">Suggest name, tags, value, notes</span>
+                  </span>
+                  <span>Try</span>
+                </button>
+                <button class="action manual">
+                  <span class="glyph">A</span>
+                  <span class="action-text">
+                    <strong>Add manually</strong>
+                    <span class="small">Type only what you know</span>
+                  </span>
+                  <span>Use</span>
+                </button>
+                <button class="action">
+                  <span class="glyph">P</span>
+                  <span class="action-text">
+                    <strong>Photo now, details later</strong>
+                    <span class="small">Great for fast room sweeps</span>
+                  </span>
+                  <span>Queue</span>
+                </button>
+                <button class="action">
+                  <span class="glyph">N</span>
+                  <span class="action-text">
+                    <strong>No photo</strong>
+                    <span class="small">Private, boring, or sensitive items</span>
+                  </span>
+                  <span>Add</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="desktop" aria-label="Desktop manual entry and evidence layout">
+          <div class="desktop-topbar">
+            <div class="brand">
+              <strong>Manual item entry</strong>
+              <span>AI is off for this item. You can add a photo later.</span>
+            </div>
+            <div class="pill-row">
+              <span class="pill active">Manual</span>
+              <span class="pill">Photo later</span>
+              <span class="pill">AI optional</span>
+            </div>
+          </div>
+
+          <div class="desktop-layout">
+            <aside class="rail">
+              <button class="nav-item active">Add item</button>
+              <button class="nav-item">Inbox drafts</button>
+              <button class="nav-item">Garage</button>
+              <button class="nav-item">Office</button>
+              <button class="nav-item">Packing lists</button>
+              <div class="section-title">
+                <h2>Shortcuts</h2>
+              </div>
+              <div class="pill-row">
+                <span class="pill">Needs photo</span>
+                <span class="pill">Needs receipt</span>
+                <span class="pill">Unlabeled</span>
+              </div>
+            </aside>
+
+            <section class="main">
+              <div class="entry-card">
+                <div class="entry-head">
+                  <div>
+                    <h2>Add without AI</h2>
+                    <p class="helper-note">
+                      Required fields stay minimal: name and location. Everything else improves the record, but can wait.
+                    </p>
+                  </div>
+                  <div class="mode-tabs" aria-label="Entry mode">
+                    <button class="selected">Manual</button>
+                    <button>AI Scan</button>
+                    <button>Bulk</button>
+                  </div>
+                </div>
+
+                <div class="form-grid">
+                  <div class="field">
+                    <label for="item-name">Item name</label>
+                    <input id="item-name" value="Passport folder" />
+                  </div>
+                  <div class="field">
+                    <label for="privacy">Photo</label>
+                    <select id="privacy">
+                      <option>No photo for this item</option>
+                      <option>Add photo later</option>
+                      <option>Attach photo now</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="space">Space</label>
+                    <select id="space">
+                      <option>Office</option>
+                      <option>Garage</option>
+                      <option>Kitchen</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="area">Area</label>
+                    <select id="area">
+                      <option>Filing cabinet</option>
+                      <option>Desk drawer</option>
+                      <option>Closet shelf</option>
+                    </select>
+                  </div>
+                  <div class="field wide">
+                    <label for="tags">Tags</label>
+                    <input id="tags" value="important, travel, documents" />
+                  </div>
+                  <div class="field wide">
+                    <label for="notes">Notes</label>
+                    <textarea id="notes" rows="4">Both passports and vaccine cards. No photo saved for privacy.</textarea>
+                  </div>
+                </div>
+
+                <div class="photo-drop">
+                  <div>
+                    <strong>Photo intentionally skipped</strong>
+                    <p class="helper-note">
+                      Stow should remember that this was a deliberate privacy choice, not missing data.
+                    </p>
+                  </div>
+                </div>
+
+                <div class="footer-actions">
+                  <button class="btn">Save draft</button>
+                  <button class="btn primary">Save item</button>
+                </div>
+              </div>
+
+              <div class="section-title">
+                <h2>Find flow preview</h2>
+              </div>
+              <div>
+                <div class="result-row">
+                  <div class="tile">P</div>
+                  <div class="stack">
+                    <span class="title">Passport folder</span>
+                    <span class="small">Office / Filing cabinet / Drawer 2</span>
+                  </div>
+                  <span class="pill">Private</span>
+                </div>
+                <div class="result-row">
+                  <div class="tile">D</div>
+                  <div class="stack">
+                    <span class="title">Cordless drill</span>
+                    <span class="small">Garage / Toolbox / Bottom tray</span>
+                  </div>
+                  <span class="pill">Labeled</span>
+                </div>
+              </div>
+            </section>
+
+            <aside class="detail">
+              <h2>Item record</h2>
+              <p class="helper-note">
+                Evidence is useful, but not mandatory. The record is still valid when a user avoids photography or AI.
+              </p>
+              <div class="meter" aria-label="Record completeness">
+                <span></span>
+              </div>
+              <span class="small">Record strength: usable</span>
+
+              <div class="section-title">
+                <h2>Evidence</h2>
+              </div>
+              <div class="evidence">
+                <div class="evidence-card">
+                  <strong>Photo</strong>
+                  <p class="helper-note">Skipped for privacy</p>
+                </div>
+                <div class="evidence-card">
+                  <strong>Receipt</strong>
+                  <p class="helper-note">Optional</p>
+                </div>
+                <div class="evidence-card">
+                  <strong>Serial</strong>
+                  <p class="helper-note">Not relevant</p>
+                </div>
+                <div class="evidence-card">
+                  <strong>QR label</strong>
+                  <p class="helper-note">Print later</p>
+                </div>
+              </div>
+
+              <div class="section-title">
+                <h2>AI boundary</h2>
+              </div>
+              <div class="field-row">
+                <div class="tile">AI</div>
+                <div class="stack">
+                  <span class="title">AI assist disabled</span>
+                  <span class="small">No categorization or image analysis used</span>
+                </div>
+                <span class="small">Change</span>
+              </div>
+            </aside>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>
