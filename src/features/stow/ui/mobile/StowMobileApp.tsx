@@ -382,7 +382,9 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
             onSaveEdit={(patch) => {
               const updatePatch = {
                 name: patch.name,
-                value: patch.value ?? undefined,
+                // Persist null (not undefined) when the value is cleared: Firestore's
+                // updateDoc rejects an undefined field, and Item.value is number | null.
+                value: patch.value ?? null,
                 notes: patch.notes,
                 ...("image" in patch ? { image: patch.image ?? null } : {})
               };
