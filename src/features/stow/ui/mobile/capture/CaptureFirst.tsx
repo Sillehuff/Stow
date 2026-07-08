@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
+import type { CSSProperties, ChangeEvent } from "react";
 import { ArrowRight, Camera, ImageIcon, Sparkles, X } from "lucide-react";
 import type { ImageRef } from "@/types/domain";
 import type { VisionSuggestion } from "@/types/llm";
@@ -28,6 +28,15 @@ export interface CaptureFirstProps {
 type Phase = "live" | "frozen" | "uploading" | "identifying";
 
 const DARK = "#0A0A12";
+const scanTrackStyle = {
+  position: "absolute",
+  top: 8,
+  right: 8,
+  bottom: 8,
+  left: 8,
+  overflow: "hidden",
+  "--scan-travel": "calc(100% - 3px)"
+} as CSSProperties;
 
 function nextFileName() {
   return `photo-${Date.now()}.jpg`;
@@ -355,18 +364,25 @@ export function CaptureFirst({
               }}
             >
               <CornerBrackets color="var(--stow-accent)" />
-              <div
-                style={{
-                  position: "absolute",
-                  left: 8,
-                  right: 8,
-                  height: 3,
-                  borderRadius: 99,
-                  background: "var(--stow-accent)",
-                  boxShadow: "0 0 16px var(--stow-accent)",
-                  animation: "stowScan 1.4s ease-in-out infinite"
-                }}
-              />
+              <div style={scanTrackStyle}>
+                {/* The animated element spans the full track: translateY percentages
+                    resolve against the element's OWN height, so animating the 3px bar
+                    directly would move it ~0px. The bar is drawn at the mover's top. */}
+                <div style={{ position: "absolute", inset: 0, animation: "stowScan 1.4s ease-in-out infinite" }}>
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: 3,
+                      borderRadius: 99,
+                      background: "var(--stow-accent)",
+                      boxShadow: "0 0 16px var(--stow-accent)"
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           </>
         ) : null}

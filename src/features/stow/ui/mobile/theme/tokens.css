@@ -9,12 +9,17 @@
   --stow-surface: #ffffff;
   --stow-canvas: #f7f7fa;
   --stow-accent: #e8652b;
+  --stow-accent-strong: #c34f18;
   --stow-accent-soft: color-mix(in srgb, #e8652b 12%, #ffffff);
   --stow-accent-text: #b5470f;
   --stow-success: #2d9f6f;
   --stow-success-soft: #eafaf2;
+  --stow-success-text: #1f7a55;
   --stow-danger: #e04545;
   --stow-danger-soft: #fff0f0;
+  --stow-danger-text: #c22f2f;
+  --stow-packed-text: #4d5aa6;
+  --stow-repair-text: #8a5a13;
   --stow-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   --stow-shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.04);
   --stow-radius: 12px;
@@ -107,13 +112,13 @@
 
 @keyframes stowScan {
   0% {
-    top: 8px;
+    transform: translateY(0);
   }
   50% {
-    top: calc(100% - 11px);
+    transform: translateY(var(--scan-travel, calc(100% - 3px)));
   }
   100% {
-    top: 8px;
+    transform: translateY(0);
   }
 }
 

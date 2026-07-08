@@ -161,6 +161,7 @@ export interface HouseholdInvite {
   role: Role;
   tokenHash: string;
   token?: string;
+  invitedEmail?: string | null;
   createdAt: Timestamp;
   createdBy: string;
   expiresAt: Timestamp;

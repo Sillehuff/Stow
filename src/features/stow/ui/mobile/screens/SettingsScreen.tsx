@@ -100,6 +100,36 @@ function memberLabel(member: HouseholdMember) {
   return member.displayName || member.email || member.uid;
 }
 
+function timestampToMillis(value: unknown): number | null {
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  if (!value || typeof value !== "object") return null;
+
+  const toMillis = (value as { toMillis?: unknown }).toMillis;
+  if (typeof toMillis === "function") {
+    const ms = toMillis.call(value);
+    return typeof ms === "number" && Number.isFinite(ms) ? ms : null;
+  }
+
+  const toDate = (value as { toDate?: unknown }).toDate;
+  if (typeof toDate === "function") {
+    const date = toDate.call(value);
+    if (date instanceof Date) {
+      const ms = date.getTime();
+      return Number.isFinite(ms) ? ms : null;
+    }
+  }
+
+  return null;
+}
+
+function inviteIsExpired(invite: HouseholdInvite) {
+  const expiresAtMs = timestampToMillis(invite.expiresAt);
+  return expiresAtMs != null && expiresAtMs < Date.now();
+}
+
 function selectStyle(extra?: CSSProperties): CSSProperties {
   return {
     borderRadius: "var(--stow-radius-input)",
@@ -107,7 +137,7 @@ function selectStyle(extra?: CSSProperties): CSSProperties {
     background: "var(--stow-canvas)",
     color: "var(--stow-ink)",
     fontFamily: "inherit",
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: 700,
     padding: "9px 28px 9px 10px",
     outline: "none",
@@ -287,17 +317,22 @@ export function SettingsScreen(props: SettingsScreenProps) {
     if (!canManage || savingAi) return;
     setSavingAi(true);
     try {
+      const trimmedBaseUrl = baseUrl.trim();
+      const config: Omit<HouseholdLlmConfig, "lastValidatedAt" | "lastValidatedBy"> = {
+        providerType: provider,
+        model: model.trim(),
+        enabled,
+        promptProfile: "default_inventory",
+        temperature: Number.isFinite(Number.parseFloat(temperature)) ? Number.parseFloat(temperature) : 0.2,
+        maxTokens: Number.isFinite(Number.parseInt(maxTokens, 10)) ? Number.parseInt(maxTokens, 10) : 400
+      };
+      if (provider === "openai_compatible" && trimmedBaseUrl) {
+        config.baseUrl = trimmedBaseUrl;
+      }
+
       await saveHouseholdLlmConfig({
         householdId,
-        config: {
-          providerType: provider,
-          model: model.trim(),
-          baseUrl: provider === "openai_compatible" ? baseUrl.trim() || undefined : undefined,
-          enabled,
-          promptProfile: "default_inventory",
-          temperature: Number.isFinite(Number.parseFloat(temperature)) ? Number.parseFloat(temperature) : 0.2,
-          maxTokens: Number.isFinite(Number.parseInt(maxTokens, 10)) ? Number.parseInt(maxTokens, 10) : 400
-        }
+        config
       });
       if (apiKey.trim()) {
         await setHouseholdLlmSecret({ householdId, apiKey: apiKey.trim() });
@@ -394,14 +429,21 @@ export function SettingsScreen(props: SettingsScreenProps) {
 
   function regenerateInvite(invite: HouseholdInvite) {
     if (!canManage) return;
+    const hasEmailRestriction = Boolean(invite.invitedEmail);
     setConfirm({
       title: "Regenerate invite?",
-      body: "The current link will stop working and a new invite with the same role will be created.",
+      body: hasEmailRestriction
+        ? "The current link will stop working; a new invite with the same role and email restriction will be created."
+        : "The current link will stop working and a new invite with the same role will be created.",
       confirmLabel: "Regenerate invite",
       danger: false,
       action: async () => {
         await revokeHouseholdInvite({ householdId, inviteId: invite.id });
-        const nextInvite = await createHouseholdInvite({ householdId, role: invite.role });
+        const nextInvite = await createHouseholdInvite({
+          householdId,
+          role: invite.role,
+          email: invite.invitedEmail ?? undefined
+        });
         // Best-effort copy; a clipboard rejection must not surface as a regenerate failure.
         await copyToClipboard(nextInvite.inviteUrl);
         onFlash("Invite regenerated");
@@ -637,28 +679,47 @@ export function SettingsScreen(props: SettingsScreenProps) {
                 </button>
               </div>
 
-              {pendingInvites.map((invite) => (
-                <div
-                  key={invite.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "12px 18px",
-                    borderTop: "1px solid var(--stow-border-l)"
-                  }}
-                >
-                  <Bell size={15} color="var(--stow-warm)" />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: "var(--stow-ink)" }}>{invite.role} invite</div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--stow-warm)" }}>Pending</div>
+              {pendingInvites.map((invite) => {
+                const expired = inviteIsExpired(invite);
+                return (
+                  <div
+                    key={invite.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "12px 18px",
+                      borderTop: "1px solid var(--stow-border-l)"
+                    }}
+                  >
+                    <Bell size={15} color="var(--stow-warm)" />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "var(--stow-ink)" }}>{invite.role} invite</div>
+                      {invite.invitedEmail ? (
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: "var(--stow-warm)",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap"
+                          }}
+                        >
+                          {invite.invitedEmail}
+                        </div>
+                      ) : null}
+                      <div style={{ fontSize: 12, fontWeight: 700, color: expired ? "var(--stow-danger-text)" : "var(--stow-warm)" }}>
+                        {expired ? "Expired" : "Pending"}
+                      </div>
+                    </div>
+                    <InlineButton onClick={() => regenerateInvite(invite)}>Regenerate</InlineButton>
+                    <InlineButton danger onClick={() => revokeInvite(invite)}>
+                      Revoke
+                    </InlineButton>
                   </div>
-                  <InlineButton onClick={() => regenerateInvite(invite)}>Regenerate</InlineButton>
-                  <InlineButton danger onClick={() => revokeInvite(invite)}>
-                    Revoke
-                  </InlineButton>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : null}
         </div>
@@ -689,6 +750,8 @@ export function SettingsScreen(props: SettingsScreenProps) {
             <button
               type="button"
               aria-label="Toggle AI Vision"
+              role="switch"
+              aria-checked={enabled}
               onClick={() => canManage && setEnabled((value) => !value)}
               disabled={!canManage}
               style={{

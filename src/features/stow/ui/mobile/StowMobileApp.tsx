@@ -138,6 +138,24 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
     }, 0);
   }, [data.packingLists, data.items]);
 
+  const menuSpaceIndex = spaceMenuId ? data.spaces.findIndex((space) => space.id === spaceMenuId) : -1;
+
+  // Keyboard-accessible one-step reorder from the space menu; the sheet stays open so
+  // repeated moves don't mean reopening it each time.
+  function moveMenuSpace(direction: -1 | 1) {
+    const orderedIds = data.spaces.map((space) => space.id);
+    const from = menuSpaceIndex;
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= orderedIds.length) return;
+    const next = orderedIds.slice();
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    void guardWrite(
+      data.actions.reorderSpaces({ householdId, orderedIds: next }),
+      "A reorder made offline couldn’t be saved"
+    );
+  }
+
   const selectedSpace = nav.selectedSpaceId ? data.spaces.find((space) => space.id === nav.selectedSpaceId) ?? null : null;
   const selectedItem = nav.selectedItemId ? data.items.find((item) => item.id === nav.selectedItemId) ?? null : null;
   const selectedItemSpace = selectedItem ? data.spaces.find((space) => space.id === selectedItem.spaceId) ?? null : null;
@@ -622,6 +640,10 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
           space={menuSpace}
           itemCount={menuSpace ? itemCountForSpace(menuSpace.id) : 0}
           open={spaceMenuId != null}
+          canMoveUp={menuSpaceIndex > 0}
+          canMoveDown={menuSpaceIndex >= 0 && menuSpaceIndex < data.spaces.length - 1}
+          onMoveUp={() => moveMenuSpace(-1)}
+          onMoveDown={() => moveMenuSpace(1)}
           onClose={() => setSpaceMenuId(null)}
           onEdit={() => {
             if (spaceMenuId) nav.openOverlay("editSpace", { spaceId: spaceMenuId });

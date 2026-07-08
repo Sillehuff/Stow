@@ -57,7 +57,7 @@ export function IconPicker({ value, color, onChange }: { value: string; color: s
               boxSizing: "border-box",
               borderRadius: "var(--stow-radius-input)",
               padding: "10px 14px",
-              fontSize: 14,
+              fontSize: 16,
               fontWeight: 500,
               outline: "none",
               border: "1.5px solid var(--stow-border)",
@@ -84,7 +84,7 @@ export function IconPicker({ value, color, onChange }: { value: string; color: s
                     cursor: "pointer",
                     fontFamily: "inherit",
                     border: selected ? "none" : "1px solid var(--stow-border)",
-                    background: selected ? "var(--stow-accent)" : "var(--stow-canvas)",
+                    background: selected ? "var(--stow-accent-strong)" : "var(--stow-canvas)",
                     color: selected ? "#fff" : "var(--stow-ink-muted)"
                   }}
                 >
@@ -104,7 +104,7 @@ export function IconPicker({ value, color, onChange }: { value: string; color: s
         style={{
           background: "none",
           border: "none",
-          color: "var(--stow-accent)",
+          color: "var(--stow-accent-text)",
           fontWeight: 700,
           fontSize: 12.5,
           cursor: "pointer",

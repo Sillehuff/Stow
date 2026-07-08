@@ -3,10 +3,10 @@ import type { CSSProperties, ReactNode } from "react";
 type Variant = "primary" | "neutral" | "danger" | "ghost";
 
 const VARIANTS: Record<Variant, CSSProperties> = {
-  primary: { background: "var(--stow-accent)", color: "#fff", border: "none" },
+  primary: { background: "var(--stow-accent-strong)", color: "#fff", border: "none" },
   neutral: { background: "var(--stow-canvas)", color: "var(--stow-ink)", border: "1px solid var(--stow-border)" },
-  danger: { background: "var(--stow-danger)", color: "#fff", border: "none" },
-  ghost: { background: "transparent", color: "var(--stow-accent)", border: "none" }
+  danger: { background: "var(--stow-danger-text)", color: "#fff", border: "none" },
+  ghost: { background: "transparent", color: "var(--stow-accent-text)", border: "none" }
 };
 
 export function Button({

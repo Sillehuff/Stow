@@ -11,11 +11,13 @@ export interface SheetAction {
 export function ActionSheet({
   open,
   title,
+  label,
   actions,
   onClose
 }: {
   open: boolean;
   title?: string;
+  label?: string;
   actions: SheetAction[];
   onClose: () => void;
 }) {
@@ -45,10 +47,11 @@ export function ActionSheet({
       />
       <div
         ref={surfaceRef}
-        role="menu"
-        aria-label={title ?? "Actions"}
+        role="dialog"
+        aria-modal="true"
+        aria-label={label ?? title ?? "Actions"}
         tabIndex={-1}
-        style={{ position: "relative", padding: "0 10px 12px", animation: "stowUp .26s ease-out" }}
+        style={{ position: "relative", padding: "0 10px calc(12px + env(safe-area-inset-bottom, 0px))", animation: "stowUp .26s ease-out" }}
       >
         <div
           style={{
@@ -76,13 +79,12 @@ export function ActionSheet({
           ) : null}
           {actions.map((action, index) => {
             const Icon = action.icon;
-            const actionColor = action.destructive ? "var(--stow-danger)" : "var(--stow-accent)";
+            const actionColor = action.destructive ? "var(--stow-danger-text)" : "var(--stow-accent-text)";
 
             return (
               <button
                 key={action.label}
                 type="button"
-                role="menuitem"
                 onClick={action.onSelect}
                 style={{
                   width: "100%",
@@ -121,7 +123,7 @@ export function ActionSheet({
             padding: "16px 18px",
             fontSize: 17,
             fontWeight: 800,
-            color: "var(--stow-accent)",
+            color: "var(--stow-accent-text)",
             boxShadow: "0 12px 36px rgba(0,0,0,0.14)",
             cursor: "pointer",
             fontFamily: "inherit"
