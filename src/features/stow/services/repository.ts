@@ -91,6 +91,40 @@ function mapNamedSnapshot<T extends { name: string }>(snap: QuerySnapshot<Docume
   };
 }
 
+/**
+ * Incremental snapshot mapping for hot collections: re-map only the docs Firestore
+ * reports as changed instead of re-normalizing every doc on every snapshot, and keep
+ * unchanged elements referentially identical so memoized rows/screens can skip
+ * re-rendering. One mapper instance per subscription — its cache dies with the
+ * listener. `mapOne` may return null to drop a doc (malformed/stub filtering).
+ */
+export function incrementalSnapshotMapper<T>(mapOne: (snap: { id: string; data(): DocumentData }) => T | null) {
+  const byId = new Map<string, T>();
+  return (snap: QuerySnapshot<DocumentData>): SnapshotState<T> => {
+    for (const change of snap.docChanges()) {
+      if (change.type === "removed") {
+        byId.delete(change.doc.id);
+      } else {
+        const mapped = mapOne(change.doc);
+        if (mapped === null) byId.delete(change.doc.id);
+        else byId.set(change.doc.id, mapped);
+      }
+    }
+    // snap.docs carries the query's ordering; assemble from cache so unchanged
+    // entries keep identity. Docs the mapper dropped are skipped.
+    const data: T[] = [];
+    for (const docSnap of snap.docs) {
+      const cached = byId.get(docSnap.id);
+      if (cached !== undefined) data.push(cached);
+    }
+    return {
+      data,
+      fromCache: snap.metadata.fromCache,
+      hasPendingWrites: snap.metadata.hasPendingWrites
+    };
+  };
+}
+
 function mapMemberSnapshot(snap: QuerySnapshot<DocumentData>): SnapshotState<HouseholdMember> {
   return {
     data: snap.docs.map((docSnap) => ({
@@ -279,16 +313,8 @@ export const inventoryRepository = {
 
   subscribeItems(householdId: string, onData: (state: SnapshotState<Item>) => void, onError: (e: Error) => void): Unsubscribe {
     const q = query(collection(requireDb(), householdPaths.items(householdId)), orderBy("updatedAt", "desc"));
-    return onSnapshot(
-      q,
-      (snap) =>
-        onData({
-          data: snap.docs.map((docSnap) => normalizeItemDoc(docSnap)),
-          fromCache: snap.metadata.fromCache,
-          hasPendingWrites: snap.metadata.hasPendingWrites
-        }),
-      onError
-    );
+    const mapIncremental = incrementalSnapshotMapper<Item>((docSnap) => normalizeItemDoc(docSnap));
+    return onSnapshot(q, (snap) => onData(mapIncremental(snap)), onError);
   },
 
   subscribeItemDrafts(
@@ -659,8 +685,13 @@ export const inventoryRepository = {
       vision?: Item["vision"] | null;
     };
   }) {
+    // Strip undefined-valued keys: updateDoc throws on any undefined field (the
+    // client sets no ignoreUndefinedProperties), and callers building patches from
+    // optional inputs have shipped exactly that crash before. "Clear this field"
+    // must be expressed as null, never undefined.
+    const patch = Object.fromEntries(Object.entries(input.patch).filter(([, value]) => value !== undefined));
     await updateDoc(doc(requireDb(), householdPaths.item(input.householdId, input.itemId)), {
-      ...input.patch,
+      ...patch,
       updatedAt: serverTimestamp(),
       updatedBy: input.userId
     });
@@ -836,7 +867,8 @@ export const inventoryRepository = {
     onError: (e: Error) => void
   ): Unsubscribe {
     const q = query(collection(requireDb(), householdPaths.packingLists(householdId)), orderBy("updatedAt", "desc"));
-    return onSnapshot(q, (snap) => onData(mapSnapshot<PackingList>(snap)), onError);
+    const mapIncremental = incrementalSnapshotMapper<PackingList>((docSnap) => mapDoc<PackingList>(docSnap));
+    return onSnapshot(q, (snap) => onData(mapIncremental(snap)), onError);
   },
 
   async createPackingList(input: {
@@ -921,7 +953,8 @@ export const inventoryRepository = {
       orderBy("createdAt", "desc"),
       limit(max)
     );
-    return onSnapshot(q, (snap) => onData(mapSnapshot<ActivityEntry>(snap)), onError);
+    const mapIncremental = incrementalSnapshotMapper<ActivityEntry>((docSnap) => mapDoc<ActivityEntry>(docSnap));
+    return onSnapshot(q, (snap) => onData(mapIncremental(snap)), onError);
   },
 
   // ── Item status & lending ──────────────────────────────────────

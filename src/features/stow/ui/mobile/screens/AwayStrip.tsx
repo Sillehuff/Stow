@@ -35,6 +35,7 @@ function loanDisplay(item: Item, memberNameByUid: Map<string, string>): string {
 
 function StatusPill({ item }: { item: Item }) {
   const meta = STATUS_META[item.status ?? "home"];
+  const color = meta.textColor;
   return (
     <span
       style={{
@@ -45,13 +46,13 @@ function StatusPill({ item }: { item: Item }) {
         padding: "4px 8px",
         borderRadius: 99,
         background: meta.soft,
-        color: meta.color,
+        color,
         fontSize: 11,
         fontWeight: 800,
         whiteSpace: "nowrap"
       }}
     >
-      <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: 99, background: meta.color, flexShrink: 0 }} />
+      <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: 99, background: color, flexShrink: 0 }} />
       {meta.label}
     </span>
   );
@@ -75,7 +76,7 @@ export function AwayStrip({ items, members, onOpenItem }: AwayStripProps) {
             fontWeight: 800,
             textTransform: "uppercase",
             letterSpacing: 1.5,
-            color: "var(--stow-accent)"
+            color: "var(--stow-accent-text)"
           }}
         >
           Away from home
@@ -90,7 +91,7 @@ export function AwayStrip({ items, members, onOpenItem }: AwayStripProps) {
             display: "grid",
             placeItems: "center",
             background: "var(--stow-accent-soft)",
-            color: "var(--stow-accent)",
+            color: "var(--stow-accent-text)",
             fontSize: 11,
             fontWeight: 900
           }}
@@ -168,7 +169,7 @@ export function AwayStrip({ items, members, onOpenItem }: AwayStripProps) {
                         whiteSpace: "nowrap",
                         fontSize: 12,
                         fontWeight: 700,
-                        color: overdue ? "var(--stow-danger)" : "var(--stow-warm)"
+                        color: overdue ? "var(--stow-danger-text)" : "var(--stow-warm)"
                       }}
                     >
                       {loanMeta}

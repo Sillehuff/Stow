@@ -81,7 +81,8 @@ export const llmConfigSchema = z.object({
     .url()
     .max(500)
     .refine(isPublicHttpsUrl, "baseUrl must be an https URL pointing to a public host")
-    .optional(),
+    .nullish()
+    .transform((value) => value ?? undefined),
   promptProfile: z.literal("default_inventory"),
   maxTokens: z.number().int().positive().max(4096).optional(),
   temperature: z.number().min(0).max(2).optional(),

@@ -54,6 +54,14 @@ export function SpacesList({
     if (event.key === "Escape") onRenameCancel();
   }
 
+  function onRowKeyDown(event: KeyboardEvent<HTMLDivElement>, id: string, isRenaming: boolean) {
+    if (event.target !== event.currentTarget) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    if (suppressClick() || draggingId || isRenaming) return;
+    onOpenSpace(id);
+  }
+
   return (
     <>
       <div
@@ -85,10 +93,14 @@ export function SpacesList({
               key={id}
               data-reorder-row
               {...bind(id)}
+              role="button"
+              tabIndex={0}
+              aria-label={`Open ${space.name}`}
               onClick={() => {
                 if (suppressClick() || draggingId || isRenaming) return;
                 onOpenSpace(id);
               }}
+              onKeyDown={(event) => onRowKeyDown(event, id, isRenaming)}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -148,7 +160,7 @@ export function SpacesList({
                         border: "1.5px solid var(--stow-accent)",
                         borderRadius: 9,
                         padding: "7px 10px",
-                        fontSize: 15.5,
+                        fontSize: 16,
                         fontWeight: 700,
                         color: "var(--stow-ink)",
                         outline: "none",
@@ -198,7 +210,7 @@ export function SpacesList({
                     padding: "7px 14px",
                     borderRadius: 99,
                     border: "none",
-                    background: "var(--stow-accent)",
+                    background: "var(--stow-accent-strong)",
                     color: "#fff",
                     fontSize: 13,
                     fontWeight: 800,
@@ -253,13 +265,13 @@ export function SpacesList({
             border: "none",
             borderTop: "1px solid var(--stow-border-l)",
             background: "transparent",
-            color: "var(--stow-accent)",
+            color: "var(--stow-accent-text)",
             fontWeight: 700,
             fontSize: 14,
             fontFamily: "inherit"
           }}
         >
-          <Plus size={16} strokeWidth={2.5} color="var(--stow-accent)" />
+          <Plus size={16} strokeWidth={2.5} color="var(--stow-accent-text)" />
           Add Space
         </button>
       </div>

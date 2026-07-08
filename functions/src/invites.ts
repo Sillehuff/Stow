@@ -76,6 +76,9 @@ export async function acceptHouseholdInviteHandler(
     // Registers inviteRef in the transaction's read set; this arms the version check
     // that enforces single-use. Must precede the writes below — do not refactor away.
     const snap = await tx.get(inviteRef);
+    // Read (not just check) membership inside the tx so a concurrent join/role-change
+    // conflicts rather than being silently overwritten.
+    const memberSnap = await tx.get(memberRef);
     if (!snap.exists) throw new HttpsError("not-found", "Invite not found or invalid");
     const inviteData = snap.data() as {
       role: string;
@@ -103,6 +106,14 @@ export async function acceptHouseholdInviteHandler(
         // invitee who signed in with the wrong account understand they need to switch accounts.
         throw new HttpsError("permission-denied", "This invite was issued to a different email address");
       }
+    }
+
+    if (memberSnap.exists) {
+      // Never touch an existing membership: an invite must not change a member's role
+      // (an OWNER accepting a MEMBER link would be silently demoted — a sole owner
+      // would brick household admin) and must stay unconsumed for its real recipient.
+      // Role changes go through updateHouseholdMemberRole, which has last-owner guards.
+      throw new HttpsError("already-exists", "You are already a member of this household");
     }
 
     tx.set(

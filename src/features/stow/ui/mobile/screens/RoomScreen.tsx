@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { ReactNode } from "react";
 import type { Item, SpaceWithAreas } from "@/types/domain";
 import { Box, Camera, ChevronLeft, Plus, QrCode } from "@/features/stow/ui/mobile/theme/icons";
@@ -75,9 +76,22 @@ export function RoomScreen(props: RoomScreenProps) {
   } = props;
   const selectedArea = selectedAreaId ? space.areas.find((area) => area.id === selectedAreaId) ?? null : null;
   const isInArea = selectedArea != null;
-  const spaceItems = items.filter((item) => item.spaceId === space.id);
-  const areaItems = (areaId: string) => spaceItems.filter((item) => item.areaId === areaId);
-  const filtered = isInArea ? spaceItems.filter((item) => item.areaId === selectedArea.id) : spaceItems;
+  // One pass over items per items/space change, not O(areas × items) on every render
+  // tick: the area cards each asked for their own filtered list.
+  const { spaceItems, itemCountByAreaId } = useMemo(() => {
+    const scoped: Item[] = [];
+    const counts = new Map<string, number>();
+    for (const item of items) {
+      if (item.spaceId !== space.id) continue;
+      scoped.push(item);
+      counts.set(item.areaId, (counts.get(item.areaId) ?? 0) + 1);
+    }
+    return { spaceItems: scoped, itemCountByAreaId: counts };
+  }, [items, space.id]);
+  const filtered = useMemo(
+    () => (isInArea ? spaceItems.filter((item) => item.areaId === selectedArea.id) : spaceItems),
+    [isInArea, selectedArea, spaceItems]
+  );
   const spaceColor = space.color;
 
   return (
@@ -157,7 +171,7 @@ export function RoomScreen(props: RoomScreenProps) {
                 <AreaCard
                   key={area.id}
                   name={area.name}
-                  count={areaItems(area.id).length}
+                  count={itemCountByAreaId.get(area.id) ?? 0}
                   color={spaceColor}
                   onClick={() => onOpenArea(area.id)}
                 />

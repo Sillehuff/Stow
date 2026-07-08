@@ -85,16 +85,25 @@ export function PackingScreen(props: PackingScreenProps) {
   }, [activeList, itemById]);
 
   const pickerSections = useMemo(() => {
+    if (!pickerOpen) return [];
+
+    const itemsBySpaceId = new Map<string, Item[]>();
+    for (const item of items) {
+      const spaceName = spaceNameById.get(item.spaceId) ?? "";
+      if (!matchesPackingItemPickerQuery(pickerQuery, [item.name, item.areaNameSnapshot, spaceName])) continue;
+      const sectionItems = itemsBySpaceId.get(item.spaceId);
+      if (sectionItems) sectionItems.push(item);
+      else itemsBySpaceId.set(item.spaceId, [item]);
+    }
+
     return spaces
       .map((space) => ({
         spaceId: space.id,
         spaceName: space.name,
-        items: items.filter((item) =>
-          item.spaceId === space.id && matchesPackingItemPickerQuery(pickerQuery, [item.name, item.areaNameSnapshot, space.name])
-        )
+        items: itemsBySpaceId.get(space.id) ?? []
       }))
       .filter((section) => section.items.length > 0);
-  }, [items, pickerQuery, spaces]);
+  }, [items, pickerOpen, pickerQuery, spaceNameById, spaces]);
 
   function openCreate() {
     setCreating(true);
@@ -204,7 +213,7 @@ export function PackingScreen(props: PackingScreenProps) {
                 fontSize: 13,
                 fontWeight: 700,
                 border: "none",
-                background: "var(--stow-accent)",
+                background: "var(--stow-accent-strong)",
                 color: "#fff",
                 cursor: "pointer",
                 fontFamily: "inherit",
@@ -247,7 +256,7 @@ export function PackingScreen(props: PackingScreenProps) {
                               border: "1.5px solid var(--stow-accent)",
                               borderRadius: 10,
                               padding: "8px 10px",
-                              fontSize: 15,
+                              fontSize: 16,
                               fontWeight: 800,
                               color: "var(--stow-ink)",
                               outline: "none",
@@ -263,7 +272,7 @@ export function PackingScreen(props: PackingScreenProps) {
                               padding: "8px 12px",
                               borderRadius: 99,
                               border: "none",
-                              background: "var(--stow-accent)",
+                              background: "var(--stow-accent-strong)",
                               color: "#fff",
                               fontSize: 12,
                               fontWeight: 800,
@@ -296,7 +305,7 @@ export function PackingScreen(props: PackingScreenProps) {
                     </div>
                     {!isRenaming ? (
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: pct === 100 ? "var(--stow-success)" : "var(--stow-accent)" }}>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: pct === 100 ? "var(--stow-success-text)" : "var(--stow-accent-text)" }}>
                           {pct}%
                         </div>
                         <button
@@ -412,14 +421,14 @@ export function PackingScreen(props: PackingScreenProps) {
               background: "none",
               border: "none",
               cursor: "pointer",
-              color: "var(--stow-accent)",
+              color: "var(--stow-accent-text)",
               fontWeight: 700,
               fontSize: 15,
               padding: 4,
               fontFamily: "inherit"
             }}
           >
-            <ChevronLeft size={20} strokeWidth={2.5} color="var(--stow-accent)" /> Lists
+            <ChevronLeft size={20} strokeWidth={2.5} color="var(--stow-accent-text)" /> Lists
           </button>
           <button
             type="button"
@@ -451,7 +460,7 @@ export function PackingScreen(props: PackingScreenProps) {
             style={{
               fontSize: 13,
               fontWeight: 800,
-              color: pct === 100 ? "var(--stow-success)" : "var(--stow-ink-muted)",
+              color: pct === 100 ? "var(--stow-success-text)" : "var(--stow-ink-muted)",
               whiteSpace: "nowrap"
             }}
           >
@@ -489,7 +498,7 @@ export function PackingScreen(props: PackingScreenProps) {
                     borderRadius: 99,
                     flexShrink: 0,
                     border: packed ? "none" : "2px solid var(--stow-border)",
-                    background: packed ? "var(--stow-success)" : "transparent",
+                    background: packed ? "var(--stow-success-text)" : "transparent",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -517,7 +526,13 @@ export function PackingScreen(props: PackingScreenProps) {
                   }}
                 >
                   {imageUrl ? (
-                    <img src={imageUrl} alt="" style={{ width: 40, height: 40, borderRadius: 10, objectFit: "cover", flexShrink: 0 }} />
+                    <img
+                      src={imageUrl}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      style={{ width: 40, height: 40, borderRadius: 10, objectFit: "cover", flexShrink: 0 }}
+                    />
                   ) : (
                     <div
                       style={{
@@ -609,7 +624,7 @@ export function PackingScreen(props: PackingScreenProps) {
                 boxSizing: "border-box",
                 borderRadius: "var(--stow-radius-input)",
                 padding: "12px 38px 12px 40px",
-                fontSize: 15,
+                fontSize: 16,
                 fontWeight: 500,
                 outline: "none",
                 border: `1.5px solid ${pickerQuery.trim() ? "var(--stow-accent)" : "var(--stow-border)"}`,
@@ -686,6 +701,8 @@ export function PackingScreen(props: PackingScreenProps) {
                               <img
                                 src={imageUrl}
                                 alt=""
+                                loading="lazy"
+                                decoding="async"
                                 style={{ width: 38, height: 38, borderRadius: 10, objectFit: "cover", flexShrink: 0 }}
                               />
                             ) : (
@@ -738,7 +755,7 @@ export function PackingScreen(props: PackingScreenProps) {
                                 height: 24,
                                 borderRadius: 99,
                                 border: selected ? "none" : "2px solid var(--stow-border)",
-                                background: selected ? "var(--stow-accent)" : "transparent",
+                                background: selected ? "var(--stow-accent-strong)" : "transparent",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",

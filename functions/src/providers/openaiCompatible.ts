@@ -1,6 +1,6 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { isPublicHttpsUrl } from "../shared/schemas.js";
-import { extractJsonObject, normalizeSuggestion, providerFetch, requireOk } from "./common.js";
+import { extractJsonObject, normalizeSuggestion, parseProviderJson, providerFetch, requireOk } from "./common.js";
 import type { ProviderContext, VisionProviderAdapter } from "./types.js";
 
 function toDataUrl(mimeType: string, bytes: Buffer) {
@@ -53,7 +53,7 @@ export const openaiCompatibleAdapter: VisionProviderAdapter = {
       })
     });
     requireOk(response, "OpenAI-compatible");
-    const body = (await response.json()) as {
+    const body = parseProviderJson(response.text) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
     const content = body.choices?.[0]?.message?.content ?? "";

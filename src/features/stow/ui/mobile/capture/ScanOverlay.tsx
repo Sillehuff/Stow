@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
+import type { CSSProperties, ChangeEvent } from "react";
 import { Grid, ImageIcon, ScanLine, Sparkles, X } from "lucide-react";
 import { CornerBrackets } from "@/features/stow/ui/mobile/capture/CornerBrackets";
 import { useCamera } from "@/features/stow/ui/mobile/hooks/useCamera";
@@ -11,6 +11,17 @@ export interface ScanOverlayProps {
 }
 
 const DARK = "#0A0A12";
+const viewfinderTop = "clamp(64px, 12%, 112px)";
+const viewfinderBottom = "clamp(132px, 35%, 300px)";
+const scanTrackStyle = {
+  position: "absolute",
+  top: 8,
+  right: 8,
+  bottom: 8,
+  left: 8,
+  overflow: "hidden",
+  "--scan-travel": "calc(100% - 3px)"
+} as CSSProperties;
 
 export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf }: ScanOverlayProps) {
   const { capture, error, start, status, stop, videoRef } = useCamera();
@@ -157,7 +168,7 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf }: ScanOv
           top: 0,
           left: 0,
           right: 0,
-          height: 150,
+          height: "clamp(120px, 18%, 150px)",
           background: "linear-gradient(to bottom, rgba(10,10,18,0.6), transparent)",
           zIndex: 1,
           pointerEvents: "none"
@@ -169,7 +180,7 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf }: ScanOv
           bottom: 0,
           left: 0,
           right: 0,
-          height: 340,
+          height: "clamp(190px, 42%, 340px)",
           background: "linear-gradient(to top, rgba(10,10,18,0.92) 28%, rgba(10,10,18,0.5) 62%, transparent)",
           zIndex: 1,
           pointerEvents: "none"
@@ -181,10 +192,11 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf }: ScanOv
         <div
           style={{
             position: "absolute",
-            top: 112,
+            top: viewfinderTop,
             left: 24,
             right: 24,
-            bottom: 300,
+            bottom: viewfinderBottom,
+            minHeight: 120,
             zIndex: 2,
             pointerEvents: "none"
           }}
@@ -192,18 +204,25 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf }: ScanOv
           <div style={{ position: "relative", width: "100%", height: "100%" }}>
             <CornerBrackets color="var(--stow-accent)" />
             {live ? (
-              <div
-                style={{
-                  position: "absolute",
-                  left: 8,
-                  right: 8,
-                  height: 3,
-                  borderRadius: 99,
-                  background: "var(--stow-accent)",
-                  boxShadow: "0 0 16px var(--stow-accent)",
-                  animation: "stowScan 1.4s ease-in-out infinite"
-                }}
-              />
+              <div style={scanTrackStyle}>
+                {/* The animated element spans the full track: translateY percentages
+                    resolve against the element's OWN height, so animating the 3px bar
+                    directly would move it ~0px. The bar is drawn at the mover's top. */}
+                <div style={{ position: "absolute", inset: 0, animation: "stowScan 1.4s ease-in-out infinite" }}>
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: 3,
+                      borderRadius: 99,
+                      background: "var(--stow-accent)",
+                      boxShadow: "0 0 16px var(--stow-accent)"
+                    }}
+                  />
+                </div>
+              </div>
             ) : null}
           </div>
         </div>
@@ -215,15 +234,15 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf }: ScanOv
           left: 0,
           right: 0,
           bottom: 0,
-          padding: "0 24px max(28px, env(safe-area-inset-bottom))",
+          padding: "0 24px max(clamp(8px, 3vh, 28px), env(safe-area-inset-bottom, 0px))",
           textAlign: "center",
           zIndex: 3
         }}
       >
-        <div style={{ color: "#fff", fontSize: 17, fontWeight: 800, marginBottom: 6 }}>
+        <div style={{ color: "#fff", fontSize: "clamp(15px, 4.8vh, 17px)", fontWeight: 800, marginBottom: "clamp(2px, 1vh, 6px)" }}>
           {unavailable ? "Camera unavailable" : busy ? "Scanning photo" : shelfMode ? "Point at a shelf" : "Point at an item"}
         </div>
-        <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 13, marginBottom: 22 }}>
+        <div style={{ color: "rgba(255,255,255,0.6)", fontSize: "clamp(12px, 3.8vh, 13px)", marginBottom: "clamp(6px, 2.6vh, 22px)" }}>
           {unavailable
             ? error ?? "Pick a photo from your library to scan."
             : shelfMode
@@ -239,7 +258,7 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf }: ScanOv
             borderRadius: 99,
             padding: 4,
             width: "fit-content",
-            margin: "0 auto 22px"
+            margin: "0 auto clamp(6px, 2.6vh, 22px)"
           }}
         >
           <button
@@ -250,7 +269,7 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf }: ScanOv
               display: "flex",
               alignItems: "center",
               gap: 6,
-              padding: "8px 18px",
+              padding: "clamp(5px, 1.8vh, 8px) 18px",
               borderRadius: 99,
               fontSize: 13,
               fontWeight: 800,
@@ -275,7 +294,7 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf }: ScanOv
               display: "flex",
               alignItems: "center",
               gap: 6,
-              padding: "8px 18px",
+              padding: "clamp(5px, 1.8vh, 8px) 18px",
               borderRadius: 99,
               fontSize: 13,
               fontWeight: 800,
@@ -321,8 +340,8 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf }: ScanOv
             onClick={onShutter}
             disabled={!live}
             style={{
-              width: 76,
-              height: 76,
+              width: "clamp(48px, 12vh, 76px)",
+              height: "clamp(48px, 12vh, 76px)",
               borderRadius: 99,
               margin: "0 auto",
               border: "5px solid rgba(255,255,255,0.3)",
@@ -336,8 +355,8 @@ export function ScanOverlay({ onClose, onCaptureSingle, onCaptureShelf }: ScanOv
           >
             <div
               style={{
-                width: 54,
-                height: 54,
+                width: "clamp(32px, 8.5vh, 54px)",
+                height: "clamp(32px, 8.5vh, 54px)",
                 borderRadius: 99,
                 background: live ? "var(--stow-accent)" : "var(--stow-warm)"
               }}

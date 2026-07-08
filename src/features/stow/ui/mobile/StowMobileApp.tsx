@@ -75,6 +75,30 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
 
   const flash = (message: string) => setToast(message);
 
+  // With the persistent local cache, write promises resolve only on server ack, so
+  // awaiting them offline hangs the UI forever even though the local write already
+  // applied. Wrap every awaited mutation: offline it resolves immediately and a
+  // later server-side rejection (e.g. security rules) is surfaced via toast.
+  function guardWrite(write: Promise<unknown>, rejectedMessage: string): Promise<boolean> {
+    return completeWrite(write, () => online, () => flash(rejectedMessage));
+  }
+
+  // A slow AI scan must never clobber what the user is doing by the time it resolves.
+  // Each scan takes a ticket; a stale ticket (a newer scan started) or a busy overlay
+  // at resolution time means the result — and its uploaded photo — are discarded.
+  const scanTicketRef = useRef(0);
+  const overlayKindRef = useRef(nav.overlay.kind);
+  overlayKindRef.current = nav.overlay.kind;
+
+  function scanResultStale(ticket: number) {
+    return ticket !== scanTicketRef.current || overlayKindRef.current != null;
+  }
+
+  function discardScanResult(image: ImageRef) {
+    void bestEffortDeleteImage(image);
+    flash("AI scan discarded");
+  }
+
   function logActivitySafe(entry: Parameters<typeof buildActivityEntry>[0]) {
     data.actions
       .logActivity({ householdId, entry: buildActivityEntry(entry) })
@@ -114,6 +138,24 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
     }, 0);
   }, [data.packingLists, data.items]);
 
+  const menuSpaceIndex = spaceMenuId ? data.spaces.findIndex((space) => space.id === spaceMenuId) : -1;
+
+  // Keyboard-accessible one-step reorder from the space menu; the sheet stays open so
+  // repeated moves don't mean reopening it each time.
+  function moveMenuSpace(direction: -1 | 1) {
+    const orderedIds = data.spaces.map((space) => space.id);
+    const from = menuSpaceIndex;
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= orderedIds.length) return;
+    const next = orderedIds.slice();
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    void guardWrite(
+      data.actions.reorderSpaces({ householdId, orderedIds: next }),
+      "A reorder made offline couldn’t be saved"
+    );
+  }
+
   const selectedSpace = nav.selectedSpaceId ? data.spaces.find((space) => space.id === nav.selectedSpaceId) ?? null : null;
   const selectedItem = nav.selectedItemId ? data.items.find((item) => item.id === nav.selectedItemId) ?? null : null;
   const selectedItemSpace = selectedItem ? data.spaces.find((space) => space.id === selectedItem.spaceId) ?? null : null;
@@ -150,10 +192,16 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
     onOpenSpace: (spaceId) => nav.openSpace(spaceId),
     onOpenMenu: (spaceId) => setSpaceMenuId(spaceId),
     onReorder: (orderedIds) => {
-      void data.actions.reorderSpaces({ householdId, orderedIds });
+      void guardWrite(
+        data.actions.reorderSpaces({ householdId, orderedIds }),
+        "A reorder made offline couldn’t be saved"
+      );
     },
     onRename: (spaceId, nextName) => {
-      void data.actions.updateSpace({ householdId, spaceId, patch: { name: nextName } }).then(() => flash("Space renamed"));
+      void guardWrite(
+        data.actions.updateSpace({ householdId, spaceId, patch: { name: nextName } }),
+        "A rename made offline couldn’t be saved"
+      ).then((committed) => flash(committed ? "Space renamed" : "Renamed — will sync when you’re online"));
     },
     onAddSpace: () => nav.openOverlay("addSpace"),
     renamingId: renamingSpaceId,
@@ -164,9 +212,10 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
         const space = data.spaces.find((candidate) => candidate.id === renamingSpaceId);
         const trimmed = renameValue.trim();
         if (trimmed && space && trimmed !== space.name) {
-          void data.actions.updateSpace({ householdId, spaceId: renamingSpaceId, patch: { name: trimmed } }).then(() => {
-            flash("Space renamed");
-          });
+          void guardWrite(
+            data.actions.updateSpace({ householdId, spaceId: renamingSpaceId, patch: { name: trimmed } }),
+            "A rename made offline couldn’t be saved"
+          ).then((committed) => flash(committed ? "Space renamed" : "Renamed — will sync when you’re online"));
         }
       }
       setRenamingSpaceId(null);
@@ -193,9 +242,14 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
   }
 
   async function handlePhotoPicked(blob: Blob) {
+    const ticket = ++scanTicketRef.current;
     nav.closeOverlay();
     const image = await uploadDraftCapture(blob);
     if (!image) return;
+    if (scanResultStale(ticket)) {
+      discardScanResult(image);
+      return;
+    }
     nav.openOverlay("addItem", {
       image,
       aiFilled: false,
@@ -205,9 +259,14 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
   }
 
   async function handleScanSingle(blob: Blob) {
+    const ticket = ++scanTicketRef.current;
     nav.closeOverlay();
     const image = await uploadDraftCapture(blob);
     if (!image) return;
+    if (scanResultStale(ticket)) {
+      discardScanResult(image);
+      return;
+    }
 
     let suggestion: VisionSuggestion | undefined;
     if (image.storagePath) {
@@ -222,10 +281,18 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
         });
         suggestion = response.suggestion;
       } catch {
+        if (scanResultStale(ticket)) {
+          discardScanResult(image);
+          return;
+        }
         flash("Couldn't read the photo — add details yourself.");
       }
     }
 
+    if (scanResultStale(ticket)) {
+      discardScanResult(image);
+      return;
+    }
     nav.openOverlay("addItem", {
       image,
       aiFilled: Boolean(suggestion),
@@ -345,7 +412,10 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
         llmConfig={data.llmConfig}
         online={online}
         onRenameHousehold={(name) => {
-          void data.actions.updateHousehold({ householdId, patch: { name } }).then(() => flash("Household renamed"));
+          void guardWrite(
+            data.actions.updateHousehold({ householdId, patch: { name } }),
+            "A rename made offline couldn’t be saved"
+          ).then((committed) => flash(committed ? "Household renamed" : "Renamed — will sync when you’re online"));
         }}
         onSignOut={onSignOut}
         onFlash={flash}
@@ -353,9 +423,60 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
     );
   }
 
+  // Listener failures were previously recorded but never rendered — a member removed
+  // from the household (or a dead connection) just saw silently frozen data.
+  const accessRevoked = Object.values(data.errorsBySource).some((sourceError) => sourceError?.code === "permission-denied");
+
   return (
     <div className="stow-mobile" ref={rootRef}>
       <div className="stow-mobile__viewport">
+        {data.error ? (
+          <div
+            role="alert"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              // Access loss must outrank every screen; a connectivity hiccup stays
+              // beneath ItemDetail (z 60) and the capture overlays.
+              zIndex: accessRevoked ? 200 : 55,
+              padding: "calc(env(safe-area-inset-top) + 8px) 16px 8px",
+              background: accessRevoked ? "var(--stow-danger)" : "var(--stow-ink)",
+              color: "#fff",
+              fontSize: 13,
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              gap: 10
+            }}
+          >
+            <span style={{ flex: 1 }}>
+              {accessRevoked
+                ? "You no longer have access to this household."
+                : "Some data isn’t syncing. Check your connection."}
+            </span>
+            {accessRevoked ? (
+              <button
+                type="button"
+                onClick={onSignOut}
+                style={{
+                  border: "1px solid rgba(255,255,255,0.6)",
+                  background: "transparent",
+                  color: "#fff",
+                  borderRadius: 8,
+                  padding: "5px 10px",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontFamily: "inherit"
+                }}
+              >
+                Sign out
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <div className="stow-mobile__screen" inert={captureOverlayActive || undefined}>
           {screen}
         </div>
@@ -382,16 +503,23 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
             onSaveEdit={(patch) => {
               const updatePatch = {
                 name: patch.name,
-                value: patch.value ?? undefined,
+                // Persist null (not undefined) when the value is cleared: Firestore's
+                // updateDoc rejects an undefined field, and Item.value is number | null.
+                value: patch.value ?? null,
                 notes: patch.notes,
                 ...("image" in patch ? { image: patch.image ?? null } : {})
               };
-              return data.actions.updateItem({
-                householdId,
-                itemId: selectedItem.id,
-                userId,
-                patch: updatePatch
-              });
+              // Resolves with whether the server committed — ItemDetail gates the
+              // irreversible cleanup of a replaced photo on it.
+              return guardWrite(
+                data.actions.updateItem({
+                  householdId,
+                  itemId: selectedItem.id,
+                  userId,
+                  patch: updatePatch
+                }),
+                "An edit made offline couldn’t be saved"
+              );
             }}
             onToggleTag={(tag) => {
               const currentTags = selectedItem.tags || [];
@@ -401,7 +529,10 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
             onMove={(dest) => {
               const destinationSpace = data.spaces.find((space) => space.id === dest.spaceId) ?? null;
               return (async () => {
-                await data.actions.updateItem({ householdId, itemId: selectedItem.id, userId, patch: dest });
+                await guardWrite(
+                  data.actions.updateItem({ householdId, itemId: selectedItem.id, userId, patch: dest }),
+                  "A move made offline couldn’t be saved"
+                );
                 logActivitySafe({
                   type: "item_moved",
                   actorUid: userId,
@@ -418,9 +549,15 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
             onChangeStatus={async (next: ItemStatus) => {
               if (next === selectedItem.status) return; // re-tapping "lent" must not wipe the loan
               if (selectedItem.status === "lent") {
-                await data.actions.clearItemLoan({ householdId, itemId: selectedItem.id, userId, nextStatus: next });
+                await guardWrite(
+                  data.actions.clearItemLoan({ householdId, itemId: selectedItem.id, userId, nextStatus: next }),
+                  "A status change made offline couldn’t be saved"
+                );
               } else {
-                await data.actions.setItemStatus({ householdId, itemId: selectedItem.id, userId, status: next });
+                await guardWrite(
+                  data.actions.setItemStatus({ householdId, itemId: selectedItem.id, userId, status: next }),
+                  "A status change made offline couldn’t be saved"
+                );
               }
               logActivitySafe({
                 type: "item_status_changed",
@@ -432,18 +569,21 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
               });
             }}
             onConfirmLoan={async (loan) => {
-              await data.actions.setItemLoan({
-                householdId,
-                itemId: selectedItem.id,
-                userId,
-                loan: {
-                  to: loan.to,
-                  ...(loan.toUid ? { toUid: loan.toUid } : {}),
-                  since: serverTimestamp() as unknown as Timestamp,
-                  ...(loan.dueMs ? { due: Timestamp.fromMillis(loan.dueMs) } : {}),
-                  ...(loan.note ? { note: loan.note } : {})
-                }
-              });
+              await guardWrite(
+                data.actions.setItemLoan({
+                  householdId,
+                  itemId: selectedItem.id,
+                  userId,
+                  loan: {
+                    to: loan.to,
+                    ...(loan.toUid ? { toUid: loan.toUid } : {}),
+                    since: serverTimestamp() as unknown as Timestamp,
+                    ...(loan.dueMs ? { due: Timestamp.fromMillis(loan.dueMs) } : {}),
+                    ...(loan.note ? { note: loan.note } : {})
+                  }
+                }),
+                "A loan recorded offline couldn’t be saved"
+              );
               logActivitySafe({
                 type: "item_status_changed",
                 actorUid: userId,
@@ -505,6 +645,10 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
           space={menuSpace}
           itemCount={menuSpace ? itemCountForSpace(menuSpace.id) : 0}
           open={spaceMenuId != null}
+          canMoveUp={menuSpaceIndex > 0}
+          canMoveDown={menuSpaceIndex >= 0 && menuSpaceIndex < data.spaces.length - 1}
+          onMoveUp={() => moveMenuSpace(-1)}
+          onMoveDown={() => moveMenuSpace(1)}
           onClose={() => setSpaceMenuId(null)}
           onEdit={() => {
             if (spaceMenuId) nav.openOverlay("editSpace", { spaceId: spaceMenuId });
@@ -541,13 +685,31 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
             }}
             onError={flash}
             actions={{
-              updateSpace: data.actions.updateSpace,
-              createArea: data.actions.createArea,
-              updateArea: data.actions.updateArea,
-              deleteArea: data.actions.deleteArea,
-              reorderAreas: data.actions.reorderAreas,
+              // The sheet awaits these; guardWrite keeps them from hanging offline.
+              updateSpace: async (input) => {
+                await guardWrite(data.actions.updateSpace(input), "A space edit made offline couldn’t be saved");
+              },
+              // The sheet consumes the new area's id, which the write promise can't
+              // deliver offline — pre-generate it so the id resolves either way.
+              createArea: async (input) => {
+                const areaId = data.actions.createAreaId(input.householdId, input.spaceId);
+                await guardWrite(
+                  data.actions.createArea({ ...input, areaId }),
+                  "An area added offline couldn’t be saved"
+                );
+                return areaId;
+              },
+              updateArea: async (input) => {
+                await guardWrite(data.actions.updateArea(input), "An area edit made offline couldn’t be saved");
+              },
+              deleteArea: async (input) => {
+                await guardWrite(data.actions.deleteArea(input), "An area deleted offline couldn’t be removed");
+              },
+              reorderAreas: async (input) => {
+                await guardWrite(data.actions.reorderAreas(input), "A reorder made offline couldn’t be saved");
+              },
               deleteSpace: async (input) => {
-                await data.actions.deleteSpace(input);
+                await guardWrite(data.actions.deleteSpace(input), "A space deleted offline couldn’t be removed");
                 logActivitySafe({
                   type: "space_deleted",
                   actorUid: input.userId,
@@ -757,7 +919,10 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
             setDeleteItemId(null);
             void (async () => {
               try {
-                await data.actions.deleteItem({ householdId, itemId: itemIdToDelete, userId });
+                const committed = await guardWrite(
+                  data.actions.deleteItem({ householdId, itemId: itemIdToDelete, userId }),
+                  "An item deleted offline couldn’t be removed"
+                );
                 logActivitySafe({
                   type: "item_deleted",
                   actorUid: userId,
@@ -765,8 +930,12 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
                   itemName: itemToDelete?.name,
                   itemId: itemIdToDelete
                 });
-                if (imageToClean) void bestEffortDeleteImage(imageToClean);
-                flash("Item deleted");
+                // Storage deletion is irreversible while a queued Firestore delete
+                // can still be rejected and roll back — destroy the photo only
+                // after server commit. A queued-then-successful delete leaves an
+                // orphaned object, which is the cheaper failure.
+                if (imageToClean && committed) void bestEffortDeleteImage(imageToClean);
+                flash(committed ? "Item deleted" : "Item deleted — will sync when you’re online");
                 if (shouldReturn) nav.back();
               } catch {
                 flash("Couldn't delete item");

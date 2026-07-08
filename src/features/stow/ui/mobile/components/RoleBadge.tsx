@@ -1,8 +1,8 @@
 import type { Role } from "@/types/domain";
 
 const COLOR: Record<Role, string> = {
-  OWNER: "var(--stow-accent)",
-  ADMIN: "var(--stow-success)",
+  OWNER: "var(--stow-accent-text)",
+  ADMIN: "var(--stow-success-text)",
   MEMBER: "var(--stow-warm)"
 };
 

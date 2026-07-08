@@ -84,7 +84,7 @@ export function Sheet({
             <X size={14} color="var(--stow-ink-muted)" />
           </button>
         </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "0 24px 32px" }}>{children}</div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 24px calc(32px + env(safe-area-inset-bottom, 0px))" }}>{children}</div>
       </div>
     </div>
   );

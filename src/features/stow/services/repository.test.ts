@@ -37,7 +37,7 @@ vi.mock("@/lib/firebase/functions", () => ({
   updateHouseholdMemberRole: vi.fn()
 }));
 
-import { inventoryRepository, normalizeItemDoc } from "@/features/stow/services/repository";
+import { incrementalSnapshotMapper, inventoryRepository, normalizeItemDoc } from "@/features/stow/services/repository";
 
 afterEach(() => {
   setCalls.length = 0;
@@ -109,5 +109,86 @@ describe("createItemsBatch", () => {
     expect(ids).toEqual([]);
     expect(setCalls).toHaveLength(0);
     expect(commit).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateItem", () => {
+  it("never passes undefined-valued fields to updateDoc", async () => {
+    const { updateDoc } = await import("firebase/firestore");
+
+    await inventoryRepository.updateItem({
+      householdId: "h1",
+      itemId: "i1",
+      userId: "u1",
+      // A caller that builds its patch from optional inputs can produce undefined
+      // values; updateDoc throws on any of them (no ignoreUndefinedProperties).
+      patch: { name: "Passport", value: undefined, notes: undefined, image: null }
+    });
+
+    expect(updateDoc).toHaveBeenCalledTimes(1);
+    const payload = (updateDoc as ReturnType<typeof vi.fn>).mock.calls[0][1] as Record<string, unknown>;
+    expect(Object.values(payload)).not.toContain(undefined);
+    expect(payload).toMatchObject({ name: "Passport", image: null, updatedBy: "u1" });
+    expect("value" in payload).toBe(false);
+    expect("notes" in payload).toBe(false);
+  });
+});
+
+describe("incrementalSnapshotMapper", () => {
+  type Row = { id: string; name: string };
+  const mapRow = (snap: { id: string; data(): Record<string, unknown> }): Row | null => {
+    const data = snap.data();
+    return typeof data.name === "string" ? { id: snap.id, name: data.name } : null;
+  };
+  const docSnap = (id: string, data: Record<string, unknown>) => ({ id, data: () => data });
+  const querySnap = (
+    docs: ReturnType<typeof docSnap>[],
+    changes: Array<{ type: "added" | "modified" | "removed"; doc: ReturnType<typeof docSnap> }>
+  ) =>
+    ({
+      docs,
+      docChanges: () => changes,
+      metadata: { fromCache: false, hasPendingWrites: false }
+    }) as never;
+
+  it("maps an initial snapshot in query order", () => {
+    const map = incrementalSnapshotMapper(mapRow);
+    const a = docSnap("a", { name: "Alpha" });
+    const b = docSnap("b", { name: "Beta" });
+    const state = map(querySnap([b, a], [{ type: "added", doc: a }, { type: "added", doc: b }]));
+    expect(state.data.map((row) => row.id)).toEqual(["b", "a"]);
+  });
+
+  it("keeps unchanged objects referentially identical across snapshots", () => {
+    const map = incrementalSnapshotMapper(mapRow);
+    const a = docSnap("a", { name: "Alpha" });
+    const b = docSnap("b", { name: "Beta" });
+    const first = map(querySnap([a, b], [{ type: "added", doc: a }, { type: "added", doc: b }]));
+    const b2 = docSnap("b", { name: "Beta v2" });
+    const second = map(querySnap([b2, a], [{ type: "modified", doc: b2 }]));
+    expect(second.data.map((row) => row.name)).toEqual(["Beta v2", "Alpha"]);
+    expect(second.data[1]).toBe(first.data[0]); // "a" untouched → same object
+    expect(second.data[0]).not.toBe(first.data[1]); // "b" re-mapped
+  });
+
+  it("drops removed docs and docs the mapper rejects", () => {
+    const map = incrementalSnapshotMapper(mapRow);
+    const a = docSnap("a", { name: "Alpha" });
+    const stub = docSnap("s", { position: 3 }); // name-less stub → mapper returns null
+    const first = map(
+      querySnap([a, stub], [{ type: "added", doc: a }, { type: "added", doc: stub }])
+    );
+    expect(first.data.map((row) => row.id)).toEqual(["a"]);
+    const second = map(querySnap([stub], [{ type: "removed", doc: a }]));
+    expect(second.data).toEqual([]);
+  });
+
+  it("re-adding a previously removed doc resurfaces it", () => {
+    const map = incrementalSnapshotMapper(mapRow);
+    const a = docSnap("a", { name: "Alpha" });
+    map(querySnap([a], [{ type: "added", doc: a }]));
+    map(querySnap([], [{ type: "removed", doc: a }]));
+    const third = map(querySnap([a], [{ type: "added", doc: a }]));
+    expect(third.data.map((row) => row.id)).toEqual(["a"]);
   });
 });

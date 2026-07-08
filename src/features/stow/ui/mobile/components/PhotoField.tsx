@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ChangeEvent } from "react";
 import { Camera, ChevronRight, ImageIcon, Sparkles, Trash2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -212,15 +213,20 @@ export function PhotoField({ value, onChange, onScanAI, uploadPath, disabled = f
         </div>
       )}
 
-      {cameraOpen ? (
-        <PhotoSource
-          onClose={() => setCameraOpen(false)}
-          onPicked={(blob) => {
-            setCameraOpen(false);
-            void uploadBlob(blob);
-          }}
-        />
-      ) : null}
+      {cameraOpen
+        ? // Portal: this field lives inside sheets and scrolling panes whose stacking
+          // contexts (transform animations) would otherwise trap even a fixed overlay.
+          createPortal(
+            <PhotoSource
+              onClose={() => setCameraOpen(false)}
+              onPicked={(blob) => {
+                setCameraOpen(false);
+                void uploadBlob(blob);
+              }}
+            />,
+            document.body
+          )
+        : null}
     </>
   );
 }

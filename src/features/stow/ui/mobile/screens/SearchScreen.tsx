@@ -144,6 +144,7 @@ export function SearchScreen(props: SearchScreenProps) {
             />
             <input
               autoFocus
+              aria-label="Search items"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Items, tags, or spaces..."
@@ -152,7 +153,7 @@ export function SearchScreen(props: SearchScreenProps) {
                 boxSizing: "border-box",
                 borderRadius: "var(--stow-radius-input)",
                 padding: "12px 36px 12px 40px",
-                fontSize: 15,
+                fontSize: 16,
                 fontWeight: 500,
                 outline: "none",
                 border: `1.5px solid ${trimmedQuery ? "var(--stow-accent)" : "var(--stow-border)"}`,
@@ -293,7 +294,13 @@ function GridCard({ item, spaceName, onClick }: { item: Item; spaceName: string;
         }}
       >
         {item.image?.downloadUrl ? (
-          <img src={item.image.downloadUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img
+            src={item.image.downloadUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
         ) : item.kind === "folder" ? (
           <Folder size={28} color="var(--stow-border)" />
         ) : (

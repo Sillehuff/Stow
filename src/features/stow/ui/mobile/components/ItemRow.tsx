@@ -43,6 +43,8 @@ export function ItemRow({
         <img
           src={item.image.downloadUrl}
           alt=""
+          loading="lazy"
+          decoding="async"
           style={{
             width: 46,
             height: 46,

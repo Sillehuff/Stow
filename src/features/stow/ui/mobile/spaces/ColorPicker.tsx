@@ -59,7 +59,7 @@ export function ColorPicker({ value, onChange }: { value: string; onChange: (col
         style={{
           background: "none",
           border: "none",
-          color: "var(--stow-accent)",
+          color: "var(--stow-accent-text)",
           fontWeight: 700,
           fontSize: 12.5,
           cursor: "pointer",

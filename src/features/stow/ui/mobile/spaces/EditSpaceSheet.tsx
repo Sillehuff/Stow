@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent } from "react";
 import { useHoldToReorder } from "@/features/stow/ui/mobile/hooks/useHoldToReorder";
 import { useDismissable } from "@/features/stow/ui/mobile/shell/useDismissable";
-import { GripVertical, Plus, Trash2 } from "@/features/stow/ui/mobile/theme/icons";
+import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "@/features/stow/ui/mobile/theme/icons";
 import { iconForKey } from "@/features/stow/ui/mobile/theme/icons";
 import { ColorPicker } from "@/features/stow/ui/mobile/spaces/ColorPicker";
 import { IconPicker } from "@/features/stow/ui/mobile/spaces/IconPicker";
@@ -78,6 +78,23 @@ function FieldLabel({ children }: { children: string }) {
   );
 }
 
+function areaMoveButtonStyle(disabled: boolean) {
+  return {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    background: "transparent",
+    border: "1px solid var(--stow-border-l)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: disabled ? "default" : "pointer",
+    opacity: disabled ? 0.35 : 1,
+    padding: 0,
+    flexShrink: 0
+  };
+}
+
 export function EditSpaceSheet(props: EditSpaceSheetProps) {
   const { space, itemCount, items, otherSpaces, onClose, onSaved, onDeleted, onError, actions, householdId, userId } = props;
   const surfaceRef = useDismissable(true, onClose);
@@ -123,11 +140,13 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
   }, [destSpace]);
 
   const areaKeys = areas.map((area) => area.key);
+  function applyAreaOrder(orderedKeys: string[]) {
+    setAreas((previous) => orderedKeys.map((key) => previous.find((area) => area.key === key)).filter((area): area is DraftArea => Boolean(area)));
+  }
+
   const { order, draggingId, bind, containerRef, suppressClick } = useHoldToReorder<DraftArea>({
     ids: areaKeys,
-    onReorder: (orderedKeys) => {
-      setAreas((previous) => orderedKeys.map((key) => previous.find((area) => area.key === key)).filter((area): area is DraftArea => Boolean(area)));
-    },
+    onReorder: applyAreaOrder,
     holdMs: 0
   });
 
@@ -199,6 +218,18 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
 
   function removeAreaFromDraft(key: string) {
     setAreas((previous) => previous.filter((area) => area.key !== key));
+  }
+
+  function moveArea(key: string, direction: -1 | 1) {
+    setAreas((previous) => {
+      const from = previous.findIndex((area) => area.key === key);
+      const to = from + direction;
+      if (from < 0 || to < 0 || to >= previous.length) return previous;
+      const next = previous.slice();
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
   }
 
   function requestAreaDelete(area: DraftArea) {
@@ -448,7 +479,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
               border: "none",
               fontSize: 15,
               fontWeight: 800,
-              color: canSave ? "var(--stow-accent)" : "var(--stow-border)",
+              color: canSave ? "var(--stow-accent-text)" : "var(--stow-border)",
               cursor: canSave ? "pointer" : "default",
               fontFamily: "inherit",
               padding: 0
@@ -458,7 +489,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
           </button>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "18px 22px 28px" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "18px 22px calc(28px + env(safe-area-inset-bottom, 0px))" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 13, marginBottom: 22 }}>
             <div
               style={{
@@ -526,14 +557,14 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                 gap: 4,
                 fontSize: 12.5,
                 fontWeight: 800,
-                color: "var(--stow-accent)",
+                color: "var(--stow-accent-text)",
                 background: "none",
                 border: "none",
                 cursor: "pointer",
                 fontFamily: "inherit"
               }}
             >
-              <Plus size={13} strokeWidth={2.5} color="var(--stow-accent)" />
+              <Plus size={13} strokeWidth={2.5} color="var(--stow-accent-text)" />
               Add
             </button>
           </div>
@@ -552,9 +583,12 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                 No areas yet {"\u2014"} tap Add.
               </div>
             ) : (
-              orderedAreas.map((area) => {
+              orderedAreas.map((area, index) => {
                 const dragging = draggingId === area.key;
                 const gripProps = bindGrip(area.key);
+                const areaName = area.name.trim() || "Area";
+                const first = index === 0;
+                const last = index === orderedAreas.length - 1;
 
                 return (
                   <div
@@ -582,6 +616,26 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                     >
                       <GripVertical size={16} color="var(--stow-border)" />
                     </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        aria-label={`Move area ${areaName} up`}
+                        disabled={first}
+                        onClick={() => moveArea(area.key, -1)}
+                        style={areaMoveButtonStyle(first)}
+                      >
+                        <ChevronUp size={14} color="var(--stow-warm)" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Move area ${areaName} down`}
+                        disabled={last}
+                        onClick={() => moveArea(area.key, 1)}
+                        style={areaMoveButtonStyle(last)}
+                      >
+                        <ChevronDown size={14} color="var(--stow-warm)" />
+                      </button>
+                    </div>
                     <input
                       value={area.name}
                       onChange={(event) => renameArea(area.key, event.target.value)}
@@ -590,7 +644,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                         minWidth: 0,
                         border: "none",
                         background: "transparent",
-                        fontSize: 14.5,
+                        fontSize: 16,
                         fontWeight: 600,
                         color: "var(--stow-ink)",
                         outline: "none",
@@ -599,6 +653,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                     />
                     <button
                       type="button"
+                      aria-label={`Delete area ${areaName}`}
                       onClick={() => requestAreaDelete(area)}
                       style={{
                         width: 26,
@@ -613,7 +668,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                         flexShrink: 0
                       }}
                     >
-                      <Trash2 size={13} color="var(--stow-danger)" />
+                      <Trash2 size={13} color="var(--stow-danger-text)" />
                     </button>
                   </div>
                 );
@@ -638,6 +693,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                     {areaDelete.name} has {areaDeleteItemCount} item{areaDeleteItemCount !== 1 ? "s" : ""} {"\u2014"} choose where they go:
                   </div>
                   <select
+                    aria-label={`Destination space for items in ${areaDelete.name}`}
                     value={areaDestSpaceId}
                     onChange={(event) => {
                       const nextSpaceId = event.target.value;
@@ -652,6 +708,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                       background: "var(--stow-surface)",
                       color: "var(--stow-ink)",
                       padding: "10px 12px",
+                      fontSize: 16,
                       fontFamily: "inherit",
                       fontWeight: 700,
                       marginBottom: 8
@@ -665,6 +722,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                     ))}
                   </select>
                   <select
+                    aria-label={`Destination area for items in ${areaDelete.name}`}
                     value={areaDestAreaId}
                     onChange={(event) => setAreaDestAreaId(event.target.value)}
                     disabled={!selectedAreaDestSpace}
@@ -675,6 +733,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                       background: "var(--stow-surface)",
                       color: "var(--stow-ink)",
                       padding: "10px 12px",
+                      fontSize: 16,
                       fontFamily: "inherit",
                       fontWeight: 700,
                       marginBottom: 10
@@ -701,7 +760,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                   width: "100%",
                   border: "none",
                   borderRadius: "var(--stow-radius-input)",
-                  background: canConfirmAreaDelete ? "var(--stow-danger)" : "var(--stow-border-l)",
+                  background: canConfirmAreaDelete ? "var(--stow-danger-text)" : "var(--stow-border-l)",
                   color: "#fff",
                   padding: "12px 0",
                   fontSize: 14,
@@ -745,16 +804,16 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
               gap: 8,
               padding: "13px 0",
               borderRadius: "var(--stow-radius-input)",
-              border: "1.5px solid color-mix(in srgb, var(--stow-danger) 28%, transparent)",
+              border: "1.5px solid color-mix(in srgb, var(--stow-danger-text) 28%, transparent)",
               background: "var(--stow-danger-soft)",
-              color: "var(--stow-danger)",
+              color: "var(--stow-danger-text)",
               fontSize: 14.5,
               fontWeight: 800,
               cursor: "pointer",
               fontFamily: "inherit"
             }}
           >
-            <Trash2 size={15} color="var(--stow-danger)" />
+            <Trash2 size={15} color="var(--stow-danger-text)" />
             Delete Space
           </button>
 
@@ -775,6 +834,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                   </div>
                   <select
                     value={destSpaceId}
+                    aria-label={`Destination space for items in ${space.name}`}
                     onChange={(event) => setDestSpaceId(event.target.value)}
                     style={{
                       width: "100%",
@@ -783,6 +843,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                       background: "var(--stow-surface)",
                       color: "var(--stow-ink)",
                       padding: "10px 12px",
+                      fontSize: 16,
                       fontFamily: "inherit",
                       fontWeight: 700,
                       marginBottom: 8
@@ -797,6 +858,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                   </select>
                   <select
                     value={destAreaId}
+                    aria-label={`Destination area for items in ${space.name}`}
                     onChange={(event) => setDestAreaId(event.target.value)}
                     disabled={!destSpace}
                     style={{
@@ -806,6 +868,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                       background: "var(--stow-surface)",
                       color: "var(--stow-ink)",
                       padding: "10px 12px",
+                      fontSize: 16,
                       fontFamily: "inherit",
                       fontWeight: 700,
                       marginBottom: 10
@@ -832,7 +895,7 @@ export function EditSpaceSheet(props: EditSpaceSheetProps) {
                   width: "100%",
                   border: "none",
                   borderRadius: "var(--stow-radius-input)",
-                  background: saving || !canDeleteWithReassign ? "var(--stow-border-l)" : "var(--stow-danger)",
+                  background: saving || !canDeleteWithReassign ? "var(--stow-border-l)" : "var(--stow-danger-text)",
                   color: "#fff",
                   padding: "12px 0",
                   fontSize: 14,

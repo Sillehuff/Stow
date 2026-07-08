@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 export function Field({
   label,
   value,
@@ -13,12 +15,13 @@ export function Field({
   type?: string;
   multiline?: boolean;
 }) {
+  const id = useId();
   const baseStyle = {
     width: "100%",
     boxSizing: "border-box" as const,
     borderRadius: "var(--stow-radius-input)",
     padding: "12px 16px",
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: 500,
     outline: "none",
     border: "1.5px solid var(--stow-border)",
@@ -29,7 +32,8 @@ export function Field({
 
   return (
     <div>
-      <div
+      <label
+        htmlFor={id}
         style={{
           fontSize: 11,
           fontWeight: 800,
@@ -40,9 +44,10 @@ export function Field({
         }}
       >
         {label}
-      </div>
+      </label>
       {multiline ? (
         <textarea
+          id={id}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
@@ -50,7 +55,7 @@ export function Field({
           style={{ ...baseStyle, resize: "none" }}
         />
       ) : (
-        <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} type={type} style={baseStyle} />
+        <input id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} type={type} style={baseStyle} />
       )}
     </div>
   );

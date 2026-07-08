@@ -57,8 +57,14 @@ export async function saveHouseholdLlmConfigHandler(raw: unknown, uid: string) {
   const input = saveLlmConfigInputSchema.parse(raw);
   await requireHouseholdAdmin(input.householdId, uid);
 
+  const config = { ...input.config, baseUrl: input.config.baseUrl ?? undefined };
+  if (config.providerType === "openai_compatible" && !config.baseUrl) {
+    throw new HttpsError("invalid-argument", "OpenAI-compatible provider requires a baseUrl");
+  }
+
   const payload = {
-    ...input.config,
+    ...config,
+    baseUrl: config.baseUrl ?? FieldValue.delete(),
     updatedAt: FieldValue.serverTimestamp(),
     updatedBy: uid
   };
@@ -88,6 +94,7 @@ export async function validateHouseholdLlmConfigHandler(raw: unknown, uid: strin
   const input = validateLlmConfigInputSchema.parse(raw);
   await requireHouseholdAdmin(input.householdId, uid);
 
+  invalidateConfigCache(input.householdId);
   const { config, apiKey } = await loadConfigAndSecret(input.householdId);
   const adapter = getVisionAdapter(config.providerType);
   const result = await adapter.validate({ config, apiKey });

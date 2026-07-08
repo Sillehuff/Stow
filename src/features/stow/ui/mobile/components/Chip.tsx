@@ -13,7 +13,7 @@ export function Chip({
   color?: string;
   onRemove?: () => void;
 }) {
-  const accent = color ?? "var(--stow-accent)";
+  const accent = color ?? "var(--stow-accent-strong)";
 
   return (
     <button

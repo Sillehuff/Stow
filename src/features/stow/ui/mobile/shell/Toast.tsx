@@ -15,31 +15,40 @@ export function Toast({ message, onDone }: { message: string | null; onDone: () 
     return () => window.clearTimeout(timer);
   }, [message]);
 
-  if (!message) return null;
   return (
     <div
       role="status"
+      aria-live="polite"
+      aria-atomic="true"
       style={{
         position: "absolute",
-        bottom: 110,
-        left: "50%",
-        transform: "translateX(-50%)",
+        bottom: message ? 110 : "auto",
+        left: message ? "50%" : 0,
+        top: message ? "auto" : 0,
+        transform: message ? "translateX(-50%)" : "none",
         zIndex: 90,
         display: "flex",
         alignItems: "center",
+        justifyContent: "center",
         gap: 8,
-        background: "#1A1A2E",
-        color: "#fff",
-        padding: "10px 16px",
-        borderRadius: 99,
+        width: message ? "auto" : 1,
+        height: message ? "auto" : 1,
+        overflow: message ? "visible" : "hidden",
+        clipPath: message ? "none" : "inset(50%)",
+        background: message ? "#1A1A2E" : "transparent",
+        color: message ? "#fff" : "transparent",
+        padding: message ? "10px 16px" : 0,
+        borderRadius: message ? 99 : 0,
+        maxWidth: message ? "calc(100vw - 48px)" : 1,
         fontSize: 14,
         fontWeight: 600,
-        whiteSpace: "nowrap",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-        animation: "stowToast .2s ease-out"
+        textAlign: "center",
+        lineHeight: 1.3,
+        boxShadow: message ? "0 8px 24px rgba(0,0,0,0.3)" : "none",
+        animation: message ? "stowToast .2s ease-out" : "none"
       }}
     >
-      <Check size={16} color="var(--stow-accent)" />
+      {message ? <Check size={16} color="var(--stow-accent)" style={{ flexShrink: 0 }} /> : null}
       {message}
     </div>
   );

@@ -1,4 +1,4 @@
-import { extractJsonObject, normalizeSuggestion, providerFetch, requireOk } from "./common.js";
+import { extractJsonObject, normalizeSuggestion, parseProviderJson, providerFetch, requireOk } from "./common.js";
 import type { ProviderContext, VisionProviderAdapter } from "./types.js";
 
 export const anthropicAdapter: VisionProviderAdapter = {
@@ -37,7 +37,7 @@ export const anthropicAdapter: VisionProviderAdapter = {
       })
     });
     requireOk(response, "Anthropic");
-    const body = (await response.json()) as {
+    const body = parseProviderJson(response.text) as {
       content?: Array<{ type: string; text?: string }>;
     };
     const text = body.content?.filter((part) => part.type === "text").map((part) => part.text ?? "").join("\n") ?? "";

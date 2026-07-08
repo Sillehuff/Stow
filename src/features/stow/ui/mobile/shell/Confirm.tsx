@@ -74,7 +74,7 @@ export function Confirm({
               fontWeight: 700,
               fontSize: 15,
               border: "none",
-              background: danger ? "var(--stow-danger)" : "var(--stow-accent)",
+              background: danger ? "var(--stow-danger-text)" : "var(--stow-accent-strong)",
               color: "#fff",
               cursor: "pointer"
             }}

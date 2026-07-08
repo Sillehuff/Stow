@@ -91,7 +91,8 @@ service cloud.firestore {
 
       match /activity/{activityId} {
         allow read: if isHouseholdMember(householdId);
-        allow create: if isHouseholdMember(householdId);
+        allow create: if isHouseholdMember(householdId)
+          && request.resource.data.actorUid == request.auth.uid;
         allow update, delete: if false;
       }
 

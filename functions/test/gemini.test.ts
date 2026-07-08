@@ -18,14 +18,17 @@ const image = {
 };
 
 function geminiResponse(text: string) {
-  return {
-    ok: true,
+  return geminiBodyResponse({
+    candidates: [{ content: { parts: [{ text }] } }]
+  });
+}
+
+function geminiBodyResponse(body: unknown, init?: ResponseInit) {
+  return new Response(JSON.stringify(body), {
     status: 200,
-    statusText: "OK",
-    json: async () => ({
-      candidates: [{ content: { parts: [{ text }] } }]
-    })
-  } as Response;
+    headers: { "Content-Type": "application/json" },
+    ...init
+  });
 }
 
 describe("gemini vision adapter", () => {
@@ -39,7 +42,7 @@ describe("gemini vision adapter", () => {
 
   it("validates the configured Gemini model with models.get", async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, statusText: "OK" } as Response);
+    fetchMock.mockResolvedValueOnce(geminiBodyResponse({ name: "gemini-2.5-flash" }));
 
     const result = await geminiAdapter.validate({ apiKey: "test-key", config });
 
@@ -124,7 +127,7 @@ describe("gemini vision adapter", () => {
 
   it("surfaces provider error responses", async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 429, statusText: "Too Many Requests" } as Response);
+    fetchMock.mockResolvedValueOnce(new Response("rate limited", { status: 429, statusText: "Too Many Requests" }));
 
     await expect(
       geminiAdapter.classifyImage({
@@ -134,5 +137,119 @@ describe("gemini vision adapter", () => {
         image
       })
     ).rejects.toMatchObject<HttpsError>({ code: "internal" });
+  });
+
+  it("surfaces promptFeedback blockReason as a provider error", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(geminiBodyResponse({ promptFeedback: { blockReason: "SAFETY" } }));
+
+    await expect(
+      geminiAdapter.classifyImage({
+        apiKey: "test-key",
+        config,
+        prompt: "Return JSON.",
+        image
+      })
+    ).rejects.toMatchObject<HttpsError>({
+      code: "internal",
+      message: "Provider blocked the request (SAFETY)"
+    });
+  });
+
+  it("surfaces MAX_TOKENS with unusable text as an incomplete provider response", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      geminiBodyResponse({
+        candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [{ text: "not json" }] } }]
+      })
+    );
+
+    await expect(
+      geminiAdapter.classifyImage({
+        apiKey: "test-key",
+        config,
+        prompt: "Return JSON.",
+        image
+      })
+    ).rejects.toMatchObject<HttpsError>({
+      code: "internal",
+      message: "Provider response incomplete (MAX_TOKENS) — raise the max tokens setting"
+    });
+  });
+
+  it("accepts parseable text even when Gemini reports a non-STOP finishReason", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      geminiBodyResponse({
+        candidates: [
+          {
+            finishReason: "MAX_TOKENS",
+            content: {
+              parts: [
+                {
+                  text: '{"suggestedName":"Camera","tags":["Tech"],"notes":"Black camera","confidence":0.82}'
+                }
+              ]
+            }
+          }
+        ]
+      })
+    );
+
+    await expect(
+      geminiAdapter.classifyImage({
+        apiKey: "test-key",
+        config,
+        prompt: "Return JSON.",
+        image
+      })
+    ).resolves.toMatchObject({ suggestedName: "Camera", confidence: 0.82 });
+  });
+
+  it("uses at least 1024 output tokens for shelf detection even when household maxTokens is lower", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      geminiResponse(JSON.stringify([{ label: "Camera", confidence: 0.8, box_2d: [10, 20, 300, 420] }]))
+    );
+
+    await geminiAdapter.detectShelfItems!({
+      apiKey: "test-key",
+      config: { ...config, maxTokens: 400 },
+      prompt: "Detect shelf items.",
+      image
+    });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.generationConfig.maxOutputTokens).toBe(1024);
+  });
+
+  it("rejects shelf detection on a non-STOP finish even when a partial array parsed", async () => {
+    const fetchMock = vi.mocked(fetch);
+    // A truncated array can still yield a parseable prefix — that prefix must not
+    // pass as a completed scan (the user would commit half a shelf unknowingly).
+    fetchMock.mockResolvedValueOnce(
+      geminiBodyResponse({
+        candidates: [
+          {
+            finishReason: "MAX_TOKENS",
+            content: {
+              parts: [{ text: '[{"label":"Camera","confidence":0.8,"box_2d":[10,20,300,420]}' }]
+            }
+          }
+        ]
+      })
+    );
+
+    await expect(
+      geminiAdapter.detectShelfItems!({
+        apiKey: "test-key",
+        config,
+        prompt: "Detect shelf items.",
+        image
+      })
+    ).rejects.toMatchObject<HttpsError>({
+      code: "internal",
+      message: "Provider response incomplete (MAX_TOKENS) — raise the max tokens setting"
+    });
   });
 });

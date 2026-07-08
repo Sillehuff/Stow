@@ -14,12 +14,17 @@ export interface Palette {
   surface: string;
   canvas: string;
   accent: string;
+  accentStrong: string;
   accentSoft: string;
   accentText: string;
   success: string;
   successSoft: string;
+  successText: string;
   danger: string;
   dangerSoft: string;
+  dangerText: string;
+  packedText: string;
+  repairText: string;
   shadow: string;
   shadowSoft: string;
   radius: number;
@@ -45,13 +50,18 @@ export function makePalette(input: PaletteInput = {}): Palette {
         borderL: "#23232F",
         surface: "#181822",
         canvas: "#101019",
+        accentStrong: "#C34F18",
         accentSoft: `color-mix(in srgb, ${accent} 22%, #181822)`,
         // Accent text reads on the dark accent-soft tint; the accent itself clears AA there.
         accentText: accent,
         success: "#34C088",
         successSoft: "color-mix(in srgb, #34C088 18%, #181822)",
+        successText: "#55DFA5",
         danger: "#F26060",
         dangerSoft: "color-mix(in srgb, #F26060 18%, #181822)",
+        dangerText: "#FF8A8A",
+        packedText: "#AEB8FF",
+        repairText: "#F2C16B",
         shadow: "0 2px 12px rgba(0,0,0,0.4)",
         shadowSoft: "0 1px 3px rgba(0,0,0,0.3)"
       }
@@ -65,13 +75,18 @@ export function makePalette(input: PaletteInput = {}): Palette {
         borderL: "#F0F0F5",
         surface: "#FFFFFF",
         canvas: "#F7F7FA",
+        accentStrong: "#C34F18",
         accentSoft: `color-mix(in srgb, ${accent} 12%, #FFFFFF)`,
         // Darker accent shade that clears AA (4.5:1) as text on the accent-soft tint.
         accentText: "#B5470F",
         success: "#2D9F6F",
         successSoft: "#EAFAF2",
+        successText: "#1F7A55",
         danger: "#E04545",
         dangerSoft: "#FFF0F0",
+        dangerText: "#C22F2F",
+        packedText: "#4D5AA6",
+        repairText: "#8A5A13",
         shadow: "0 2px 10px rgba(0,0,0,0.05)",
         shadowSoft: "0 1px 3px rgba(0,0,0,0.04)"
       };
@@ -96,12 +111,17 @@ const VAR_MAP: Record<keyof Palette, string> = {
   surface: "--stow-surface",
   canvas: "--stow-canvas",
   accent: "--stow-accent",
+  accentStrong: "--stow-accent-strong",
   accentSoft: "--stow-accent-soft",
   accentText: "--stow-accent-text",
   success: "--stow-success",
   successSoft: "--stow-success-soft",
+  successText: "--stow-success-text",
   danger: "--stow-danger",
   dangerSoft: "--stow-danger-soft",
+  dangerText: "--stow-danger-text",
+  packedText: "--stow-packed-text",
+  repairText: "--stow-repair-text",
   shadow: "--stow-shadow",
   shadowSoft: "--stow-shadow-soft",
   radius: "--stow-radius",

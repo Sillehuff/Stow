@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
-import type { ActivityEntry, Area, Household, HouseholdInvite, HouseholdMember, Item, ItemDraft, PackingList, Space, SpaceWithAreas } from "@/types/domain";
+import type { ActivityEntry, Area, Household, HouseholdInvite, HouseholdMember, Item, PackingList, Space, SpaceWithAreas } from "@/types/domain";
 import type { HouseholdLlmConfig } from "@/types/llm";
 import { inventoryRepository } from "@/features/stow/services/repository";
 import { byPosition } from "@/features/stow/hooks/positionSort";
@@ -52,8 +52,11 @@ export type WorkspaceActions = {
   clearItemLoan: typeof inventoryRepository.clearItemLoan;
 };
 
-type WorkspaceErrorSource = "household" | "spaces" | "areas" | "items" | "itemDrafts" | "members" | "invites" | "llmConfig" | "packingLists" | "activity";
-type WorkspaceErrorsBySource = Record<WorkspaceErrorSource, string | null>;
+type WorkspaceErrorSource = "household" | "spaces" | "areas" | "items" | "members" | "invites" | "llmConfig" | "packingLists" | "activity";
+// Keep the Firestore error code (e.g. "permission-denied"): the UI distinguishes
+// "removed from this household" from ordinary connectivity failures.
+export type WorkspaceError = { code?: string; message: string };
+type WorkspaceErrorsBySource = Record<WorkspaceErrorSource, WorkspaceError | null>;
 
 function emptyErrors(): WorkspaceErrorsBySource {
   return {
@@ -61,7 +64,6 @@ function emptyErrors(): WorkspaceErrorsBySource {
     spaces: null,
     areas: null,
     items: null,
-    itemDrafts: null,
     members: null,
     invites: null,
     llmConfig: null,
@@ -75,7 +77,6 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
   const [spacesState, setSpacesState] = useState<CollectionState<Space>>(emptyState());
   const [areasState, setAreasState] = useState<CollectionState<Area>>(emptyState());
   const [itemsState, setItemsState] = useState<CollectionState<Item>>(emptyState());
-  const [itemDraftsState, setItemDraftsState] = useState<CollectionState<ItemDraft>>(emptyState());
   const [membersState, setMembersState] = useState<CollectionState<HouseholdMember>>(emptyState());
   const [invitesState, setInvitesState] = useState<CollectionState<HouseholdInvite>>(emptyState());
   const [packingListsState, setPackingListsState] = useState<CollectionState<PackingList>>(emptyState());
@@ -84,8 +85,17 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
   const [llmConfigMeta, setLlmConfigMeta] = useState({ fromCache: true, hasPendingWrites: false });
   const [errorsBySource, setErrorsBySource] = useState<WorkspaceErrorsBySource>(emptyErrors());
 
-  const setSourceError = (source: WorkspaceErrorSource, message: string | null) => {
-    setErrorsBySource((prev) => (prev[source] === message ? prev : { ...prev, [source]: message }));
+  const setSourceError = (source: WorkspaceErrorSource, error: Error | null) => {
+    const maybeCode = error ? (error as { code?: unknown }).code : undefined;
+    const next: WorkspaceError | null = error
+      ? { code: typeof maybeCode === "string" ? maybeCode : undefined, message: error.message }
+      : null;
+    setErrorsBySource((prev) => {
+      const current = prev[source];
+      if (current === next) return prev;
+      if (current && next && current.code === next.code && current.message === next.message) return prev;
+      return { ...prev, [source]: next };
+    });
   };
 
   useEffect(() => {
@@ -93,7 +103,6 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     setSpacesState(emptyState());
     setAreasState(emptyState());
     setItemsState(emptyState());
-    setItemDraftsState(emptyState());
     setMembersState(emptyState());
     setInvitesState(emptyState());
     setPackingListsState(emptyState());
@@ -111,23 +120,14 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setHousehold(nextHousehold);
         setSourceError("household", null);
       },
-      (e) => setSourceError("household", e.message)
+      (e) => setSourceError("household", e)
     );
     return () => unsub();
   }, [householdId]);
 
-  useEffect(() => {
-    if (!householdId) return;
-    const unsub = inventoryRepository.subscribeItemDrafts(
-      householdId,
-      (state) => {
-        setItemDraftsState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
-        setSourceError("itemDrafts", null);
-      },
-      (e) => setSourceError("itemDrafts", e.message)
-    );
-    return () => unsub();
-  }, [householdId]);
+  // NOTE: itemDrafts intentionally has no listener. The draft-document feature is
+  // dead (nothing creates or renders drafts; capture flows only mint ids for storage
+  // paths), and its always-on Firestore subscription cost every session for nothing.
 
   useEffect(() => {
     if (!householdId) return;
@@ -137,7 +137,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setSpacesState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
         setSourceError("spaces", null);
       },
-      (e) => setSourceError("spaces", e.message)
+      (e) => setSourceError("spaces", e)
     );
     return () => unsub();
   }, [householdId]);
@@ -150,7 +150,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setAreasState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
         setSourceError("areas", null);
       },
-      (e) => setSourceError("areas", e.message)
+      (e) => setSourceError("areas", e)
     );
     return () => unsub();
   }, [householdId]);
@@ -163,7 +163,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setItemsState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
         setSourceError("items", null);
       },
-      (e) => setSourceError("items", e.message)
+      (e) => setSourceError("items", e)
     );
     return () => unsub();
   }, [householdId]);
@@ -176,7 +176,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setMembersState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
         setSourceError("members", null);
       },
-      (e) => setSourceError("members", e.message)
+      (e) => setSourceError("members", e)
     );
     return () => unsub();
   }, [householdId]);
@@ -199,7 +199,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setInvitesState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
         setSourceError("invites", null);
       },
-      (e) => setSourceError("invites", e.message)
+      (e) => setSourceError("invites", e)
     );
     return () => unsub();
   }, [canManageHouseholdSettings, householdId]);
@@ -212,7 +212,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setPackingListsState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
         setSourceError("packingLists", null);
       },
-      (e) => setSourceError("packingLists", e.message)
+      (e) => setSourceError("packingLists", e)
     );
     return () => unsub();
   }, [householdId]);
@@ -226,7 +226,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setActivityState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
         setSourceError("activity", null);
       },
-      (e) => setSourceError("activity", e.message)
+      (e) => setSourceError("activity", e)
     );
     return () => unsub();
   }, [householdId]);
@@ -245,13 +245,13 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setLlmConfigMeta(meta);
         setSourceError("llmConfig", null);
       },
-      (e) => setSourceError("llmConfig", e.message)
+      (e) => setSourceError("llmConfig", e)
     );
     return () => unsub();
   }, [canManageHouseholdSettings, householdId]);
 
   const error = useMemo(() => {
-    const order: WorkspaceErrorSource[] = ["household", "spaces", "areas", "items", "itemDrafts", "members", "invites", "llmConfig", "packingLists", "activity"];
+    const order: WorkspaceErrorSource[] = ["household", "spaces", "areas", "items", "members", "invites", "llmConfig", "packingLists", "activity"];
     return order.map((source) => errorsBySource[source]).find(Boolean) ?? null;
   }, [errorsBySource]);
 
@@ -274,7 +274,6 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         spacesState.fromCache ||
         areasState.fromCache ||
         itemsState.fromCache ||
-        itemDraftsState.fromCache ||
         membersState.fromCache ||
         invitesState.fromCache ||
         packingListsState.fromCache ||
@@ -284,14 +283,13 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         spacesState.hasPendingWrites ||
         areasState.hasPendingWrites ||
         itemsState.hasPendingWrites ||
-        itemDraftsState.hasPendingWrites ||
         membersState.hasPendingWrites ||
         invitesState.hasPendingWrites ||
         packingListsState.hasPendingWrites ||
         activityState.hasPendingWrites ||
         llmConfigMeta.hasPendingWrites
     }),
-    [activityState, areasState, invitesState, itemDraftsState, itemsState, llmConfigMeta, membersState, packingListsState, spacesState]
+    [activityState, areasState, invitesState, itemsState, llmConfigMeta, membersState, packingListsState, spacesState]
   );
 
   const actions: WorkspaceActions = useMemo(
@@ -339,7 +337,6 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     spaces: spacesWithAreas,
     areas: areasState.items,
     items: itemsState.items,
-    itemDrafts: itemDraftsState.items,
     members: membersState.items,
     invites: invitesState.items,
     packingLists: packingListsState.items,

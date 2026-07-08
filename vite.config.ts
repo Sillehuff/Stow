@@ -46,8 +46,30 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
         runtimeCaching: [
           {
+            urlPattern: /^https:\/\/(fonts\.googleapis\.com|api\.fontshare\.com)\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "font-stylesheets",
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 7
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/(fonts\.gstatic\.com|cdn\.fontshare\.com)\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "font-binaries",
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 60 * 60 * 24 * 365
+              }
+            }
+          },
+          {
             urlPattern: /^https:\/\/firebasestorage\.googleapis\.com\/.*/i,
-            handler: "StaleWhileRevalidate",
+            handler: "CacheFirst",
             options: {
               cacheName: "firebase-storage-images",
               expiration: {
