@@ -26,9 +26,10 @@ export async function providerFetch(
   });
   try {
     // redirect: "error" prevents a provider host from redirecting the request
-    // (and the Bearer key) to an internal address — SSRF defense-in-depth.
+    // (and the Bearer key) to an internal address — SSRF defense-in-depth. It is
+    // placed AFTER the init spread so no caller can accidentally override it.
     const response = await Promise.race([
-      fetch(url, { redirect: "error", ...init, signal: controller.signal }),
+      fetch(url, { ...init, redirect: "error", signal: controller.signal }),
       timeout
     ]);
     const text = await Promise.race([response.text(), timeout]);

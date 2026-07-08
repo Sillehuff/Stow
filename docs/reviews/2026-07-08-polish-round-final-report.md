@@ -35,8 +35,10 @@ replacement bug are fixed in this round.
    deploys + least-privilege CI token; activity writes bound to the caller's uid;
    rules suite gains bootstrap-mirror + deny-path coverage.
 4. `f037790` — **Offline honesty**: every awaited edit/delete/status/move/loan/space/
-   settings write goes through the completeWrite guard (no more infinite hangs; the
-   undismissable delete-confirm is gone); AI-scan results carry a ticket and are
+   settings write goes through the completeWrite guard (no more known-offline hangs —
+   `navigator.onLine === true` on an unreachable network still awaits, per the
+   guard's documented contract; the undismissable delete-confirm is gone); AI-scan
+   results carry a ticket and are
    discarded (photo deleted) when stale; listener failures render as a banner with
    permission-denied ("no longer have access" + sign out) distinguished; ItemDetail
    cleans up unsaved replacement photos on Back/unmount; updateItem strips undefined
@@ -92,9 +94,35 @@ replacement bug are fixed in this round.
   "Choose from library" button clips by ~8px.
 - Anthropic adapter doesn't inspect `stop_reason` (the Gemini finding's sibling;
   no evidence of harm, not in the verified backlog).
-- Optional second opinion: a blind Codex adversarial review of the final branch
-  (owner's standing preference for major deliverables) — quota reset at 11:17pm,
-  so it's available on request.
+## Blind second opinion (Codex/GPT-5.5) and reconciliation
+
+At the owner's direction, a blind Codex adversarial review ran after the Opus SHIP
+verdict (no knowledge of the first review). Codex's stance was "not merge-ready";
+the architect hand-verified every claim. Outcome:
+
+**Accepted and fixed on the branch (final commit):**
+- Storage cleanup after offline-queued writes was irreversible while the queued
+  Firestore write could still be rejected — replaced-photo and deleted-item-photo
+  cleanup now gate on server commit (orphaned object instead of broken reference).
+- Truncated (non-STOP) Gemini shelf responses could return a parseable partial
+  array as a completed scan — shelf detection now errors on any non-STOP finish
+  (single-item categorize keeps accepting complete parsed objects). Test added.
+- `providerFetch`'s `redirect: "error"` was overridable by a future caller's init —
+  now forced after the spread.
+- The incremental snapshot mapper had no direct unit tests — four added (order,
+  identity preservation, removal, null-drop, re-add).
+- The report's "no more infinite hangs" claim was overstated — corrected above.
+
+**Reviewed and declined, with reasons:**
+- "Guards wrap composite read-before-write deletes; offline success can precede
+  queuing" — true in a cold-cache corner, but the app's always-on subscriptions
+  keep those reads cache-warm, failures still surface via the rejected-write toast,
+  and Codex's online-only-deletes alternative would reintroduce the confirmed
+  hang/latch bugs. Follow-up: build delete batches from subscribed state.
+- "Online-but-unreachable still hangs" — correct, and it is the guard's documented
+  pre-launch contract, unchanged by this branch. Follow-up: timeout-race the ack.
+- "Activity is not audit-grade" — by design; it is a UX feed. The audit-grade
+  record is the server-written visionJobs collection. Documented here.
 
 ## To ship
 

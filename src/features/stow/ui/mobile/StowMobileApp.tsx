@@ -509,6 +509,8 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
                 notes: patch.notes,
                 ...("image" in patch ? { image: patch.image ?? null } : {})
               };
+              // Resolves with whether the server committed — ItemDetail gates the
+              // irreversible cleanup of a replaced photo on it.
               return guardWrite(
                 data.actions.updateItem({
                   householdId,
@@ -517,7 +519,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
                   patch: updatePatch
                 }),
                 "An edit made offline couldn’t be saved"
-              ).then(() => undefined);
+              );
             }}
             onToggleTag={(tag) => {
               const currentTags = selectedItem.tags || [];
@@ -928,7 +930,11 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
                   itemName: itemToDelete?.name,
                   itemId: itemIdToDelete
                 });
-                if (imageToClean) void bestEffortDeleteImage(imageToClean);
+                // Storage deletion is irreversible while a queued Firestore delete
+                // can still be rejected and roll back — destroy the photo only
+                // after server commit. A queued-then-successful delete leaves an
+                // orphaned object, which is the cheaper failure.
+                if (imageToClean && committed) void bestEffortDeleteImage(imageToClean);
                 flash(committed ? "Item deleted" : "Item deleted — will sync when you’re online");
                 if (shouldReturn) nav.back();
               } catch {

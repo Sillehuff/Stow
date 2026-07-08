@@ -218,20 +218,15 @@ export const geminiAdapter: VisionProviderAdapter = {
     throwIfBlocked(body);
     const finishReason = candidateFinishReason(body);
     const text = candidateText(body);
-    const parseDetections = () =>
-      extractDetectionArray(text)
-        .map(mapDetection)
-        .filter((detection): detection is ShelfDetection => detection !== null);
-
+    // Unlike classifyImage (one JSON object — parseable means complete), a shelf
+    // response is an ARRAY: truncation mid-array yields a parseable prefix that
+    // looks like a finished scan. Committing half a shelf silently is worse than
+    // asking the user to rescan, so any non-STOP finish is an error here.
     if (isIncompleteFinish(finishReason)) {
-      try {
-        const detections = parseDetections();
-        if (detections.length > 0) return detections;
-      } catch {
-        // Surface non-STOP unusable output as provider truncation/blockage rather than malformed JSON.
-      }
       throw incompleteResponseError(finishReason);
     }
-    return parseDetections();
+    return extractDetectionArray(text)
+      .map(mapDetection)
+      .filter((detection): detection is ShelfDetection => detection !== null);
   }
 };

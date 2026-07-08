@@ -98,7 +98,7 @@ function mapNamedSnapshot<T extends { name: string }>(snap: QuerySnapshot<Docume
  * re-rendering. One mapper instance per subscription — its cache dies with the
  * listener. `mapOne` may return null to drop a doc (malformed/stub filtering).
  */
-function incrementalSnapshotMapper<T>(mapOne: (snap: { id: string; data(): DocumentData }) => T | null) {
+export function incrementalSnapshotMapper<T>(mapOne: (snap: { id: string; data(): DocumentData }) => T | null) {
   const byId = new Map<string, T>();
   return (snap: QuerySnapshot<DocumentData>): SnapshotState<T> => {
     for (const change of snap.docChanges()) {

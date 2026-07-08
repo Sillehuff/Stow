@@ -37,7 +37,8 @@ export interface ItemDetailProps {
   allTags: string[];
   members: HouseholdMember[];
   onBack: () => void;
-  onSaveEdit: (patch: { name: string; value: number | null; notes: string; image?: ImageRef | null }) => Promise<void>;
+  /** Resolves true when the server committed, false when queued offline. */
+  onSaveEdit: (patch: { name: string; value: number | null; notes: string; image?: ImageRef | null }) => Promise<boolean>;
   onToggleTag: (tag: string) => void;
   onMove: (dest: { spaceId: string; areaId: string; areaNameSnapshot: string }) => Promise<void> | void;
   onChangeStatus: (next: ItemStatus) => Promise<void> | void;
@@ -261,14 +262,18 @@ export function ItemDetail(props: ItemDetailProps) {
     const nextPath = imageToSave?.storagePath;
     setSavingEdit(true);
     try {
-      await onSaveEdit({
+      const committed = await onSaveEdit({
         name: draftName.trim(),
         value: parseValue(draftValue),
         notes: draftNotes,
         ...(photoDirty ? { image: imageToSave ?? null } : {})
       });
       if (photoDirty) {
-        if (previousPath && previousPath !== nextPath) void bestEffortDeleteImage(previousImage);
+        // Destroy the replaced photo only after server commit: a queued offline
+        // write can still be rejected and roll the doc back to referencing it.
+        // Skipping cleanup on a queued write risks an orphaned object instead —
+        // the cheaper failure.
+        if (committed && previousPath && previousPath !== nextPath) void bestEffortDeleteImage(previousImage);
         setEditOriginalImage(imageToSave ?? null);
         setDraftImage(imageToSave ?? null);
         setPhotoDirty(false);

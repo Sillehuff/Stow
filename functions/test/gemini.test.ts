@@ -222,4 +222,34 @@ describe("gemini vision adapter", () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(body.generationConfig.maxOutputTokens).toBe(1024);
   });
+
+  it("rejects shelf detection on a non-STOP finish even when a partial array parsed", async () => {
+    const fetchMock = vi.mocked(fetch);
+    // A truncated array can still yield a parseable prefix — that prefix must not
+    // pass as a completed scan (the user would commit half a shelf unknowingly).
+    fetchMock.mockResolvedValueOnce(
+      geminiBodyResponse({
+        candidates: [
+          {
+            finishReason: "MAX_TOKENS",
+            content: {
+              parts: [{ text: '[{"label":"Camera","confidence":0.8,"box_2d":[10,20,300,420]}' }]
+            }
+          }
+        ]
+      })
+    );
+
+    await expect(
+      geminiAdapter.detectShelfItems!({
+        apiKey: "test-key",
+        config,
+        prompt: "Detect shelf items.",
+        image
+      })
+    ).rejects.toMatchObject<HttpsError>({
+      code: "internal",
+      message: "Provider response incomplete (MAX_TOKENS) — raise the max tokens setting"
+    });
+  });
 });
