@@ -88,7 +88,10 @@ export function PhotoSource({ onClose, onPicked }: PhotoSourceProps) {
       aria-modal="true"
       aria-label="New Photo"
       style={{
-        position: "absolute",
+        // fixed, not absolute: this full-screen overlay also mounts inside
+        // positioned/scrolling containers (sheets, the item-detail pane), where an
+        // absolute overlay only covers its nearest positioned ancestor.
+        position: "fixed",
         inset: 0,
         zIndex: 85,
         background: DARK,

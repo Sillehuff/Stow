@@ -189,7 +189,18 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
   }).length;
   const skippedCount = state.detections.filter((_, index) => state.drafts[index]?.keep === false).length;
   const lowCount = state.detections.filter(lowConfidence).length;
-  const hasDestination = Boolean(state.destination.spaceId && state.destination.areaId);
+  // Resolve the chosen destination against the LIVE spaces list: another member can
+  // delete the space or area mid-review, and committing to dead ids strands the new
+  // items outside every space. The area must belong to the resolved live space.
+  const liveDestinationArea = useMemo(() => {
+    const liveSpace = state.destination.spaceId
+      ? spaces.find((candidate) => candidate.id === state.destination.spaceId) ?? null
+      : null;
+    return liveSpace && state.destination.areaId
+      ? liveSpace.areas.find((candidate) => candidate.id === state.destination.areaId) ?? null
+      : null;
+  }, [spaces, state.destination.areaId, state.destination.spaceId]);
+  const hasDestination = liveDestinationArea != null;
 
   // Detection uses the destination only as optional context; read it via a ref so a
   // late-loading destination doesn't re-trigger the analyze effect (duplicate upload + Vision call).
@@ -212,11 +223,19 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
   }, []);
 
   useEffect(() => {
-    if (state.destination.spaceId && state.destination.areaId) return;
+    // Re-resolve whenever the chosen destination doesn't resolve to a live space+area —
+    // covering both "not chosen yet" and "deleted by another member mid-review".
+    if (liveDestinationArea) return;
     const next = resolveInitialDest(spaces, spaceId, areaId);
-    if (!next.spaceId || !next.areaId) return;
+    if (!next.spaceId || !next.areaId) {
+      if (state.destination.spaceId || state.destination.areaId) {
+        dispatch({ type: "setDestination", destination: { spaceId: null, areaId: null, areaNameSnapshot: "" } });
+      }
+      return;
+    }
+    if (next.spaceId === state.destination.spaceId && next.areaId === state.destination.areaId) return;
     dispatch({ type: "setDestination", destination: next });
-  }, [areaId, spaceId, spaces, state.destination.areaId, state.destination.spaceId]);
+  }, [areaId, liveDestinationArea, spaceId, spaces, state.destination.areaId, state.destination.spaceId]);
 
   useEffect(() => {
     if (state.phase !== "analyzing" || analyzedAttemptRef.current === retryKey) return;
@@ -228,6 +247,12 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
       try {
         if (uploadedFrameRef.current) void bestEffortDeleteImage(uploadedFrameRef.current);
         const image = await upload(capturedBlob);
+        if (cancelled) {
+          // Closed while the frame was uploading: the unmount cleanup ran before the
+          // ref was set, so delete here — and don't pay for the vision call.
+          void bestEffortDeleteImage(image);
+          return;
+        }
         uploadedFrameRef.current = image;
         if (!image.storagePath) throw new Error("Uploaded frame has no storage path");
         const dest = destinationRef.current;
@@ -297,7 +322,12 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
         onCommitted(0, true);
         return;
       }
-      const write = createItemsBatch({ householdId, userId, items: commitItems }).then((itemIds) => {
+      // The area can be renamed mid-review; file items under its current name. The
+      // ids themselves were just validated live via hasDestination.
+      const itemsToFile = liveDestinationArea
+        ? commitItems.map((item) => ({ ...item, areaNameSnapshot: liveDestinationArea.name }))
+        : commitItems;
+      const write = createItemsBatch({ householdId, userId, items: itemsToFile }).then((itemIds) => {
         // Best-effort: an activity-log failure must not look like a failed save (it caused duplicate items on retry).
         logActivity({
           householdId,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
-import type { ActivityEntry, Area, Household, HouseholdInvite, HouseholdMember, Item, ItemDraft, PackingList, Space, SpaceWithAreas } from "@/types/domain";
+import type { ActivityEntry, Area, Household, HouseholdInvite, HouseholdMember, Item, PackingList, Space, SpaceWithAreas } from "@/types/domain";
 import type { HouseholdLlmConfig } from "@/types/llm";
 import { inventoryRepository } from "@/features/stow/services/repository";
 import { byPosition } from "@/features/stow/hooks/positionSort";
@@ -52,7 +52,7 @@ export type WorkspaceActions = {
   clearItemLoan: typeof inventoryRepository.clearItemLoan;
 };
 
-type WorkspaceErrorSource = "household" | "spaces" | "areas" | "items" | "itemDrafts" | "members" | "invites" | "llmConfig" | "packingLists" | "activity";
+type WorkspaceErrorSource = "household" | "spaces" | "areas" | "items" | "members" | "invites" | "llmConfig" | "packingLists" | "activity";
 // Keep the Firestore error code (e.g. "permission-denied"): the UI distinguishes
 // "removed from this household" from ordinary connectivity failures.
 export type WorkspaceError = { code?: string; message: string };
@@ -64,7 +64,6 @@ function emptyErrors(): WorkspaceErrorsBySource {
     spaces: null,
     areas: null,
     items: null,
-    itemDrafts: null,
     members: null,
     invites: null,
     llmConfig: null,
@@ -78,7 +77,6 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
   const [spacesState, setSpacesState] = useState<CollectionState<Space>>(emptyState());
   const [areasState, setAreasState] = useState<CollectionState<Area>>(emptyState());
   const [itemsState, setItemsState] = useState<CollectionState<Item>>(emptyState());
-  const [itemDraftsState, setItemDraftsState] = useState<CollectionState<ItemDraft>>(emptyState());
   const [membersState, setMembersState] = useState<CollectionState<HouseholdMember>>(emptyState());
   const [invitesState, setInvitesState] = useState<CollectionState<HouseholdInvite>>(emptyState());
   const [packingListsState, setPackingListsState] = useState<CollectionState<PackingList>>(emptyState());
@@ -105,7 +103,6 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     setSpacesState(emptyState());
     setAreasState(emptyState());
     setItemsState(emptyState());
-    setItemDraftsState(emptyState());
     setMembersState(emptyState());
     setInvitesState(emptyState());
     setPackingListsState(emptyState());
@@ -128,18 +125,9 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     return () => unsub();
   }, [householdId]);
 
-  useEffect(() => {
-    if (!householdId) return;
-    const unsub = inventoryRepository.subscribeItemDrafts(
-      householdId,
-      (state) => {
-        setItemDraftsState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
-        setSourceError("itemDrafts", null);
-      },
-      (e) => setSourceError("itemDrafts", e)
-    );
-    return () => unsub();
-  }, [householdId]);
+  // NOTE: itemDrafts intentionally has no listener. The draft-document feature is
+  // dead (nothing creates or renders drafts; capture flows only mint ids for storage
+  // paths), and its always-on Firestore subscription cost every session for nothing.
 
   useEffect(() => {
     if (!householdId) return;
@@ -263,7 +251,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
   }, [canManageHouseholdSettings, householdId]);
 
   const error = useMemo(() => {
-    const order: WorkspaceErrorSource[] = ["household", "spaces", "areas", "items", "itemDrafts", "members", "invites", "llmConfig", "packingLists", "activity"];
+    const order: WorkspaceErrorSource[] = ["household", "spaces", "areas", "items", "members", "invites", "llmConfig", "packingLists", "activity"];
     return order.map((source) => errorsBySource[source]).find(Boolean) ?? null;
   }, [errorsBySource]);
 
@@ -286,7 +274,6 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         spacesState.fromCache ||
         areasState.fromCache ||
         itemsState.fromCache ||
-        itemDraftsState.fromCache ||
         membersState.fromCache ||
         invitesState.fromCache ||
         packingListsState.fromCache ||
@@ -296,14 +283,13 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         spacesState.hasPendingWrites ||
         areasState.hasPendingWrites ||
         itemsState.hasPendingWrites ||
-        itemDraftsState.hasPendingWrites ||
         membersState.hasPendingWrites ||
         invitesState.hasPendingWrites ||
         packingListsState.hasPendingWrites ||
         activityState.hasPendingWrites ||
         llmConfigMeta.hasPendingWrites
     }),
-    [activityState, areasState, invitesState, itemDraftsState, itemsState, llmConfigMeta, membersState, packingListsState, spacesState]
+    [activityState, areasState, invitesState, itemsState, llmConfigMeta, membersState, packingListsState, spacesState]
   );
 
   const actions: WorkspaceActions = useMemo(
@@ -351,7 +337,6 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
     spaces: spacesWithAreas,
     areas: areasState.items,
     items: itemsState.items,
-    itemDrafts: itemDraftsState.items,
     members: membersState.items,
     invites: invitesState.items,
     packingLists: packingListsState.items,
