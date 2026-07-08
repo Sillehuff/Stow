@@ -329,14 +329,14 @@ test.describe("comprehensive interaction coverage", () => {
     // Rename + delete the list via its action menu.
     await page.getByRole("button", { name: "Lists" }).click();
     await page.getByRole("button", { name: "Weekend list actions" }).click();
-    await page.getByRole("menuitem", { name: "Rename" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Rename" }).click();
     await page.getByRole("textbox").first().fill("Weekend Trip");
     await page.getByRole("button", { name: "Done" }).click();
     await expect(page.getByText("Packing list renamed")).toBeVisible();
     await expect(page.getByText("Weekend Trip", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Weekend Trip list actions" }).click();
-    await page.getByRole("menuitem", { name: "Delete" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
     await expect(page.getByText("Packing list deleted")).toBeVisible();
     await expect(page.getByText("Weekend Trip", { exact: true })).toHaveCount(0);
   });
@@ -401,7 +401,7 @@ test.describe("comprehensive interaction coverage", () => {
     await expect(page.getByText("My Test Home", { exact: true })).toBeVisible();
 
     // AI vision: enable, save, test connection.
-    await page.getByRole("button", { name: "Toggle AI Vision" }).click();
+    await page.getByRole("switch", { name: "Toggle AI Vision" }).click();
     await page.getByRole("button", { name: "Save AI settings" }).click();
     await expect(page.getByText("AI settings saved")).toBeVisible();
     await page.getByRole("button", { name: "Test connection" }).click();
@@ -426,7 +426,7 @@ test.describe("comprehensive interaction coverage", () => {
 
     // Add manually → the Add Item sheet, then close it.
     await page.getByRole("button", { name: "Scan" }).click();
-    await page.getByRole("menuitem", { name: "Add manually" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Add manually" }).click();
     const addSheet = page.getByRole("dialog", { name: "Add Item" });
     await expect(addSheet).toBeVisible();
     await addSheet.getByRole("button", { name: "Close" }).click();
@@ -434,7 +434,7 @@ test.describe("comprehensive interaction coverage", () => {
 
     // AI Scan overlay.
     await page.getByRole("button", { name: "Scan" }).click();
-    await page.getByRole("menuitem", { name: "AI Scan" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "AI Scan" }).click();
     const scanDialog = page.getByRole("dialog", { name: "AI Scan" });
     await expect(scanDialog).toBeVisible();
     await scanDialog.getByRole("button", { name: "Close" }).click();
@@ -442,7 +442,7 @@ test.describe("comprehensive interaction coverage", () => {
 
     // QR scan overlay.
     await page.getByRole("button", { name: "Scan" }).click();
-    await page.getByRole("menuitem", { name: "Scan QR label" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Scan QR label" }).click();
     const qrDialog = page.getByRole("dialog", { name: "Scan QR label" });
     await expect(qrDialog).toBeVisible();
     await qrDialog.getByRole("button", { name: "Close" }).click();
@@ -461,7 +461,7 @@ test.describe("comprehensive interaction coverage", () => {
     // From Search (no current space), Add manually should default to the chosen space, not spaces[0].
     await page.getByRole("button", { name: "Search" }).click();
     await page.getByRole("button", { name: "Scan" }).click();
-    await page.getByRole("menuitem", { name: "Add manually" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Add manually" }).click();
     const addSheet = page.getByRole("dialog", { name: "Add Item" });
     await expect(addSheet).toBeVisible();
     await expect(addSheet.getByText("Area in Bbb Second Space")).toBeVisible();

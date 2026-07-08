@@ -119,7 +119,7 @@ test.describe("whole-shelf batch capture", () => {
     await addSpace(page);
 
     await page.getByRole("button", { name: "Scan" }).click();
-    await page.getByRole("menuitem", { name: "AI Scan" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "AI Scan" }).click();
     const scanDialog = page.getByRole("dialog", { name: "AI Scan" });
     await scanDialog.getByRole("button", { name: "Whole shelf" }).click();
     await expect(scanDialog.getByRole("button", { name: "Whole shelf" })).toHaveAttribute("aria-pressed", "true");

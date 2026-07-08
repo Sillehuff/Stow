@@ -94,6 +94,18 @@ replacement bug are fixed in this round.
   "Choose from library" button clips by ~8px.
 - Anthropic adapter doesn't inspect `stop_reason` (the Gemini finding's sibling;
   no evidence of harm, not in the verified backlog).
+## Deploy-day correction (2026-07-08, ~00:50)
+
+The first CI run on main FAILED at the Playwright smoke suite: seven tests still
+queried the scan/space menus as `role="menuitem"` and the AI toggle as a button —
+selectors the a11y batch deliberately obsoleted (dialog+buttons; switch). Hosting
+did not deploy; the already-deployed backend + rules were verified
+backward-compatible with the old client, so the interim mixed state was safe.
+Fixed by updating the 12 selectors; the full 16-test smoke suite then passed
+locally before re-pushing. **Process lesson, now standing rule for this repo: the
+local pre-merge gauntlet must include `npm run test:smoke` — it is CI-gated and
+was the one suite nobody ran locally tonight.**
+
 ## Blind second opinion (Codex/GPT-5.5) and reconciliation
 
 At the owner's direction, a blind Codex adversarial review ran after the Opus SHIP

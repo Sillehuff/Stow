@@ -259,7 +259,7 @@ test.describe("mobile /app core parity", () => {
     await expect(page.getByText("Workshop", { exact: true })).toBeVisible();
 
     await openSpaceActions(page, "Annex");
-    await page.getByRole("menuitem", { name: "Edit space" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Edit space" }).click();
     const renameDialog = page.getByRole("dialog", { name: "Edit Space" });
     await renameDialog.getByPlaceholder("Space name").fill("Studio");
     await renameDialog.getByRole("button", { name: "Save" }).click();
@@ -288,7 +288,7 @@ test.describe("mobile /app core parity", () => {
 
     await page.getByRole("button", { name: "Spaces" }).click();
     await openSpaceActions(page, "Studio");
-    await page.getByRole("menuitem", { name: "Edit space" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Edit space" }).click();
     const editDialog = page.getByRole("dialog", { name: "Edit Space" });
     await editDialog.getByRole("button", { name: "Delete Space" }).first().click();
     const deletePanel = editDialog.getByText("Delete this space? This can't be undone.").locator("xpath=..");
