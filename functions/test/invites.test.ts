@@ -67,6 +67,14 @@ const {
   revokeHouseholdInviteHandler
 } = await import("../src/invites.js");
 
+type FakeSnap = { exists: boolean; data?: () => unknown; get?: (field: string) => unknown };
+
+// The accept transaction reads both the invite and the caller's membership; route
+// tx.get by ref so each test can shape them independently (member absent by default).
+function mockTxReads(inviteSnap: FakeSnap, memberSnap: FakeSnap = { exists: false }) {
+  tx.get.mockImplementation(async (ref: unknown) => (ref === memberRef ? memberSnap : inviteSnap));
+}
+
 describe("invite handlers", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -75,7 +83,7 @@ describe("invite handlers", () => {
     inviteRef.get.mockResolvedValue({ exists: true });
     batch.commit.mockResolvedValue(undefined);
     runTransaction.mockImplementation(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx));
-    tx.get.mockResolvedValue({
+    mockTxReads({
       exists: true,
       data: () => ({ role: "MEMBER" }),
       get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
@@ -146,7 +154,7 @@ describe("invite handlers", () => {
       empty: false,
       docs: [inviteDoc]
     });
-    tx.get.mockResolvedValue({
+    mockTxReads({
       exists: true,
       data: () => ({
         role: "ADMIN",
@@ -199,7 +207,7 @@ describe("invite handlers", () => {
       docs: [inviteDoc]
     });
     // Query (outside tx) returns a pending invite; the transactional re-read sees acceptedAt set.
-    tx.get.mockResolvedValue({
+    mockTxReads({
       exists: true,
       data: () => ({ role: "MEMBER", acceptedAt: "already" }),
       get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
@@ -214,6 +222,57 @@ describe("invite handlers", () => {
     expect(tx.set).not.toHaveBeenCalled();
   });
 
+  it("rejects acceptance when the caller is already a member — role untouched, invite unconsumed", async () => {
+    const inviteDoc = {
+      ref: { path: "households/h1/invites/invite-123" },
+      data: () => ({ role: "MEMBER" }),
+      get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+    };
+    inviteQueryGet.mockResolvedValue({
+      empty: false,
+      docs: [inviteDoc]
+    });
+    // The caller is the household's sole OWNER accepting a MEMBER invite link.
+    mockTxReads(
+      {
+        exists: true,
+        data: () => ({ role: "MEMBER" }),
+        get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+      },
+      { exists: true, data: () => ({ role: "OWNER" }) }
+    );
+
+    await expect(
+      acceptHouseholdInviteHandler(
+        { householdId: "h1", token: "a".repeat(32) },
+        { uid: "u2", token: { email: "u2@example.com" } }
+      )
+    ).rejects.toMatchObject({ code: "already-exists" });
+    // No membership write (no demotion) and no invite update (stays usable
+    // by its intended recipient).
+    expect(tx.set).not.toHaveBeenCalled();
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  it("reads the membership inside the transaction so concurrent joins conflict", async () => {
+    const inviteDoc = {
+      ref: { path: "households/h1/invites/invite-123" },
+      data: () => ({ role: "MEMBER" }),
+      get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+    };
+    inviteQueryGet.mockResolvedValue({
+      empty: false,
+      docs: [inviteDoc]
+    });
+
+    await acceptHouseholdInviteHandler(
+      { householdId: "h1", token: "a".repeat(32) },
+      { uid: "u2", token: { email: "u2@example.com" } }
+    );
+
+    expect(tx.get).toHaveBeenCalledWith(memberRef);
+  });
+
   it("writes member, user, and invite updates inside the transaction on success", async () => {
     const inviteDoc = {
       ref: { path: "households/h1/invites/invite-123" },
@@ -224,7 +283,7 @@ describe("invite handlers", () => {
       empty: false,
       docs: [inviteDoc]
     });
-    tx.get.mockResolvedValue({
+    mockTxReads({
       exists: true,
       data: () => ({ role: "MEMBER" }),
       get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
@@ -250,19 +309,25 @@ describe("invite handlers", () => {
       docs: [inviteDoc]
     });
 
-    // First read sees a pending invite; the contended retry re-reads an invite that a
-    // concurrent accept already marked. Records the per-invocation tx-write counts.
-    tx.get
-      .mockResolvedValueOnce({
+    // First invite read sees a pending invite; the contended retry re-reads an invite
+    // that a concurrent accept already marked (membership reads stay absent). Records
+    // the per-invocation tx-write counts.
+    const acceptedSnap: FakeSnap = {
+      exists: true,
+      data: () => ({ role: "MEMBER", acceptedAt: "already" }),
+      get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
+    };
+    const inviteReads: FakeSnap[] = [
+      {
         exists: true,
         data: () => ({ role: "MEMBER" }),
         get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ role: "MEMBER", acceptedAt: "already" }),
-        get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
-      });
+      },
+      acceptedSnap
+    ];
+    tx.get.mockImplementation(async (ref: unknown) =>
+      ref === memberRef ? { exists: false } : inviteReads.shift() ?? acceptedSnap
+    );
 
     const writesPerInvocation: number[] = [];
     runTransaction.mockImplementation(async (fn: (t: typeof tx) => Promise<unknown>) => {
@@ -304,7 +369,7 @@ describe("invite handlers", () => {
       empty: false,
       docs: [inviteDoc]
     });
-    tx.get.mockResolvedValue({
+    mockTxReads({
       exists: true,
       data: () => ({ role: "MEMBER", invitedEmail: "alice@example.com" }),
       get: () => undefined
@@ -330,7 +395,7 @@ describe("invite handlers", () => {
       empty: false,
       docs: [inviteDoc]
     });
-    tx.get.mockResolvedValue({
+    mockTxReads({
       exists: true,
       data: () => ({ role: "MEMBER", invitedEmail: "alice@example.com" }),
       get: () => undefined
@@ -354,7 +419,7 @@ describe("invite handlers", () => {
       empty: false,
       docs: [inviteDoc]
     });
-    tx.get.mockResolvedValue({
+    mockTxReads({
       exists: true,
       data: () => ({ role: "MEMBER", invitedEmail: "alice@example.com" }),
       get: () => undefined
@@ -379,7 +444,7 @@ describe("invite handlers", () => {
       empty: false,
       docs: [inviteDoc]
     });
-    tx.get.mockResolvedValue({
+    mockTxReads({
       exists: true,
       data: () => ({ role: "MEMBER", invitedEmail: "alice@example.com" }),
       get: () => undefined
@@ -405,7 +470,7 @@ describe("invite handlers", () => {
       empty: false,
       docs: [inviteDoc]
     });
-    tx.get.mockResolvedValue({ exists: false });
+    mockTxReads({ exists: false });
 
     await expect(
       acceptHouseholdInviteHandler(
@@ -427,7 +492,7 @@ describe("invite handlers", () => {
       empty: false,
       docs: [inviteDoc]
     });
-    tx.get.mockResolvedValue({
+    mockTxReads({
       exists: true,
       data: () => ({ role: "MEMBER", expiresAt: { toDate: () => new Date(Date.now() - 1000) } }),
       get: (field: string) => (field === "createdBy" ? "admin-1" : undefined)
