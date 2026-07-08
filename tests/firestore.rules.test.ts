@@ -13,6 +13,7 @@ import {
   getDoc,
   getDocs,
   query,
+  serverTimestamp,
   setDoc,
   updateDoc,
   where,
@@ -204,6 +205,24 @@ describe("firestore rules", () => {
       role: "OWNER",
       createdBy: "seed-user"
     });
+    batch.set(
+      doc(bootstrapDb, "users", "seed-user"),
+      {
+        email: "seed@example.com",
+        displayName: "Seed User",
+        currentHouseholdId: newHouseholdId,
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+    batch.set(doc(bootstrapDb, "households", newHouseholdId, "settings", "llm"), {
+      enabled: false,
+      providerType: "gemini",
+      model: "gemini-2.5-flash",
+      promptProfile: "default_inventory",
+      temperature: 0.2,
+      maxTokens: 400
+    });
     batch.set(doc(bootstrapDb, "households", newHouseholdId, "spaces", "space-1"), {
       householdId: newHouseholdId,
       name: "Living Room",
@@ -256,6 +275,54 @@ describe("firestore rules", () => {
         updatedAt: new Date()
       })
     );
+  });
+
+  it("restricts household metadata updates to admins", async () => {
+    await seedHousehold();
+    const memberDb = testEnv.authenticatedContext("member-1").firestore();
+    const adminDb = testEnv.authenticatedContext("admin-1").firestore();
+
+    await assertFails(updateDoc(doc(memberDb, "households", HOUSEHOLD_ID), { name: "Member Rename" }));
+    await assertSucceeds(updateDoc(doc(adminDb, "households", HOUSEHOLD_ID), { name: "Admin Rename" }));
+  });
+
+  it("denies members direct invite writes", async () => {
+    await seedHousehold();
+    const memberDb = testEnv.authenticatedContext("member-1").firestore();
+
+    await assertFails(
+      setDoc(doc(memberDb, "households", HOUSEHOLD_ID, "invites", "invite-2"), {
+        role: "MEMBER",
+        tokenHash: "def456",
+        createdBy: "member-1",
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 60_000)
+      })
+    );
+    await assertFails(updateDoc(doc(memberDb, "households", HOUSEHOLD_ID, "invites", "invite-1"), { role: "ADMIN" }));
+    await assertFails(deleteDoc(doc(memberDb, "households", HOUSEHOLD_ID, "invites", "invite-1")));
+  });
+
+  it("denies cross-uid user document access", async () => {
+    await seedHousehold();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "users", "other-uid"), {
+        currentHouseholdId: HOUSEHOLD_ID
+      });
+    });
+    const memberDb = testEnv.authenticatedContext("member-1").firestore();
+
+    await assertFails(getDoc(doc(memberDb, "users", "other-uid")));
+    await assertFails(setDoc(doc(memberDb, "users", "other-uid"), { currentHouseholdId: HOUSEHOLD_ID }, { merge: true }));
+  });
+
+  it("denies outsider reads for inventory documents", async () => {
+    await seedHousehold();
+    const outsiderDb = testEnv.authenticatedContext("outsider-1").firestore();
+
+    await assertFails(getDoc(doc(outsiderDb, "households", HOUSEHOLD_ID, "items", "item-1")));
+    await assertFails(getDoc(doc(outsiderDb, "households", HOUSEHOLD_ID, "packingLists", "list-1")));
   });
 
   it("denies cross-household area writes that smuggle a foreign householdId in the payload", async () => {
@@ -327,6 +394,15 @@ describe("firestore rules", () => {
         createdAt: new Date()
       })
     );
+    await assertFails(
+      setDoc(doc(memberDb, "households", HOUSEHOLD_ID, "visionJobs", "job-2"), {
+        createdBy: "someone-else",
+        providerType: "gemini",
+        model: "gemini-2.5-flash",
+        confidence: 0.7,
+        createdAt: new Date()
+      })
+    );
     await assertSucceeds(setDoc(doc(memberDb, "users", "member-1"), { currentHouseholdId: HOUSEHOLD_ID }, { merge: true }));
     await assertSucceeds(
       setDoc(doc(memberDb, "households", HOUSEHOLD_ID, "items", "item-2"), {
@@ -383,6 +459,17 @@ describe("firestore rules", () => {
         actorUid: "member-1",
         actorName: "Member One",
         summary: "Member moved Tripod to Office › Desk",
+        itemId: "item-1",
+        createdAt: new Date()
+      })
+    );
+    await assertFails(
+      setDoc(doc(memberDb, "households", HOUSEHOLD_ID, "activity", "activity-3"), {
+        householdId: HOUSEHOLD_ID,
+        type: "item_moved",
+        actorUid: "member-2",
+        actorName: "Member Two",
+        summary: "Member spoofed another actor",
         itemId: "item-1",
         createdAt: new Date()
       })

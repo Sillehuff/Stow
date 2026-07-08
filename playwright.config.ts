@@ -5,6 +5,7 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
   testDir: "./tests/smoke",
+  forbidOnly: !!process.env.CI,
   fullyParallel: false,
   workers: 1,
   timeout: 90_000,
