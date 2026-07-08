@@ -192,7 +192,10 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
     onOpenSpace: (spaceId) => nav.openSpace(spaceId),
     onOpenMenu: (spaceId) => setSpaceMenuId(spaceId),
     onReorder: (orderedIds) => {
-      void data.actions.reorderSpaces({ householdId, orderedIds });
+      void guardWrite(
+        data.actions.reorderSpaces({ householdId, orderedIds }),
+        "A reorder made offline couldn’t be saved"
+      );
     },
     onRename: (spaceId, nextName) => {
       void guardWrite(
