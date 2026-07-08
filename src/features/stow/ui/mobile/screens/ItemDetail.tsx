@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { HouseholdMember, ImageRef, Item, ItemStatus, SpaceWithAreas } from "@/types/domain";
 import {
@@ -215,6 +215,36 @@ export function ItemDetail(props: ItemDetailProps) {
     if (draftPath && draftPath !== originalEditPath) void bestEffortDeleteImage(draftImage);
   }
 
+  // Leaving mid-edit via Back — or being unmounted by a remote deletion — must clean
+  // up a freshly uploaded replacement photo just like Cancel does, or the upload is
+  // orphaned in Storage. State is mirrored into a ref so the unmount closure sees
+  // current values.
+  const unsavedDraftRef = useRef<{ image: ImageRef | null; originalPath?: string; armed: boolean }>({
+    image: null,
+    armed: false
+  });
+  unsavedDraftRef.current = {
+    image: draftImage,
+    originalPath: originalEditPath,
+    armed: mode === "edit" && photoDirty && !savingEdit
+  };
+
+  useEffect(
+    () => () => {
+      const { image, originalPath, armed } = unsavedDraftRef.current;
+      if (armed && image?.storagePath && image.storagePath !== originalPath) void bestEffortDeleteImage(image);
+    },
+    []
+  );
+
+  function leaveViaBack() {
+    if (mode === "edit") {
+      cleanupUnsavedDraftImage();
+      unsavedDraftRef.current.armed = false;
+    }
+    onBack();
+  }
+
   function cancelEdit() {
     cleanupUnsavedDraftImage();
     setPhotoDirty(false);
@@ -358,7 +388,7 @@ export function ItemDetail(props: ItemDetailProps) {
             background: hasImage ? "linear-gradient(to bottom, rgba(0,0,0,0.45), transparent)" : "transparent"
           }}
         >
-          <IconButton label="Back" onClick={onBack} hasImage={hasImage}>
+          <IconButton label="Back" onClick={leaveViaBack} hasImage={hasImage}>
             <ChevronLeft size={18} strokeWidth={2.5} color={hasImage ? "#fff" : "var(--stow-ink)"} />
           </IconButton>
           {mode === "view" ? (
@@ -382,6 +412,7 @@ export function ItemDetail(props: ItemDetailProps) {
           position: "relative",
           zIndex: 10,
           padding: 24,
+          paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))",
           background: "var(--stow-surface)",
           boxShadow: "0 -8px 30px rgba(0,0,0,0.1)",
           overflowY: "auto",
@@ -398,6 +429,7 @@ export function ItemDetail(props: ItemDetailProps) {
                 <button
                   key={tag}
                   type="button"
+                  aria-label={`Remove tag ${tag}`}
                   onClick={() => onToggleTag(tag)}
                   style={{ ...chipBase, background: "var(--stow-accent)", color: "#fff", border: "none" }}
                 >
@@ -415,6 +447,7 @@ export function ItemDetail(props: ItemDetailProps) {
                 <button
                   key={tag}
                   type="button"
+                  aria-label={`Add tag ${tag}`}
                   onClick={() => onToggleTag(tag)}
                   style={{
                     ...chipBase,
@@ -439,13 +472,16 @@ export function ItemDetail(props: ItemDetailProps) {
                   if (event.key === "Enter") createTag();
                 }}
                 placeholder="New tag..."
+                aria-label="New tag name"
                 style={{
                   flex: 1,
                   minWidth: 0,
                   boxSizing: "border-box",
                   borderRadius: "var(--stow-radius-input)",
                   padding: "10px 16px",
-                  fontSize: 14,
+                  // ≥16px: anything smaller triggers iOS Safari's focus auto-zoom,
+                  // which crops the fixed app shell.
+                  fontSize: 16,
                   fontWeight: 500,
                   outline: "none",
                   border: "1.5px solid var(--stow-border)",
@@ -611,7 +647,8 @@ export function ItemDetail(props: ItemDetailProps) {
                     fontWeight: 900,
                     color: "var(--stow-ink)",
                     letterSpacing: 0,
-                    fontFamily: "var(--stow-display)"
+                    fontFamily: "var(--stow-display)",
+                    overflowWrap: "anywhere"
                   }}
                 >
                   {item.name}
@@ -805,7 +842,7 @@ export function ItemDetail(props: ItemDetailProps) {
                 }}
               >
                 <FieldLabel>Notes</FieldLabel>
-                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--stow-ink-soft)" }}>{item.notes}</p>
+                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--stow-ink-soft)", overflowWrap: "anywhere" }}>{item.notes}</p>
               </div>
             ) : null}
 

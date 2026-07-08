@@ -659,8 +659,13 @@ export const inventoryRepository = {
       vision?: Item["vision"] | null;
     };
   }) {
+    // Strip undefined-valued keys: updateDoc throws on any undefined field (the
+    // client sets no ignoreUndefinedProperties), and callers building patches from
+    // optional inputs have shipped exactly that crash before. "Clear this field"
+    // must be expressed as null, never undefined.
+    const patch = Object.fromEntries(Object.entries(input.patch).filter(([, value]) => value !== undefined));
     await updateDoc(doc(requireDb(), householdPaths.item(input.householdId, input.itemId)), {
-      ...input.patch,
+      ...patch,
       updatedAt: serverTimestamp(),
       updatedBy: input.userId
     });

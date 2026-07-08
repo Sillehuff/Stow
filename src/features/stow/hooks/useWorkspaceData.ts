@@ -53,7 +53,10 @@ export type WorkspaceActions = {
 };
 
 type WorkspaceErrorSource = "household" | "spaces" | "areas" | "items" | "itemDrafts" | "members" | "invites" | "llmConfig" | "packingLists" | "activity";
-type WorkspaceErrorsBySource = Record<WorkspaceErrorSource, string | null>;
+// Keep the Firestore error code (e.g. "permission-denied"): the UI distinguishes
+// "removed from this household" from ordinary connectivity failures.
+export type WorkspaceError = { code?: string; message: string };
+type WorkspaceErrorsBySource = Record<WorkspaceErrorSource, WorkspaceError | null>;
 
 function emptyErrors(): WorkspaceErrorsBySource {
   return {
@@ -84,8 +87,17 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
   const [llmConfigMeta, setLlmConfigMeta] = useState({ fromCache: true, hasPendingWrites: false });
   const [errorsBySource, setErrorsBySource] = useState<WorkspaceErrorsBySource>(emptyErrors());
 
-  const setSourceError = (source: WorkspaceErrorSource, message: string | null) => {
-    setErrorsBySource((prev) => (prev[source] === message ? prev : { ...prev, [source]: message }));
+  const setSourceError = (source: WorkspaceErrorSource, error: Error | null) => {
+    const maybeCode = error ? (error as { code?: unknown }).code : undefined;
+    const next: WorkspaceError | null = error
+      ? { code: typeof maybeCode === "string" ? maybeCode : undefined, message: error.message }
+      : null;
+    setErrorsBySource((prev) => {
+      const current = prev[source];
+      if (current === next) return prev;
+      if (current && next && current.code === next.code && current.message === next.message) return prev;
+      return { ...prev, [source]: next };
+    });
   };
 
   useEffect(() => {
@@ -111,7 +123,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setHousehold(nextHousehold);
         setSourceError("household", null);
       },
-      (e) => setSourceError("household", e.message)
+      (e) => setSourceError("household", e)
     );
     return () => unsub();
   }, [householdId]);
@@ -124,7 +136,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setItemDraftsState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
         setSourceError("itemDrafts", null);
       },
-      (e) => setSourceError("itemDrafts", e.message)
+      (e) => setSourceError("itemDrafts", e)
     );
     return () => unsub();
   }, [householdId]);
@@ -137,7 +149,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setSpacesState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
         setSourceError("spaces", null);
       },
-      (e) => setSourceError("spaces", e.message)
+      (e) => setSourceError("spaces", e)
     );
     return () => unsub();
   }, [householdId]);
@@ -150,7 +162,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setAreasState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
         setSourceError("areas", null);
       },
-      (e) => setSourceError("areas", e.message)
+      (e) => setSourceError("areas", e)
     );
     return () => unsub();
   }, [householdId]);
@@ -163,7 +175,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setItemsState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
         setSourceError("items", null);
       },
-      (e) => setSourceError("items", e.message)
+      (e) => setSourceError("items", e)
     );
     return () => unsub();
   }, [householdId]);
@@ -176,7 +188,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setMembersState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
         setSourceError("members", null);
       },
-      (e) => setSourceError("members", e.message)
+      (e) => setSourceError("members", e)
     );
     return () => unsub();
   }, [householdId]);
@@ -199,7 +211,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setInvitesState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
         setSourceError("invites", null);
       },
-      (e) => setSourceError("invites", e.message)
+      (e) => setSourceError("invites", e)
     );
     return () => unsub();
   }, [canManageHouseholdSettings, householdId]);
@@ -212,7 +224,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setPackingListsState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
         setSourceError("packingLists", null);
       },
-      (e) => setSourceError("packingLists", e.message)
+      (e) => setSourceError("packingLists", e)
     );
     return () => unsub();
   }, [householdId]);
@@ -226,7 +238,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setActivityState({ items: state.data, fromCache: state.fromCache, hasPendingWrites: state.hasPendingWrites });
         setSourceError("activity", null);
       },
-      (e) => setSourceError("activity", e.message)
+      (e) => setSourceError("activity", e)
     );
     return () => unsub();
   }, [householdId]);
@@ -245,7 +257,7 @@ export function useWorkspaceData(householdId: string | null, user: User | null) 
         setLlmConfigMeta(meta);
         setSourceError("llmConfig", null);
       },
-      (e) => setSourceError("llmConfig", e.message)
+      (e) => setSourceError("llmConfig", e)
     );
     return () => unsub();
   }, [canManageHouseholdSettings, householdId]);

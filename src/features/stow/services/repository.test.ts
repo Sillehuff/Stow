@@ -111,3 +111,25 @@ describe("createItemsBatch", () => {
     expect(commit).not.toHaveBeenCalled();
   });
 });
+
+describe("updateItem", () => {
+  it("never passes undefined-valued fields to updateDoc", async () => {
+    const { updateDoc } = await import("firebase/firestore");
+
+    await inventoryRepository.updateItem({
+      householdId: "h1",
+      itemId: "i1",
+      userId: "u1",
+      // A caller that builds its patch from optional inputs can produce undefined
+      // values; updateDoc throws on any of them (no ignoreUndefinedProperties).
+      patch: { name: "Passport", value: undefined, notes: undefined, image: null }
+    });
+
+    expect(updateDoc).toHaveBeenCalledTimes(1);
+    const payload = (updateDoc as ReturnType<typeof vi.fn>).mock.calls[0][1] as Record<string, unknown>;
+    expect(Object.values(payload)).not.toContain(undefined);
+    expect(payload).toMatchObject({ name: "Passport", image: null, updatedBy: "u1" });
+    expect("value" in payload).toBe(false);
+    expect("notes" in payload).toBe(false);
+  });
+});
