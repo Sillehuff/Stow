@@ -115,6 +115,30 @@ describe("shared schemas", () => {
     ).not.toThrow();
   });
 
+  it("accepts null baseUrl and normalizes it to undefined", () => {
+    const parsed = llmConfigSchema.parse({
+      enabled: true,
+      providerType: "gemini",
+      model: "gemini-2.5-flash",
+      baseUrl: null,
+      promptProfile: "default_inventory"
+    });
+
+    expect(parsed.baseUrl).toBeUndefined();
+  });
+
+  it("rejects non-https and private-host baseUrl values in llm config", () => {
+    const baseConfig = {
+      enabled: true,
+      providerType: "openai_compatible" as const,
+      model: "gpt-4.1-mini",
+      promptProfile: "default_inventory" as const
+    };
+
+    expect(llmConfigSchema.safeParse({ ...baseConfig, baseUrl: "http://api.openai.com/v1" }).success).toBe(false);
+    expect(llmConfigSchema.safeParse({ ...baseConfig, baseUrl: "https://127.0.0.1/v1" }).success).toBe(false);
+  });
+
   it("accepts a save-config input without validation/audit fields", () => {
     const result = saveLlmConfigInputSchema.safeParse({
       householdId: "h1",

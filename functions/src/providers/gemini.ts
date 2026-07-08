@@ -1,8 +1,45 @@
-import { extractJsonObject, normalizeSuggestion, providerFetch, requireOk } from "./common.js";
+import { HttpsError } from "firebase-functions/v2/https";
+import { extractJsonObject, normalizeSuggestion, parseProviderJson, providerFetch, requireOk } from "./common.js";
 import { shelfDetectionSchema, type ShelfDetection } from "../shared/schemas.js";
 import type { ProviderContext, ShelfDetectContext, VisionProviderAdapter } from "./types.js";
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
+
+type GeminiGenerateContentResponse = {
+  promptFeedback?: { blockReason?: string };
+  candidates?: Array<{
+    finishReason?: string;
+    content?: { parts?: Array<{ text?: string }> };
+  }>;
+};
+
+function parseGeminiResponse(text: string): GeminiGenerateContentResponse {
+  return parseProviderJson(text) as GeminiGenerateContentResponse;
+}
+
+function throwIfBlocked(body: GeminiGenerateContentResponse) {
+  const blockReason = body.promptFeedback?.blockReason;
+  if (blockReason) {
+    throw new HttpsError("internal", `Provider blocked the request (${blockReason})`);
+  }
+}
+
+function candidateFinishReason(body: GeminiGenerateContentResponse): string | undefined {
+  return body.candidates?.[0]?.finishReason;
+}
+
+function candidateText(body: GeminiGenerateContentResponse): string {
+  return body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("\n") ?? "";
+}
+
+function isIncompleteFinish(finishReason: string | undefined): finishReason is string {
+  return Boolean(finishReason && finishReason !== "STOP");
+}
+
+function incompleteResponseError(finishReason: string): HttpsError {
+  const suffix = finishReason === "MAX_TOKENS" ? " — raise the max tokens setting" : "";
+  return new HttpsError("internal", `Provider response incomplete (${finishReason})${suffix}`);
+}
 
 function extractDetectionArray(text: string): unknown[] {
   const trimmed = text
@@ -129,10 +166,17 @@ export const geminiAdapter: VisionProviderAdapter = {
       })
     });
     requireOk(response, "Gemini");
-    const body = (await response.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("\n") ?? "";
+    const body = parseGeminiResponse(response.text);
+    throwIfBlocked(body);
+    const finishReason = candidateFinishReason(body);
+    const text = candidateText(body);
+    if (isIncompleteFinish(finishReason)) {
+      try {
+        return normalizeSuggestion(extractJsonObject(text));
+      } catch {
+        throw incompleteResponseError(finishReason);
+      }
+    }
     return normalizeSuggestion(extractJsonObject(text));
   },
 
@@ -151,7 +195,7 @@ export const geminiAdapter: VisionProviderAdapter = {
       body: JSON.stringify({
         generationConfig: {
           temperature: config.temperature ?? 0.1,
-          maxOutputTokens: config.maxTokens ?? 1024
+          maxOutputTokens: Math.max(config.maxTokens ?? 1024, 1024)
         },
         contents: [
           {
@@ -170,12 +214,24 @@ export const geminiAdapter: VisionProviderAdapter = {
       })
     });
     requireOk(response, "Gemini");
-    const body = (await response.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("\n") ?? "";
-    return extractDetectionArray(text)
-      .map(mapDetection)
-      .filter((detection): detection is ShelfDetection => detection !== null);
+    const body = parseGeminiResponse(response.text);
+    throwIfBlocked(body);
+    const finishReason = candidateFinishReason(body);
+    const text = candidateText(body);
+    const parseDetections = () =>
+      extractDetectionArray(text)
+        .map(mapDetection)
+        .filter((detection): detection is ShelfDetection => detection !== null);
+
+    if (isIncompleteFinish(finishReason)) {
+      try {
+        const detections = parseDetections();
+        if (detections.length > 0) return detections;
+      } catch {
+        // Surface non-STOP unusable output as provider truncation/blockage rather than malformed JSON.
+      }
+      throw incompleteResponseError(finishReason);
+    }
+    return parseDetections();
   }
 };

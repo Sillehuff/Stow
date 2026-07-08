@@ -3,25 +3,56 @@ import { visionSuggestionSchema, type VisionSuggestion } from "../shared/schemas
 
 const PROVIDER_TIMEOUT_MS = 30_000;
 
+export type ProviderFetchResult = {
+  status: number;
+  ok: boolean;
+  headers: Headers;
+  text: string;
+};
+
 /** fetch with a hard timeout — a hung provider must not pin the function until the platform kills it. */
 export async function providerFetch(
   url: string,
   init: RequestInit,
   timeoutMs = PROVIDER_TIMEOUT_MS
-): Promise<Response> {
+): Promise<ProviderFetchResult> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new HttpsError("deadline-exceeded", "AI provider request timed out"));
+    }, timeoutMs);
+  });
   try {
     // redirect: "error" prevents a provider host from redirecting the request
     // (and the Bearer key) to an internal address — SSRF defense-in-depth.
-    return await fetch(url, { redirect: "error", ...init, signal: controller.signal });
+    const response = await Promise.race([
+      fetch(url, { redirect: "error", ...init, signal: controller.signal }),
+      timeout
+    ]);
+    const text = await Promise.race([response.text(), timeout]);
+    return {
+      status: response.status,
+      ok: response.ok,
+      headers: response.headers,
+      text
+    };
   } catch (error) {
     if (controller.signal.aborted) {
       throw new HttpsError("deadline-exceeded", "AI provider request timed out");
     }
     throw error;
   } finally {
-    clearTimeout(timer);
+    clearTimeout(timer!);
+  }
+}
+
+export function parseProviderJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new HttpsError("internal", "Provider response was not valid JSON");
   }
 }
 
@@ -68,11 +99,11 @@ export function normalizeSuggestion(candidate: unknown): VisionSuggestion {
   return parsed.data;
 }
 
-export function requireOk(response: Response, provider: string) {
+export function requireOk(response: ProviderFetchResult, provider: string) {
   if (!response.ok) {
     throw new HttpsError(
       "internal",
-      `${provider} API request failed (${response.status}): ${response.statusText}`
+      `${provider} API request failed (${response.status})`
     );
   }
 }
