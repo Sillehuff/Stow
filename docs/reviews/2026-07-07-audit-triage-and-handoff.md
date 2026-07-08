@@ -1,6 +1,10 @@
 # Stow polish & hardening — 2026-07-07 audit triage + handoff
 
-**Status: PAUSED mid-program at a clean stopping point.** A Claude session limit
+**Status: RESUMED and largely EXECUTED (2026-07-07 evening session).** See the
+"Resume-session progress" section at the bottom for what landed, what's in flight,
+and what remains. The original handoff below is kept for the finding details.
+
+**Original status: PAUSED mid-program at a clean stopping point.** A Claude session limit
 (resets 1pm America/New_York) and an intermittently-unavailable safety classifier
 truncated the run. This document preserves everything so a fresh session — or local
 Codex (GPT-5.5) workers via the `delegate` skill — can resume with zero context.
@@ -258,3 +262,79 @@ The workflow result JSON is at `tasks/w2ti99y9b.output`.
 - Independent verification of the 47 findings → `codex-adversarial-review` is a good
   second opinion, but a fresh Claude adversarial fan-out (as originally designed) is the
   primary; run whichever is available first, reconcile.
+
+---
+
+## Resume-session progress (2026-07-07, ~9:20pm–onward)
+
+### Verification (COMPLETE)
+Five Codex (GPT-5.5) verifiers, read-only sandbox, one per domain batch, adversarially
+verified all 45 open findings against the code: **44 CONFIRMED, 1 REJECTED**.
+- REJECTED: "saveHouseholdLlmConfig merge:true makes baseUrl un-clearable" — the
+  callable serializer turns a cleared (undefined) baseUrl into null, which the strict
+  zod schema REJECTS, so the described flow fails earlier. That rejection exposed a
+  worse confirmed bug: saving Gemini/Anthropic AI settings (baseUrl: null) failed
+  validation outright. Hand-confirmed; fixed in the functions batch.
+- Verifier reports: session scratchpad `orders/result-{backend,infra,frontend1,2,3}.md`
+  (worker transcripts alongside as .err). Finding objects: scratchpad
+  `stow-47-findings.json` (recovered from the prior session's dedup agent).
+
+### Landed on `polish/2026-07-07-audit-triage` (all committed; suite green at each step)
+- 379c5a2 — P0: acceptHouseholdInvite can no longer demote an existing member/owner
+  (tx membership read + reject; invite stays unconsumed; 2 new functions tests).
+- 70810c7 — Functions batch (Codex X1, reviewed): Gemini blockReason/finishReason
+  surfaced + shelf 1024-token floor; providerFetch body read inside the timeout
+  (returns text; adapters parse); validate bypasses the per-instance config cache;
+  baseUrl nullish end-to-end + FieldValue.delete() on clear + openai_compatible
+  requires baseUrl at save. 85 functions tests pass.
+- b7464bc — Infra batch (Codex X4, reviewed): functions predeploy build hook (+build
+  before emulator serve); hosting cache headers (** must-revalidate, /assets/**
+  immutable); SW CacheFirst for Storage images + CDN font stylesheets/binaries +
+  fontshare preconnect; merge-workflow concurrency + permissions: contents:read;
+  playwright forbidOnly; firestore.rules activity create binds actorUid to caller;
+  rules tests: bootstrap-mirror (users + settings/llm writes) + deny paths (forged
+  visionJobs.createdBy/activity actorUid, invite writes, cross-uid users, outsider
+  reads, non-admin household update). Rules suite run OUTSIDE the sandbox: green.
+- f037790 — Claude C1: offline-hang class fixed by wrapping every awaited
+  edit/delete/status/move/loan/space/settings write in the completeWrite guard at the
+  StowMobileApp boundary (EditSpaceSheet untouched — its actions are wrapped where
+  they're passed in; createArea pre-generates the area id so its Promise<string>
+  contract survives offline). Offline delete latch resolved. AI-scan ticket guard
+  (stale results discarded + photo deleted). Workspace listener errors surfaced
+  (banner; permission-denied ⇒ "no longer have access" + sign out; error codes now
+  kept in useWorkspaceData). ItemDetail: Back/unmount cleans up unsaved replacement
+  photo; overflow-wrap; tag a11y labels; 16px tag input; bottom safe-area.
+  repository.updateItem strips undefined patch keys (+ test).
+- 0eea9b4 — Claude C2: QuickCapture close-mid-upload no longer orphans the _shelf
+  frame or pays for vision; commit validates destination against LIVE spaces (dead
+  destination re-resolves; renamed area files under current name). Photo downscale
+  (1600px JPEG q0.82, EXIF-baked) at the uploadFileToStorage choke point — all
+  capture paths covered; Storage uploads fail fast offline. PhotoField camera overlay
+  portals to body as position:fixed. Dead itemDrafts listener removed.
+- 5432b9f — Claude perf slice 1: incremental docChanges() mapping for items /
+  packingLists / activity subscriptions (unchanged objects keep identity).
+
+### In flight (dispatch scripts armed — ChatGPT quota exhausted at ~9:45pm, resets 11:17pm)
+- X2 (SettingsScreen): invite regen preserves invitedEmail + shows it; expired
+  invites labeled; AI toggle role=switch; 16px selects/inputs + labels; baseUrl key
+  omitted client-side. Order: scratchpad `orders/fix-settings.md`; auto-dispatches
+  23:18:30.
+- X3 (components): Field labels + 16px floor; Toast persistent live region + wrap;
+  ActionSheet dialog semantics + safe-area; Sheet/EditSpaceSheet safe-area; named
+  delete-area buttons; keyboard reorder (areas buttons + spaces menu entries);
+  SpacesList keyboard rows; lazy imgs; ScanOverlay clamped geometry; stowScan
+  transform keyframes; AA contrast strong-variant tokens; PackingScreen picker gated
+  on open. Order: `orders/fix-components.md`; auto-dispatches after X2.
+- X5 (race tests): tests/firestore.races.test.ts per the three invariants below.
+  Order: `orders/fix-racetests.md`; auto-dispatches 23:19.
+
+### Still to do after those land
+1. Review X2/X3/X5 diffs (Claude review gate), run full checks, commit.
+2. React.memo + stable-callbacks sweep (perf slice 2) — AFTER X3 (same files).
+3. UI live-preview verification pass (emulators + seeded household + dev server;
+   prior session's sign-in recipe near the top of this doc).
+4. Full verification: typecheck, npm test, functions test, test:rules, build.
+5. Independent review of the final branch diff (Ellis's standing rule) — a fresh
+   agent or codex-adversarial-review over `git diff d59cf2a..HEAD`.
+6. Final dated report in docs/reviews/; update Atrium wiki (wiki/projects/stow.md),
+   journal, HOME.md. Merge to main only after the independent review.
