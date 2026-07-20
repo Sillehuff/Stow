@@ -5,6 +5,7 @@ import type { ImageRef } from "@/types/domain";
 import type { VisionSuggestion } from "@/types/llm";
 import { inventoryRepository } from "@/features/stow/services/repository";
 import { CornerBrackets } from "@/features/stow/ui/mobile/capture/CornerBrackets";
+import { visionErrorMessage } from "@/features/stow/ui/mobile/capture/visionErrors";
 import { useCamera } from "@/features/stow/ui/mobile/hooks/useCamera";
 import { visionCategorizeItemImage } from "@/lib/firebase/functions";
 import { storagePaths } from "@/lib/firebase/paths";
@@ -20,6 +21,9 @@ export interface CaptureFirstProps {
     image?: ImageRef;
     aiFilled: boolean;
     suggestion?: VisionSuggestion;
+    // Set when an AI identify was attempted and failed — the details sheet shows
+    // why instead of silently presenting an unlabeled photo.
+    aiError?: string;
     spaceId?: string | null;
     areaId?: string | null;
   }) => void;
@@ -123,14 +127,14 @@ export function CaptureFirst({
     reset();
   }
 
-  async function handOff(image: ImageRef, suggestion?: VisionSuggestion) {
+  async function handOff(image: ImageRef, suggestion?: VisionSuggestion, aiError?: string) {
     if (!mountedRef.current || cancelledRef.current) {
       await bestEffortDeleteImage(image);
       return;
     }
     stop();
     clearFrozenPhoto();
-    onOpenDetails({ image, aiFilled: Boolean(suggestion), suggestion, spaceId, areaId });
+    onOpenDetails({ image, aiFilled: Boolean(suggestion), suggestion, aiError, spaceId, areaId });
   }
 
   async function handleBlob(blob: Blob) {
@@ -164,17 +168,20 @@ export function CaptureFirst({
 
       setPhase("identifying");
       try {
+        // Omit unset context keys entirely — the callable encoder turns an
+        // `undefined` property into `null`, which the backend schema rejects.
         const response = await visionCategorizeItemImage({
           householdId,
           imageRef: { storagePath: image.storagePath },
           context: {
-            spaceId: spaceId ?? undefined,
-            areaId: areaId ?? undefined
+            ...(spaceId ? { spaceId } : {}),
+            ...(areaId ? { areaId } : {})
           }
         });
         await handOff(image, response.suggestion);
-      } catch {
-        await handOff(image);
+      } catch (error) {
+        // The photo is still good — hand it off, but say why AI details are missing.
+        await handOff(image, undefined, visionErrorMessage(error, "Couldn't read the photo — fill the details yourself."));
       }
     } finally {
       processingRef.current = false;

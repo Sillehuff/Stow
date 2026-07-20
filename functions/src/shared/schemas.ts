@@ -66,6 +66,12 @@ export function isPublicHttpsUrl(raw: string): boolean {
 const idString = z.string().min(1).max(128);
 const shortString = z.string().max(300);
 
+// The Firebase callable client encodes `undefined` object values as `null`, so an
+// optional field a client left unset arrives as null. Accept both and normalize to
+// undefined — rejecting null here broke every scan launched without a space selected.
+const optionalId = idString.nullish().transform((value) => value ?? undefined);
+const optionalShortString = shortString.nullish().transform((value) => value ?? undefined);
+
 export const roleSchema = z.enum(["OWNER", "ADMIN", "MEMBER"]);
 export type Role = z.infer<typeof roleSchema>;
 
@@ -180,12 +186,13 @@ export const visionCategorizeInputSchema = z
     imageRef: visionImageRefSchema,
     context: z
       .object({
-        spaceId: idString.optional(),
-        areaId: idString.optional(),
-        areaName: shortString.optional()
+        spaceId: optionalId,
+        areaId: optionalId,
+        areaName: optionalShortString
       })
       .strict()
-      .optional()
+      .nullish()
+      .transform((value) => value ?? undefined)
   })
   .strict();
 
@@ -202,9 +209,9 @@ export const visionDetectShelfInputSchema = z
   .object({
     householdId: idString,
     imageRef: visionImageRefSchema,
-    spaceId: idString.optional(),
-    areaId: idString.optional(),
-    areaName: shortString.optional()
+    spaceId: optionalId,
+    areaId: optionalId,
+    areaName: optionalShortString
   })
   .strict();
 export type VisionDetectShelfInput = z.infer<typeof visionDetectShelfInputSchema>;

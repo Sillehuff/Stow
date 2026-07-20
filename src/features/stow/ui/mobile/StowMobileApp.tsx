@@ -18,6 +18,7 @@ import { AddSpaceSheet } from "@/features/stow/ui/mobile/add/AddSpaceSheet";
 import { Button } from "@/features/stow/ui/mobile/components/Button";
 import { ActivityScreen } from "@/features/stow/ui/mobile/screens/ActivityScreen";
 import { CaptureFirst } from "@/features/stow/ui/mobile/capture/CaptureFirst";
+import { visionErrorMessage } from "@/features/stow/ui/mobile/capture/visionErrors";
 import { PhotoSource } from "@/features/stow/ui/mobile/capture/PhotoSource";
 import { QuickCapture } from "@/features/stow/ui/mobile/capture/QuickCapture";
 import { ScanOverlay } from "@/features/stow/ui/mobile/capture/ScanOverlay";
@@ -269,23 +270,27 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
     }
 
     let suggestion: VisionSuggestion | undefined;
+    let aiError: string | undefined;
     if (image.storagePath) {
       try {
+        // Omit unset context keys entirely — the callable encoder turns an
+        // `undefined` property into `null`, which the backend schema rejects.
         const response = await visionCategorizeItemImage({
           householdId,
           imageRef: { storagePath: image.storagePath },
           context: {
-            spaceId: nav.selectedSpaceId ?? undefined,
-            areaId: nav.selectedAreaId ?? undefined
+            ...(nav.selectedSpaceId ? { spaceId: nav.selectedSpaceId } : {}),
+            ...(nav.selectedAreaId ? { areaId: nav.selectedAreaId } : {})
           }
         });
         suggestion = response.suggestion;
-      } catch {
+      } catch (error) {
         if (scanResultStale(ticket)) {
           discardScanResult(image);
           return;
         }
-        flash("Couldn't read the photo — add details yourself.");
+        // Shown inside the Add Item sheet, where the user is already looking.
+        aiError = visionErrorMessage(error, "Couldn't read the photo — add details yourself.");
       }
     }
 
@@ -297,6 +302,7 @@ export function StowMobileApp({ householdId, user, onSignOut, online, basePath =
       image,
       aiFilled: Boolean(suggestion),
       suggestion,
+      aiError,
       spaceId: nav.selectedSpaceId,
       areaId: nav.selectedAreaId
     });

@@ -183,6 +183,33 @@ describe("shared schemas", () => {
     ).toThrow();
   });
 
+  it("accepts null for unset vision context fields (callable encoder sends undefined as null)", () => {
+    const parsed = visionCategorizeInputSchema.parse({
+      householdId: "h1",
+      imageRef: { storagePath: "households/h1/items/item-1/image.jpg" },
+      context: { spaceId: null, areaId: null, areaName: null }
+    });
+    expect(parsed.context).toEqual({ spaceId: undefined, areaId: undefined, areaName: undefined });
+
+    const nullContext = visionCategorizeInputSchema.parse({
+      householdId: "h1",
+      imageRef: { storagePath: "households/h1/items/item-1/image.jpg" },
+      context: null
+    });
+    expect(nullContext.context).toBeUndefined();
+
+    const shelf = visionDetectShelfInputSchema.parse({
+      householdId: "h1",
+      imageRef: { storagePath: "households/h1/items/item-1/image.jpg" },
+      spaceId: null,
+      areaId: null,
+      areaName: null
+    });
+    expect(shelf.spaceId).toBeUndefined();
+    expect(shelf.areaId).toBeUndefined();
+    expect(shelf.areaName).toBeUndefined();
+  });
+
   it("validates normalized suggestions", () => {
     expect(() =>
       visionSuggestionSchema.parse({

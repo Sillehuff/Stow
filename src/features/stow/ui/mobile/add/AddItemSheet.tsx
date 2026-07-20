@@ -5,6 +5,7 @@ import type { ImageRef, ItemEntryMode, SpaceWithAreas } from "@/types/domain";
 import type { VisionSuggestion } from "@/types/llm";
 import { inventoryRepository } from "@/features/stow/services/repository";
 import { applyVisionSuggestion, type ItemDraftFields } from "@/features/stow/ui/mobile/capture/applyVisionSuggestion";
+import { visionErrorMessage } from "@/features/stow/ui/mobile/capture/visionErrors";
 import { ChevronDown, Plus, Sparkles } from "@/features/stow/ui/mobile/theme/icons";
 import { Button } from "@/features/stow/ui/mobile/components/Button";
 import { Field } from "@/features/stow/ui/mobile/components/Field";
@@ -39,6 +40,9 @@ export interface AddItemInitial {
   image?: ImageRef;
   aiFilled?: boolean;
   suggestion?: VisionSuggestion;
+  // Why the scan that produced this sheet came back without AI details — shown
+  // where the user is looking instead of being silently dropped.
+  aiError?: string;
   spaceId?: string | null;
   areaId?: string | null;
 }
@@ -160,7 +164,7 @@ export function AddItemSheet(props: AddItemSheetProps) {
     setAiFilled(Boolean(initial?.aiFilled || initial?.suggestion));
     setScanning(false);
     setSubmitting(false);
-    setScanError(null);
+    setScanError(initial?.aiError ?? null);
   }, [householdId, initial, open, seededLocation.areaId, seededLocation.spaceId]);
 
   useEffect(() => {
@@ -198,13 +202,15 @@ export function AddItemSheet(props: AddItemSheetProps) {
     setScanning(true);
     setScanError(null);
     try {
+      // Omit unset context keys entirely — the callable encoder turns an
+      // `undefined` property into `null`, which the backend schema rejects.
       const response = await visionCategorizeItemImage({
         householdId,
         imageRef: { storagePath: image.storagePath },
         context: {
-          spaceId: selectedSpace?.id,
-          areaId: selectedArea?.id,
-          areaName: selectedArea?.name
+          ...(selectedSpace?.id ? { spaceId: selectedSpace.id } : {}),
+          ...(selectedArea?.id ? { areaId: selectedArea.id } : {}),
+          ...(selectedArea?.name ? { areaName: selectedArea.name } : {})
         }
       });
       if (scanRequestIdRef.current !== requestId) return;
@@ -219,8 +225,10 @@ export function AddItemSheet(props: AddItemSheetProps) {
       setTags(next.tags.join(", "));
       setNotes(next.notes);
       setAiFilled(true);
-    } catch {
-      if (scanRequestIdRef.current === requestId) setScanError("Couldn't read the photo. Try again or fill the details yourself.");
+    } catch (error) {
+      if (scanRequestIdRef.current === requestId) {
+        setScanError(visionErrorMessage(error, "Couldn't read the photo. Try again or fill the details yourself."));
+      }
     } finally {
       if (scanRequestIdRef.current === requestId) setScanning(false);
     }
@@ -354,11 +362,6 @@ export function AddItemSheet(props: AddItemSheetProps) {
             <Button variant="neutral" disabled={busy} onClick={runAiScan} style={{ marginTop: 10, padding: "12px 0" }}>
               <Sparkles size={15} color="var(--stow-accent)" /> {scanning ? "Reading photo..." : "Scan with AI"}
             </Button>
-          ) : null}
-          {scanning ? (
-            <p style={{ margin: "8px 2px 0", fontSize: 12.5, fontWeight: 600, color: "var(--stow-ink-muted)" }}>
-              Reading photo...
-            </p>
           ) : null}
           {scanError ? (
             <p style={{ margin: "8px 2px 0", fontSize: 12.5, fontWeight: 600, color: "var(--stow-danger)" }}>{scanError}</p>

@@ -728,12 +728,24 @@ export function ItemDetail(props: ItemDetailProps) {
                 >
                   Location
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 17, fontWeight: 800, color: "var(--stow-ink)" }}>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{spaceName}</span>
+                {/* The cell is ~200px wide, so typical names can't fit one 17px line.
+                    Wrap to a second line rather than ellipsizing — the location is the
+                    one thing this card exists to show. */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    columnGap: 6,
+                    rowGap: 1,
+                    fontSize: 15.5,
+                    fontWeight: 800,
+                    color: "var(--stow-ink)"
+                  }}
+                >
+                  <span style={{ overflowWrap: "anywhere" }}>{spaceName}</span>
                   <ChevronRight size={14} color="var(--stow-warm)" strokeWidth={2.4} style={{ flexShrink: 0 }} />
-                  <span style={{ color: "var(--stow-ink-soft)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {locationArea}
-                  </span>
+                  <span style={{ color: "var(--stow-ink-soft)", overflowWrap: "anywhere" }}>{locationArea}</span>
                 </div>
               </div>
               <ArrowRight size={16} color="var(--stow-accent)" style={{ flexShrink: 0, opacity: 0.6 }} />

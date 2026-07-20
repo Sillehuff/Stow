@@ -10,6 +10,7 @@ import {
   type CaptureDestination
 } from "@/features/stow/ui/mobile/capture/captureReducer";
 import { CornerBrackets } from "@/features/stow/ui/mobile/capture/CornerBrackets";
+import { visionErrorMessage } from "@/features/stow/ui/mobile/capture/visionErrors";
 import {
   AlertTriangle,
   ArrowRight,
@@ -111,7 +112,10 @@ function resolveInitialDest(spaces: SpaceWithAreas[], spaceId?: string, areaId?:
 }
 
 function shelfFileName(): string {
-  return `shelf-${Date.now()}.jpg`;
+  // All shelf frames share the household's `_shelf/` folder, so a timestamp alone
+  // can collide (two attempts in the same millisecond) — and the losing attempt's
+  // cleanup then deletes the winner's freshly-uploaded frame mid-scan.
+  return `shelf-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.jpg`;
 }
 
 async function defaultUploadFrame(householdId: string, blob: Blob): Promise<ImageRef> {
@@ -256,16 +260,20 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
         uploadedFrameRef.current = image;
         if (!image.storagePath) throw new Error("Uploaded frame has no storage path");
         const dest = destinationRef.current;
+        // Omit unset keys entirely — the callable encoder turns an `undefined`
+        // property into `null`, which the backend schema rejects.
         const response: VisionDetectShelfResponse = await detectShelfItems({
           householdId,
           imageRef: { storagePath: image.storagePath },
-          spaceId: dest.spaceId ?? undefined,
-          areaId: dest.areaId ?? undefined,
-          areaName: dest.areaNameSnapshot || undefined
+          ...(dest.spaceId ? { spaceId: dest.spaceId } : {}),
+          ...(dest.areaId ? { areaId: dest.areaId } : {}),
+          ...(dest.areaNameSnapshot ? { areaName: dest.areaNameSnapshot } : {})
         });
         if (!cancelled) dispatch({ type: "detected", detections: response.detections });
-      } catch {
-        if (!cancelled) setAnalyzeError("Shelf detection failed. Try again or close this capture.");
+      } catch (error) {
+        if (!cancelled) {
+          setAnalyzeError(visionErrorMessage(error, "Shelf detection failed. Try again or close this capture."));
+        }
       }
     }
 
@@ -478,7 +486,10 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
   }
 
   function renderFrozenFrame() {
-    const analyzing = state.phase === "analyzing";
+    // After a failed analyze the phase is still "analyzing", but the scanning
+    // affordances (sweep bar, "Analyzing frame", "Reading the shelf") must stop —
+    // an error card under a still-running scanner reads as a frozen app.
+    const analyzing = state.phase === "analyzing" && !analyzeError;
     return (
       <div
         role="dialog"
@@ -659,37 +670,39 @@ function QuickCaptureAttempt(props: QuickCaptureAllProps & { onRescan: () => voi
         ) : null}
 
         <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "0 22px 38px", zIndex: 5 }}>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "8px 15px",
-                borderRadius: 99,
-                background: "rgba(255,255,255,0.16)",
-                backdropFilter: "blur(14px)",
-                WebkitBackdropFilter: "blur(14px)",
-                color: "#fff",
-                fontSize: 13,
-                fontWeight: 800
-              }}
-            >
-              {analyzing ? (
-                <>
-                  <ScanLine size={14} color="var(--stow-accent)" /> Reading the shelf
-                </>
-              ) : (
-                <>
-                  <Check size={14} color="var(--stow-success)" strokeWidth={3} /> {state.detections.length} found
-                  <span style={{ width: 3, height: 3, borderRadius: 99, background: "rgba(255,255,255,0.5)" }} />
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#FFD9A6" }}>
-                    <AlertTriangle size={12} color="#FFD9A6" /> {lowCount} need a look
-                  </span>
-                </>
-              )}
+          {analyzeError ? null : (
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "8px 15px",
+                  borderRadius: 99,
+                  background: "rgba(255,255,255,0.16)",
+                  backdropFilter: "blur(14px)",
+                  WebkitBackdropFilter: "blur(14px)",
+                  color: "#fff",
+                  fontSize: 13,
+                  fontWeight: 800
+                }}
+              >
+                {analyzing ? (
+                  <>
+                    <ScanLine size={14} color="var(--stow-accent)" /> Reading the shelf
+                  </>
+                ) : (
+                  <>
+                    <Check size={14} color="var(--stow-success)" strokeWidth={3} /> {state.detections.length} found
+                    <span style={{ width: 3, height: 3, borderRadius: 99, background: "rgba(255,255,255,0.5)" }} />
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#FFD9A6" }}>
+                      <AlertTriangle size={12} color="#FFD9A6" /> {lowCount} need a look
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {analyzeError ? (
             <div
