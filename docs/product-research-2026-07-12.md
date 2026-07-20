@@ -740,18 +740,18 @@ Primary and official sources used for the market assessment:
 
 Key repository evidence for the current-product assessment:
 
-- [Approved location-first product thesis](</Users/ellishuff/Documents/Coding Projects/Stow/docs/superpowers/specs/2026-06-06-stow-mobile-redesign-design.md:12>)
-- [Current domain model: item location, status, loan, and packing](</Users/ellishuff/Documents/Coding Projects/Stow/src/types/domain.ts:44>)
-- [Persistent offline Firestore configuration](</Users/ellishuff/Documents/Coding Projects/Stow/src/lib/firebase/client.ts:23>)
-- [Retrieval-first Home and search behavior](</Users/ellishuff/Documents/Coding Projects/Stow/src/features/stow/ui/mobile/screens/HomeScreen.tsx:36>)
-- [Whole-shelf confidence-first review](</Users/ellishuff/Documents/Coding Projects/Stow/src/features/stow/ui/mobile/capture/QuickCapture.tsx:612>)
-- [Least-confident-first ordering and batch projection](</Users/ellishuff/Documents/Coding Projects/Stow/src/features/stow/ui/mobile/capture/captureReducer.ts:47>)
-- [QR generation and sharing](</Users/ellishuff/Documents/Coding Projects/Stow/src/features/stow/ui/mobile/spaces/SpaceQrSheet.tsx:40>)
-- [Lending and due-date model](</Users/ellishuff/Documents/Coding Projects/Stow/src/features/stow/ui/mobile/screens/LendingSheet.tsx:53>)
-- [Packing list implementation](</Users/ellishuff/Documents/Coding Projects/Stow/src/features/stow/ui/mobile/screens/PackingScreen.tsx:188>)
-- [Household roles, invites, AI controls, and export](</Users/ellishuff/Documents/Coding Projects/Stow/src/features/stow/ui/mobile/screens/SettingsScreen.tsx:546>)
-- [Provider abstraction](</Users/ellishuff/Documents/Coding Projects/Stow/functions/src/providers/registry.ts:8>)
-- [Vision security and server-side job handling](</Users/ellishuff/Documents/Coding Projects/Stow/functions/src/vision.ts:80>)
+- [Approved location-first product thesis](</Users/ellishuff/Coding Projects/Stow/docs/superpowers/specs/2026-06-06-stow-mobile-redesign-design.md:12>)
+- [Current domain model: item location, status, loan, and packing](</Users/ellishuff/Coding Projects/Stow/src/types/domain.ts:44>)
+- [Persistent offline Firestore configuration](</Users/ellishuff/Coding Projects/Stow/src/lib/firebase/client.ts:23>)
+- [Retrieval-first Home and search behavior](</Users/ellishuff/Coding Projects/Stow/src/features/stow/ui/mobile/screens/HomeScreen.tsx:36>)
+- [Whole-shelf confidence-first review](</Users/ellishuff/Coding Projects/Stow/src/features/stow/ui/mobile/capture/QuickCapture.tsx:612>)
+- [Least-confident-first ordering and batch projection](</Users/ellishuff/Coding Projects/Stow/src/features/stow/ui/mobile/capture/captureReducer.ts:47>)
+- [QR generation and sharing](</Users/ellishuff/Coding Projects/Stow/src/features/stow/ui/mobile/spaces/SpaceQrSheet.tsx:40>)
+- [Lending and due-date model](</Users/ellishuff/Coding Projects/Stow/src/features/stow/ui/mobile/screens/LendingSheet.tsx:53>)
+- [Packing list implementation](</Users/ellishuff/Coding Projects/Stow/src/features/stow/ui/mobile/screens/PackingScreen.tsx:188>)
+- [Household roles, invites, AI controls, and export](</Users/ellishuff/Coding Projects/Stow/src/features/stow/ui/mobile/screens/SettingsScreen.tsx:546>)
+- [Provider abstraction](</Users/ellishuff/Coding Projects/Stow/functions/src/providers/registry.ts:8>)
+- [Vision security and server-side job handling](</Users/ellishuff/Coding Projects/Stow/functions/src/vision.ts:80>)
 
 ## Bottom line
 
